@@ -1,4 +1,4 @@
-#include "util.h"
+#include <util.h>
 #include <chrono>
 #include <iostream>
 #include <stdio.h>
@@ -9,8 +9,15 @@ double BtoMB( uint32_t byte ) {
 }
 
 int main(int argc, char *argv[]) {
-	struct resources res;
-	char temp_char;
+	config_t config = {.dev_name = NULL,
+                          .server_name = NULL,
+                          .tcp_port = 20000,
+                          .ib_port = 1,
+                          .gid_idx = -1
+                        };
+	//struct resources res;
+	RDMARegion region;
+
 	std::cout << "Running stuff" << std::endl;
 	// \begin parse command line parameters
 	while (1) {
@@ -65,42 +72,22 @@ int main(int argc, char *argv[]) {
 	}
 	// \ned parse command line parameters
 
-	print_config();
+	print_config(config);
 
 	// init all the resources, so cleanup will be easy
-	resources_init(&res);
+	region.resources_init();
 
 	// create resources before using them
-	resources_create(&res);
+	region.resources_create(config);
 
 	// connect the QPs
-	connect_qp(&res);
+	connect_qp(config, region);
 	
-	if (!config.server_name) {
-		using hrc = std::chrono::high_resolution_clock;
-		using usecs = std::chrono::microseconds;
-		typedef std::chrono::duration<float> secs;
-		// @Server
-		std::string content;
-		std::cout << "Entering Server side event loop." << std::endl;
-		while( true ) {
-			std::getline(std::cin, content);
-			std::cout << std::endl << "Server side sending: " << content << std::endl;
-			strcpy( res.buf, content.c_str() );
-			auto t_start = hrc::now();
-			post_send(&res, content.size(), IBV_WR_SEND);
-			poll_completion(&res);
-			auto t_end = hrc::now();
-			secs dur = t_end - t_start;
-			std::cout << "Transmission of " << content.size() << " Bytes (" << BtoMB(content.size()) << " MB) took " << dur.count() << " us (" << BtoMB(content.size()) / dur.count() << " MB/s)" << std::endl;
-		}
-	} else {
-		// @Client
-		std::cout << "Entering Client side event loop." << std::endl;
-		while( true ) {
-			poll_completion(&res);
-			std::cout << "Client side received: " << res.buf << std::endl << std::endl;
-			post_receive(&res);
-		}
+	// @Client
+	std::cout << "Entering Client side event loop." << std::endl;
+	while( true ) {
+		poll_completion(&region.res);
+		std::cout << "Client side received: " << region.res.buf << std::endl << std::endl;
+		post_receive(&region.res);
 	}
 }
