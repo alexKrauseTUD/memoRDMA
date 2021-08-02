@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 	// connect the QPs
 	connect_qp(config, region);
 	
-	std:.string op;
+	std::string op;
 	bool abort = false;
 	while ( !abort ) {
 		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
