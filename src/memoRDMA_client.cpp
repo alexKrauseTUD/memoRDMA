@@ -91,7 +91,6 @@ int main(int argc, char *argv[]) {
 		std::cout << "Chosen:" << op << std::endl;
 
 		if ( op == "1" ) {
-			poll_completion(&region.res);
 			std::cout << "Client side received: " << region.res.buf << std::endl << std::endl;
 		} else if ( op == "2" ) {
 			abort = true;
