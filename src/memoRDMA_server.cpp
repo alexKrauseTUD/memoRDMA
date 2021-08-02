@@ -19,7 +19,6 @@ int main(int argc, char *argv[]) {
 	//struct resources res;
 	RDMARegion region;
 
-	std::cout << "Running stuff" << std::endl;
 	// \begin parse command line parameters
 	while (1) {
 		int c;
@@ -90,6 +89,26 @@ int main(int argc, char *argv[]) {
 	// @Server
 	std::string content;
 	std::cout << "Entering Server side event loop." << std::endl;
+	
+	std::string op;
+	bool abort = false;
+
+	while ( !abort ) {
+		std::cout << "Choose an opcode: [1] Direct write [2] Exit.";
+  		std::cin >> op;
+		std::cout << "Chosen:" << op << std::endl;
+		if ( op == "1" ) {
+			std::getline(std::cin, content);
+			std::cout << std::endl << "Server side sending: " << content << std::endl;
+			strcpy( region.res.buf, content.c_str() );
+			post_send(&region.res, content.size(), IBV_WR_RDMA_WRITE);
+			std::cout << "Write WR complete?" << std::endl;
+		} else if ( op == "2" ) {
+			abort = true;
+		}
+	}
+	return 0;
+  		
 	while( true ) {
 		std::getline(std::cin, content);
 		std::cout << std::endl << "Server side sending: " << content << std::endl;

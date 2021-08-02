@@ -15,9 +15,6 @@ int main(int argc, char *argv[]) {
                           .ib_port = 1,
                           .gid_idx = -1
                         };
-	//struct resources res;
-	RDMARegion region;
-
 	std::cout << "Running stuff" << std::endl;
 	// \begin parse command line parameters
 	while (1) {
@@ -73,7 +70,9 @@ int main(int argc, char *argv[]) {
 	// \ned parse command line parameters
 
 	print_config(config);
-
+	
+	RDMARegion region;
+	
 	// init all the resources, so cleanup will be easy
 	region.resources_init();
 
@@ -83,6 +82,20 @@ int main(int argc, char *argv[]) {
 	// connect the QPs
 	connect_qp(config, region);
 	
+	std:.string op;
+	bool abort = false;
+	while ( !abort ) {
+		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
+  		std::cin >> op;
+		std::cout << "Chosen:" << op << std::endl;
+		if ( op == "1" ) {
+			std::cout << "Client side received: " << region.res.buf << std::endl << std::endl;
+		} else if ( op == "2" ) {
+			abort = true;
+		}
+	}
+	return 0;
+
 	// @Client
 	std::cout << "Entering Client side event loop." << std::endl;
 	while( true ) {
