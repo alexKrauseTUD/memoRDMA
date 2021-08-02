@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
 	std::string op;
 	bool abort = false;
 	while ( !abort ) {
+		post_receive(&region.res);
 		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
