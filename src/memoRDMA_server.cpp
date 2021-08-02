@@ -97,12 +97,33 @@ int main(int argc, char *argv[]) {
 		std::cout << "Choose an opcode: [1] Direct write [2] Exit.";
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
+		std::getline(std::cin, content);
 		if ( op == "1" ) {
 			std::getline(std::cin, content);
 			std::cout << std::endl << "Server side sending: " << content << std::endl;
 			strcpy( region.res.buf, content.c_str() );
-			post_send(&region.res, content.size(), IBV_WR_RDMA_WRITE);
-			std::cout << "Write WR complete?" << std::endl;
+    		
+			struct ibv_send_wr wr, *bad_wr = NULL;
+    		struct ibv_sge sge;
+			
+			memset(&wr, 0, sizeof(wr));
+			memset(&sge, 0, sizeof(sge));
+			wr.wr_id = 0;
+			wr.opcode = IBV_WR_RDMA_WRITE;
+			wr.sg_list = &sge;
+			wr.num_sge = 1;
+			wr.send_flags = IBV_SEND_SIGNALED;
+			wr.wr.rdma.remote_addr = region.res.remote_props.addr;
+        	wr.wr.rdma.rkey = region.res.remote_props.rkey;
+
+			sge.addr = (uintptr_t)region.res.buf;
+    		sge.length = content.size()+1;
+			sge.lkey = region.res.mr->lkey;
+
+			int ret = ibv_post_send(region.res.qp, &wr, &bad_wr);
+
+			std::cout << "Write WR complete? Ret is: " << ret << std::endl;
+			std::cout << EINVAL << " " << ENOMEM << " " << EFAULT << std::endl;
 		} else if ( op == "2" ) {
 			abort = true;
 		}
