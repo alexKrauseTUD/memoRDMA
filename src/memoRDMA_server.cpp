@@ -121,6 +121,7 @@ int main(int argc, char *argv[]) {
 			sge.lkey = region.res.mr->lkey;
 
 			int ret = ibv_post_send(region.res.qp, &wr, &bad_wr);
+			poll_completion(&region.res);
 
 			std::cout << "Write WR complete? Ret is: " << ret << std::endl;
 			std::cout << EINVAL << " " << ENOMEM << " " << EFAULT << std::endl;
