@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 			poll_completion(&region->res);
 		} else if ( op == "2" ) {
 			std::cout << std::endl << "Server side commiting." << std::endl;
-			region->res.buf[0] = '\1';
+			region->res.buf[0] = '1';
 			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE);
 			poll_completion(&region->res);
 		} else if ( op == "3" ) {
