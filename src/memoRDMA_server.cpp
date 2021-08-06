@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 			region->res.buf[0] = '1';
 			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE);
 			poll_completion(&region->res);
-			region->res.buf[0] = '0';
+			region->clearBuffer();
 		} else if ( op == "3" ) {
 			abort = true;
 		}
