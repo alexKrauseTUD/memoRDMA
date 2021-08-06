@@ -14,11 +14,11 @@ double BtoMB( uint32_t byte ) {
 void check_receive( RDMARegion* region, bool* abort ) {
 	using namespace std::chrono_literals;
 	while( !*abort ) {
-		if ( region->res.buf[0] == '0' ) {
+		if ( region->res.buf[0] == '\0' ) {
 			std::cout << "Nothing received yet. Sleeping 1s." << std::endl;
 			std::this_thread::sleep_for( 1000ms );
 		} else {
-			std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
+			std::cout << "Client side received: " << region->res.buf+1 << std::endl << std::endl;
 			region->clearBuffer();
 			std::this_thread::sleep_for( 1000ms );
 		}
