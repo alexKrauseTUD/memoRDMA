@@ -235,5 +235,5 @@ int RDMARegion::resources_destroy() {
 }
 
 void RDMARegion::clearBuffer() {
-    memset( res.buf, '0', BUFF_SIZE );
+    memset( res.buf, 0, BUFF_SIZE );
 }
