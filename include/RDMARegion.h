@@ -39,6 +39,8 @@ class RDMARegion {
         int modify_qp_to_rts(struct ibv_qp *qp);
         int resources_destroy();
 
+        void clearBuffer();
+
         struct resources res;
 };
 

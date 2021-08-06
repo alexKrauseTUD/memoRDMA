@@ -3,10 +3,26 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <thread>
+#include <chrono>
 #include "RDMAHandler.h"
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
+}
+
+void check_receive( RDMARegion* region, bool* abort ) {
+	using namespace std::chrono_literals;
+	while( !*abort ) {
+		if ( region->res.buf[0] == '0' ) {
+			std::cout << "Nothing received yet. Sleeping 1s." << std::endl;
+			std::this_thread::sleep_for( 1000ms );
+		} else {
+			std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
+			region->clearBuffer();
+			std::this_thread::sleep_for( 1000ms );
+		}
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -75,16 +91,17 @@ int main(int argc, char *argv[]) {
 	uint32_t region_id = RDMAHandler::getInstance().create_and_setup_region( config );
 	auto region = RDMAHandler::getInstance().getRegion( region_id );
 
-
 	std::string op;
 	bool abort = false;
+
+	std::thread t(check_receive, region, &abort);
 	while ( !abort ) {
 		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 
 		if ( op == "1" ) {
-			std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
+			// std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
 		} else if ( op == "2" ) {
 			abort = true;
 		}
