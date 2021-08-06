@@ -12,14 +12,15 @@ double BtoMB( uint32_t byte ) {
 }
 
 void check_receive( RDMARegion* region, bool* abort ) {
+	std::cout << "Starting Client-side monitoring thread" << std::endl;
 	using namespace std::chrono_literals;
 	while( !*abort ) {
 		if ( region->res.buf[0] != '1' ) {
 			std::cout << "Current postbox byte: " << std::hex << region->res.buf[0] << std::endl;
 			std::this_thread::sleep_for( 1000ms );
 		} else {
-			std::cout << "Client side received: " << region->res.buf+1 << std::endl << std::endl;
-			std::cout << "Current hex string: " << std::hex << region->res.buf[0] << std::endl;
+			std::cout << "Current postbox byte: " << std::hex << region->res.buf[0] << std::endl;
+			std::cout << "Client side received: " << region->res.buf+1 << std::endl;
 			region->clearBuffer();
 			std::this_thread::sleep_for( 1000ms );
 		}
