@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include "RDMAHandler.h"
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -67,21 +68,14 @@ int main(int argc, char *argv[]) {
 		print_usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	// \ned parse command line parameters
+	// \end parse command line parameters
 
 	print_config(config);
 	
-	RDMARegion region;
-	
-	// init all the resources, so cleanup will be easy
-	region.resources_init();
+	uint32_t region_id = RDMAHandler::getInstance().create_and_setup_region( config );
+	auto region = RDMAHandler::getInstance().getRegion( region_id );
 
-	// create resources before using them
-	region.resources_create(config);
 
-	// connect the QPs
-	connect_qp(config, region);
-	
 	std::string op;
 	bool abort = false;
 	while ( !abort ) {
@@ -90,18 +84,18 @@ int main(int argc, char *argv[]) {
 		std::cout << "Chosen:" << op << std::endl;
 
 		if ( op == "1" ) {
-			std::cout << "Client side received: " << region.res.buf << std::endl << std::endl;
+			std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
 		} else if ( op == "2" ) {
 			abort = true;
 		}
 	}
 	return 0;
 
-	// @Client
-	std::cout << "Entering Client side event loop." << std::endl;
-	while( true ) {
-		poll_completion(&region.res);
-		std::cout << "Client side received: " << region.res.buf << std::endl << std::endl;
-		post_receive(&region.res);
-	}
+	// // @Client
+	// std::cout << "Entering Client side event loop." << std::endl;
+	// while( true ) {
+	// 	poll_completion(&region->res);
+	// 	std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
+	// 	post_receive(&region->res);
+	// }
 }

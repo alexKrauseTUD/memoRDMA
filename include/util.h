@@ -95,16 +95,15 @@ static int sock_connect(const char *server_name, int port) {
     //  }
     struct addrinfo hints = {.ai_flags = AI_PASSIVE,
                              .ai_family = AF_INET,
-                             .ai_socktype = SOCK_STREAM};
+                             .ai_socktype = SOCK_STREAM,
+                             .ai_protocol = 0};
 
     // resolve DNS address, user sockfd as temp storage
     sprintf(service, "%d", port);
     CHECK(getaddrinfo(server_name, service, &hints, &resolved_addr));
 
-    for (iterator = resolved_addr; iterator != NULL;
-         iterator = iterator->ai_next) {
-        sockfd = socket(iterator->ai_family, iterator->ai_socktype,
-                        iterator->ai_protocol);
+    for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+        sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
         assert(sockfd >= 0);
 
         if (server_name == NULL) {
@@ -324,6 +323,7 @@ static int connect_qp(struct config_t& config, RDMARegion& region) {
     if (config.server_name) {
         post_receive(&region.res);
     }
+    
     // modify the QP to RTR
     region.modify_qp_to_rtr(config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,
                      remote_con_data.gid);

@@ -5,13 +5,10 @@ RDMARegion::RDMARegion() {
 
 }
 
-// Res is initialized to default values
-void RDMARegion::resources_init() {
+int RDMARegion::resources_create(struct config_t& config) {
     memset(&res, 0, sizeof(res));
     res.sock = -1;
-}
 
-int RDMARegion::resources_create(struct config_t& config) {
     struct ibv_device **dev_list = NULL;
     struct ibv_qp_init_attr qp_init_attr;
     struct ibv_device *ib_dev = NULL;
@@ -88,8 +85,8 @@ int RDMARegion::resources_create(struct config_t& config) {
     res.pd = ibv_alloc_pd(res.ib_ctx);
     assert(res.pd != NULL);
 
-    // a CQ with two entries
-    cq_size = 2;
+    // Create a CQ with X entries
+    cq_size = 5; // X
     res.cq = ibv_create_cq(res.ib_ctx, cq_size, NULL, NULL, 0);
     assert(res.cq != NULL);
 
@@ -98,16 +95,10 @@ int RDMARegion::resources_create(struct config_t& config) {
     res.buf = (char*) calloc( 1, size );
     assert(res.buf != NULL);
 
-    // only in the server side put the message in the memory buffer
-    // if (!config.server_name) {
-		// std::string myMsg("Heyo, this is a fancy test.");
-        // strcpy(res.buf, myMsg.c_str());
-        // INFO("Going to send the message: %s\n", res.buf);
-    // }
-
     // register the memory buffer
-    mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-               IBV_ACCESS_REMOTE_WRITE;
+    mr_flags =  IBV_ACCESS_LOCAL_WRITE |
+                IBV_ACCESS_REMOTE_READ |
+                IBV_ACCESS_REMOTE_WRITE;
     res.mr = ibv_reg_mr(res.pd, res.buf, size, mr_flags);
     assert(res.mr != NULL);
 
@@ -148,8 +139,9 @@ int RDMARegion::modify_qp_to_init(struct config_t& config, struct ibv_qp *qp) {
     attr.qp_state = IBV_QPS_INIT;
     attr.port_num = config.ib_port;
     attr.pkey_index = 0;
-    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE;
+    attr.qp_access_flags =  IBV_ACCESS_LOCAL_WRITE | 
+                            IBV_ACCESS_REMOTE_READ |
+                            IBV_ACCESS_REMOTE_WRITE;
 
     flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
 

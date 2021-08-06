@@ -2,8 +2,9 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
-#include "RDMARegion.h"
 #include "util.h"
+#include "RDMARegion.h"
+#include "RDMAHandler.h"
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -16,8 +17,6 @@ int main(int argc, char *argv[]) {
                           .ib_port = 1,
                           .gid_idx = -1
                         };
-	//struct resources res;
-	RDMARegion region;
 
 	// \begin parse command line parameters
 	while (1) {
@@ -74,15 +73,9 @@ int main(int argc, char *argv[]) {
 
 	print_config(config);
 
-	// init all the resources, so cleanup will be easy
-	region.resources_init();
+	uint32_t region_id = RDMAHandler::getInstance().create_and_setup_region( config );
+	auto region = RDMAHandler::getInstance().getRegion( region_id );
 
-	// create resources before using them
-	region.resources_create(config);
-
-	// connect the QPs
-	connect_qp(config, region);
-	
 	using hrc = std::chrono::high_resolution_clock;
 	using usecs = std::chrono::microseconds;
 	typedef std::chrono::duration<float> secs;
@@ -101,30 +94,9 @@ int main(int argc, char *argv[]) {
 		if ( op == "1" ) {
 			std::getline(std::cin, content);
 			std::cout << std::endl << "Server side sending: " << content << std::endl;
-			strcpy( region.res.buf, content.c_str() );
-    		
-			struct ibv_send_wr wr, *bad_wr = NULL;
-    		struct ibv_sge sge;
-			
-			memset(&wr, 0, sizeof(wr));
-			memset(&sge, 0, sizeof(sge));
-			wr.wr_id = 0;
-			wr.opcode = IBV_WR_RDMA_WRITE;
-			wr.sg_list = &sge;
-			wr.num_sge = 1;
-			wr.send_flags = IBV_SEND_SIGNALED;
-			wr.wr.rdma.remote_addr = region.res.remote_props.addr;
-        	wr.wr.rdma.rkey = region.res.remote_props.rkey;
-
-			sge.addr = (uintptr_t)region.res.buf;
-    		sge.length = content.size()+1;
-			sge.lkey = region.res.mr->lkey;
-
-			int ret = ibv_post_send(region.res.qp, &wr, &bad_wr);
-			poll_completion(&region.res);
-
-			std::cout << "Write WR complete? Ret is: " << ret << std::endl;
-			std::cout << EINVAL << " " << ENOMEM << " " << EFAULT << std::endl;
+			strcpy( region->res.buf, content.c_str() );
+			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE);
+			poll_completion(&region->res);
 		} else if ( op == "2" ) {
 			abort = true;
 		}
@@ -134,10 +106,10 @@ int main(int argc, char *argv[]) {
 	while( true ) {
 		std::getline(std::cin, content);
 		std::cout << std::endl << "Server side sending: " << content << std::endl;
-		strcpy( region.res.buf, content.c_str() );
+		strcpy( region->res.buf, content.c_str() );
 		auto t_start = hrc::now();
-		post_send(&region.res, content.size(), IBV_WR_SEND);
-		poll_completion(&region.res);
+		post_send(&region->res, content.size(), IBV_WR_SEND);
+		poll_completion(&region->res);
 		auto t_end = hrc::now();
 		secs dur = t_end - t_start;
 		std::cout << "Transmission of " << content.size() << " Bytes (" << BtoMB(content.size()) << " MB) took " << dur.count() << " us (" << BtoMB(content.size()) / dur.count() << " MB/s)" << std::endl;
