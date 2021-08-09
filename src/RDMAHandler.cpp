@@ -75,14 +75,18 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region, rdma_han
 
     memcpy( communicationBuffer->writePtr()+1, &local_con_data, sizeof( cm_con_data_t ) );
     // post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, 1024ul );
+    post_send(&communicationBuffer->res, sizeof( cm_con_data_t ), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
 
     communicationBuffer->writePtr()[0] = flag;
     // post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
-    std::cout << "Sent data to remote machine." << std::endl;
+    std::cout << "Sent data to remote machine:" << std::endl;
+    INFO("Remote address = 0x%" PRIx64 "\n", local_con_data.addr);
+    INFO("Remote rkey = 0x%x\n", local_con_data.rkey);
+    INFO("Remote QP number = 0x%x\n", local_con_data.qp_num);
+    INFO("Remote LID = 0x%x\n", local_con_data.lid);
 }
 
 void RDMAHandler::receiveRegionInfo( config_t* config, RDMARegion& region) {

@@ -78,7 +78,8 @@ int main(int argc, char *argv[]) {
 
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
-
+	region->clearBuffer();
+	
 	using hrc = std::chrono::high_resolution_clock;
 	typedef std::chrono::duration<float> secs;
 	// @Server
