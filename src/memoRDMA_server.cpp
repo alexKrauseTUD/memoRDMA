@@ -95,12 +95,12 @@ int main(int argc, char *argv[]) {
 			std::getline(std::cin, content);
 			std::cout << std::endl << "Server side sending: " << content << std::endl;
 			strcpy( region->writePtr()+1, content.c_str() );
-			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE), BUFF_SIZE/2;
+			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
 			poll_completion(&region->res);
 		} else if ( op == "2" ) {
 			std::cout << std::endl << "Server side commiting." << std::endl;
 			region->writePtr()[0] = rdma_data_ready;
-			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE), BUFF_SIZE/2;
+			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 			poll_completion(&region->res);
 			region->clearBuffer();
 		} else if ( op == "3" ) {

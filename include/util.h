@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#include <iostream>
+
 #define MAX_POLL_CQ_TIMEOUT 30000 // ms
 #define BUFF_SIZE 2048
 
@@ -213,6 +215,7 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
     if (opcode != IBV_WR_SEND) {
         sr.wr.rdma.remote_addr = res->remote_props.addr + offset;
         sr.wr.rdma.rkey = res->remote_props.rkey;
+        std::cout << "Setting offset: " << offset << " ptr is now: " << (void*)sr.wr.rdma.remote_addr << " was: " << (void*)sr.wr.rdma.remote_addr << std::endl;
     }
 
     // there is a receive request in the responder side, so we won't get any
@@ -265,7 +268,7 @@ static int post_receive(struct resources *res) {
 }
 
 // Connect the QP, then transition the server side to RTR, sender side to RTS.
-static int connect_qp_tcp(struct config_t& config, RDMARegion& region) {
+static void connect_qp_tcp(struct config_t& config, RDMARegion& region) {
     struct cm_con_data_t local_con_data;
     struct cm_con_data_t remote_con_data;
     struct cm_con_data_t tmp_con_data;
@@ -335,9 +338,7 @@ static int connect_qp_tcp(struct config_t& config, RDMARegion& region) {
     // prevent packet lose
 	char Q = 'Q';
     sock_sync_data(region.res.sock, 1, &Q, &temp_char);
-
-    // FIXME: ;)
-    return 0;
+    return;
 }
 
 
