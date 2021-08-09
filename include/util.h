@@ -187,7 +187,7 @@ die:
 }
 
 // This function will create and post a send work request.
-static int post_send(struct resources *res, int len, ibv_wr_opcode opcode) {
+static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_t offset = 0) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
@@ -211,7 +211,7 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode) {
     sr.send_flags = IBV_SEND_SIGNALED;
 
     if (opcode != IBV_WR_SEND) {
-        sr.wr.rdma.remote_addr = res->remote_props.addr;
+        sr.wr.rdma.remote_addr = res->remote_props.addr + offset;
         sr.wr.rdma.rkey = res->remote_props.rkey;
     }
 

@@ -75,7 +75,6 @@ int main(int argc, char *argv[]) {
 
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
-	std::cout << "Region after init: " << region << std::endl;
 
 	using hrc = std::chrono::high_resolution_clock;
 	using usecs = std::chrono::microseconds;
@@ -95,16 +94,13 @@ int main(int argc, char *argv[]) {
 		if ( op == "1" ) {
 			std::getline(std::cin, content);
 			std::cout << std::endl << "Server side sending: " << content << std::endl;
-			std::cout << "Orig ptr: " << std::hex << (void*)region->res.buf << std::endl;
-			std::cout << "Fct ptr: " << std::hex << (void*)region->writePtr() << std::endl;
-			std::cout << "Fct ptr+1: " << std::hex << (void*)(region->writePtr()+1) << std::endl;
 			strcpy( region->writePtr()+1, content.c_str() );
-			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE);
+			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE), BUFF_SIZE/2;
 			poll_completion(&region->res);
 		} else if ( op == "2" ) {
 			std::cout << std::endl << "Server side commiting." << std::endl;
 			region->writePtr()[0] = rdma_data_ready;
-			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE);
+			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE), BUFF_SIZE/2;
 			poll_completion(&region->res);
 			region->clearBuffer();
 		} else if ( op == "3" ) {
