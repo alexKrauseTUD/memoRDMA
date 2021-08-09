@@ -25,9 +25,17 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
 	// connect the QPs
 	getInstance().sendRegionInfo( config, *region );
     
-    while( getInstance().communicationBuffer->receivePtr()[0] != rdma_receive_region ) {
+    std::cout << "My Receive Pointer: " << (void*)getInstance().communicationBuffer->receivePtr() << " - checking all " << BUFF_SIZE << " Byte for receive info." << std::endl;
+    bool abort = false;
+    while( !abort ) {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for( 1000ms );
+        for ( size_t i = 0; i < BUFF_SIZE; ++i ) {
+            if ( getInstance().communicationBuffer->receivePtr()[i] == rdma_receive_region ) {
+                std::cout << "Found rdma_receive_region at offset " << i << " (" << (void*)(getInstance().communicationBuffer->receivePtr()+i) << ")" << std::endl;
+            }
+        }
+        std::cout << "Waiting for next round." << std::endl;
     }
 
     getInstance().receiveRegionInfo( config, *region );
@@ -67,12 +75,12 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region ) {
 
     memcpy( communicationBuffer->writePtr() + 1, &local_con_data, sizeof( cm_con_data_t ) );
     // post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, 1024 );
+    post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
 
     communicationBuffer->writePtr()[0] = rdma_create_region;
     // post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, 1024 );
+    post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
     std::cout << "Sent data to remote machine." << std::endl;
 }
