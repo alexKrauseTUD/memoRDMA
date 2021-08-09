@@ -1,8 +1,9 @@
 #include "RDMAHandler.h"
 #include <iostream>
+#include <thread>
 
 void RDMAHandler::setupCommunicationBuffer(config_t& config) {
-    std::cout << "Handler creating a new ressource." << std::endl;
+    std::cout << "Handler creating communication buffer." << std::endl;
  	RDMARegion* region = new RDMARegion();
     // create resources before using them
 	region->resources_create(config);
@@ -14,18 +15,21 @@ void RDMAHandler::setupCommunicationBuffer(config_t& config) {
 }
 
 
-uint32_t RDMAHandler::create_and_setup_region(config_t& config) {
+void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
     std::cout << "Handler creating a new ressource." << std::endl;
  	
-     RDMARegion* region = new RDMARegion();
+    RDMARegion* region = new RDMARegion();
     // create resources before using them
-	region->resources_create(config);
+	region->resources_create(*config);
 
 	// connect the QPs
-	connect_qp_rdma(config, *region);
+	getInstance().connect_qp_rdma(config, *region);
 
-    regions.insert( {current_id, region} );
-    return current_id++;
+    getInstance().regions.insert( {getInstance().current_id++, region} );
+    if ( isReady ) {
+        *isReady = true;
+    }
+    // return current_id++;
 }
 
 RDMARegion* RDMAHandler::getRegion( uint32_t id ) {
@@ -36,7 +40,7 @@ RDMARegion* RDMAHandler::getRegion( uint32_t id ) {
     return nullptr;
 }
 
-void RDMAHandler::connect_qp_rdma(struct config_t& config, RDMARegion& region) {
+void RDMAHandler::connect_qp_rdma( config_t* config, RDMARegion& region) {
     struct cm_con_data_t local_con_data;
     struct cm_con_data_t remote_con_data;
     struct cm_con_data_t tmp_con_data;
@@ -44,8 +48,8 @@ void RDMAHandler::connect_qp_rdma(struct config_t& config, RDMARegion& region) {
 
     memset(&my_gid, 0, sizeof(my_gid));
 
-    if (config.gid_idx >= 0) {
-        CHECK(ibv_query_gid(region.res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
+    if (config->gid_idx >= 0) {
+        CHECK(ibv_query_gid(region.res.ib_ctx, config->ib_port, config->gid_idx, &my_gid));
     }
 
     // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
@@ -59,9 +63,20 @@ void RDMAHandler::connect_qp_rdma(struct config_t& config, RDMARegion& region) {
     INFO("\n Local LID      = 0x%x\n", region.res.port_attr.lid);
 
     /* Step 1: Server creates data and sends to Client */
+    memcpy( communicationBuffer->writePtr() + 1, &local_con_data, sizeof( cm_con_data_t ) );
+    post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    poll_completion(&communicationBuffer->res);
+    communicationBuffer->writePtr()[0] = rdma_create_region;
+    post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    poll_completion(&communicationBuffer->res);
 
+    std::cout << "Sent data to client." << std::endl;
     /* Step 2: Client creates local resources and sends back to server. */
-    sock_sync_data(region.res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
+
+    while( true ) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for( 100ms );
+    }
 
     remote_con_data.addr = ntohll(tmp_con_data.addr);
     remote_con_data.rkey = ntohl(tmp_con_data.rkey);
@@ -78,7 +93,7 @@ void RDMAHandler::connect_qp_rdma(struct config_t& config, RDMARegion& region) {
     INFO("Remote QP number = 0x%x\n", remote_con_data.qp_num);
     INFO("Remote LID = 0x%x\n", remote_con_data.lid);
 
-    if (config.gid_idx >= 0) {
+    if (config->gid_idx >= 0) {
         uint8_t *p = remote_con_data.gid;
         int i;
         printf("Remote GID = ");
@@ -88,15 +103,15 @@ void RDMAHandler::connect_qp_rdma(struct config_t& config, RDMARegion& region) {
     }
 
     // modify the QP to init
-    region.modify_qp_to_init(config, region.res.qp);
+    region.modify_qp_to_init(*config, region.res.qp);
 
     // let the client post RR to be prepared for incoming messages
-    if (config.server_name) {
+    if (config->server_name) {
         post_receive(&region.res);
     }
     
     // modify the QP to RTR
-    region.modify_qp_to_rtr(config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,
+    region.modify_qp_to_rtr(*config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,
                      remote_con_data.gid);
 
     // modify QP state to RTS

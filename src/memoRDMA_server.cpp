@@ -5,6 +5,9 @@
 #include "util.h"
 #include "RDMARegion.h"
 #include "RDMAHandler.h"
+#include <map>
+#include <thread>
+#include <atomic>
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -77,7 +80,6 @@ int main(int argc, char *argv[]) {
 	auto region = RDMAHandler::getInstance().communicationBuffer;
 
 	using hrc = std::chrono::high_resolution_clock;
-	using usecs = std::chrono::microseconds;
 	typedef std::chrono::duration<float> secs;
 	// @Server
 	std::string content;
@@ -86,8 +88,11 @@ int main(int argc, char *argv[]) {
 	std::string op;
 	bool abort = false;
 
+	std::map< uint32_t, std::pair< bool*, std::thread* > > pool;
+	std::atomic< size_t > global_id = {0};
+
 	while ( !abort ) {
-		std::cout << "Choose an opcode: [1] Direct write [2] Commit [3] Exit.";
+		std::cout << "Choose an opcode: [1] Direct write [2] Commit [3] Create new region [4] Check Threads [5] Exit";
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
@@ -104,6 +109,25 @@ int main(int argc, char *argv[]) {
 			poll_completion(&region->res);
 			region->clearBuffer();
 		} else if ( op == "3" ) {
+			bool* b = new bool();
+			*b = false;
+			// std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, RDMAHandler::getInstance(), &config, b );
+			std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, &config, b );
+			pool.insert( {global_id++, {b,t}} );
+		} else if ( op == "4" ) {
+			std::cout << "There are " << pool.size() << " threads to check." << std::endl;
+			for ( auto it = pool.begin(); it != pool.end(); ) {
+				std::cout << "Checking thread..." << it->first << std::flush;
+				if ( *it->second.first ) {
+					std::cout << "joining thread " << it->first << std::endl;
+					it->second.second->join();
+					it = pool.erase( it );
+				} else {
+					std::cout << "not ready yet." << std::endl;
+					++it;
+				}
+			}
+		} else if ( op == "5" ) {
 			abort = true;
 		}
 	}

@@ -15,15 +15,27 @@ void check_receive( RDMARegion* region, bool* abort ) {
 	std::cout << "Starting Client-side monitoring thread" << std::endl;
 	using namespace std::chrono_literals;
 	while( !*abort ) {
-		if ( region->receivePtr()[0] != rdma_data_ready ) {
-			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
-			std::this_thread::sleep_for( 1000ms );
-		} else {
-			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
-			std::cout << "Client side received (rcv): " << region->receivePtr()+1 << std::endl;
-			std::cout << "Client side received (all):" << region->writePtr() << std::endl;
-			region->clearBuffer();
-			std::this_thread::sleep_for( 1000ms );
+		switch( region->receivePtr()[0] ) {
+			case rdma_create_region: {
+				struct cm_con_data_t tmp_con_data;
+				memcpy( &tmp_con_data, region->receivePtr()+1, sizeof( cm_con_data_t ) );
+				std::cout << "### Received RDMA Region ###" << std::endl;
+			    INFO("Remote address = 0x%" PRIx64 "\n", tmp_con_data.addr);
+			    INFO("Remote rkey = 0x%x\n", tmp_con_data.rkey);
+			    INFO("Remote QP number = 0x%x\n", tmp_con_data.qp_num);
+			    INFO("Remote LID = 0x%x\n", tmp_con_data.lid);
+			}; break;
+			case rdma_delete_region: {}; break;
+			case rdma_data_ready: {
+				std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
+				std::cout << "Client side received (rcv): " << region->receivePtr()+1 << std::endl;
+				std::cout << "Client side received (all):" << region->writePtr() << std::endl;
+				region->clearBuffer();
+				std::this_thread::sleep_for( 1000ms );
+			}; break;
+			default: {
+				std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
+			}; break;
 		}
 	}
 }
