@@ -20,7 +20,8 @@ void check_receive( RDMARegion* region, bool* abort ) {
 			std::this_thread::sleep_for( 1000ms );
 		} else {
 			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
-			std::cout << "Client side received: " << region->receivePtr()+1 << std::endl;
+			std::cout << "Client side received (rcv): " << region->receivePtr()+1 << std::endl;
+			std::cout << "Client side received (all):" << region->writePtr() << std::endl;
 			region->clearBuffer();
 			std::this_thread::sleep_for( 1000ms );
 		}
