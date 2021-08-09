@@ -17,9 +17,12 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 	while( !*abort ) {
 		switch( region->receivePtr()[0] ) {
 			case rdma_create_region: {
+				std::cout << "[Rcv Region] Got data, initializing new region." << std::endl;
 				RDMARegion* newRegion = new RDMARegion();
 				newRegion->resources_create(*config, false);
+				std::cout << "[Rcv Region] Reading remote data from memory." << std::endl;
 				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
+				std::cout << "[Rcv Region] Sending local data back to host." << std::endl;
 				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion );
 				RDMAHandler::getInstance().registerRegion( newRegion );
 

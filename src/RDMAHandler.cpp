@@ -27,7 +27,7 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
     
     while( getInstance().communicationBuffer->receivePtr()[0] != rdma_receive_region ) {
         using namespace std::chrono_literals;
-        std::this_thread::sleep_for( 100ms );
+        std::this_thread::sleep_for( 1000ms );
     }
 
     getInstance().receiveRegionInfo( config, *region );
@@ -48,7 +48,7 @@ RDMARegion* RDMAHandler::getRegion( uint32_t id ) {
     return nullptr;
 }
 
-void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region) {
+void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region ) {
     struct cm_con_data_t local_con_data;
     union ibv_gid my_gid;
 
@@ -72,7 +72,7 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region) {
     communicationBuffer->writePtr()[0] = rdma_create_region;
     post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     poll_completion(&communicationBuffer->res);
-    std::cout << "Sent data to client." << std::endl;
+    std::cout << "Sent data to remote machine." << std::endl;
 }
 
 void RDMAHandler::receiveRegionInfo( config_t* config, RDMARegion& region) {
