@@ -15,8 +15,8 @@ void check_receive( RDMARegion* region, bool* abort ) {
 	std::cout << "Starting Client-side monitoring thread" << std::endl;
 	using namespace std::chrono_literals;
 	while( !*abort ) {
-		if ( region->res.buf[0] != rdma_data_ready ) {
-			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
+		if ( region->receivePtr()[0] != rdma_data_ready ) {
+			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
 			std::this_thread::sleep_for( 1000ms );
 		} else {
 			std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
