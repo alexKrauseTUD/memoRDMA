@@ -23,10 +23,8 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 				std::cout << "[Rcv Region] Reading remote data from memory." << std::endl;
 				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
 				std::cout << "[Rcv Region] Sending local data back to host." << std::endl;
-				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion );
+				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion, rdma_receive_region );
 				RDMAHandler::getInstance().registerRegion( newRegion );
-
-				region->clearBuffer();
 			}; break;
 			case rdma_delete_region: {}; break;
 			case rdma_data_ready: {

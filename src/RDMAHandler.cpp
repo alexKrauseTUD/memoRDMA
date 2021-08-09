@@ -23,7 +23,7 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
 	region->resources_create(*config, false);
 
 	// connect the QPs
-	getInstance().sendRegionInfo( config, *region );
+	getInstance().sendRegionInfo( config, *region, rdma_create_region );
     
     std::cout << "My Receive Pointer: " << (void*)getInstance().communicationBuffer->receivePtr() << " - checking all " << BUFF_SIZE << " Byte for receive info." << std::endl;
     bool abort = false;
@@ -56,7 +56,7 @@ RDMARegion* RDMAHandler::getRegion( uint32_t id ) {
     return nullptr;
 }
 
-void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region ) {
+void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region, rdma_handler_communication flag ) {
     struct cm_con_data_t local_con_data;
     union ibv_gid my_gid;
 
@@ -73,12 +73,12 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion& region ) {
     memcpy(local_con_data.gid, &my_gid, 16);
     INFO("\n Local LID      = 0x%x\n", region.res.port_attr.lid);
 
-    memcpy( communicationBuffer->writePtr() + 1, &local_con_data, sizeof( cm_con_data_t ) );
+    memcpy( communicationBuffer->writePtr()+1, &local_con_data, sizeof( cm_con_data_t ) );
     // post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     post_send(&communicationBuffer->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
 
-    communicationBuffer->writePtr()[0] = rdma_create_region;
+    communicationBuffer->writePtr()[0] = flag;
     // post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     post_send(&communicationBuffer->res, sizeof(char), IBV_WR_RDMA_WRITE, 1024ul );
     poll_completion(&communicationBuffer->res);
