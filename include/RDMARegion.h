@@ -39,6 +39,10 @@ class RDMARegion {
         int modify_qp_to_rts(struct ibv_qp *qp);
         int resources_destroy();
 
+        char* writePtr();
+        char* receivePtr();
+        uint64_t inline maxWriteSize() const;
+
         void clearBuffer();
 
         struct resources res;

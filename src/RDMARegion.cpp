@@ -234,6 +234,18 @@ int RDMARegion::resources_destroy() {
     return 0;
 }
 
+char* RDMARegion::writePtr() {
+    return res.buf;
+}
+
+char* RDMARegion::receivePtr() {
+    return res.buf + maxWriteSize();
+}
+
+uint64_t inline RDMARegion::maxWriteSize() const {
+    return BUFF_SIZE / 2;
+}
+
 void RDMARegion::clearBuffer() {
     memset( res.buf, 0, BUFF_SIZE );
 }

@@ -90,8 +90,8 @@ int main(int argc, char *argv[]) {
 
 	print_config(config);
 	
-	uint32_t region_id = RDMAHandler::getInstance().create_and_setup_region( config );
-	auto region = RDMAHandler::getInstance().getRegion( region_id );
+	RDMAHandler::getInstance().setupCommunicationBuffer( config );
+	auto region = RDMAHandler::getInstance().communicationBuffer;
 
 	std::string op;
 	bool abort = false;

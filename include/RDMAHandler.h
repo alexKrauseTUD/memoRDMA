@@ -34,7 +34,7 @@ class RDMAHandler
         void operator=(RDMAHandler const&)  = delete;
 
         /* Functions */
-        uint32_t setupCommunicationBuffer(config_t& config);
+        void setupCommunicationBuffer(config_t& config);
         uint32_t create_and_setup_region(config_t& config);
         void connect_qp_rdma(struct config_t& config, RDMARegion& region);
         RDMARegion* getRegion( uint32_t id );

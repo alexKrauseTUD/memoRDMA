@@ -1,7 +1,7 @@
 #include "RDMAHandler.h"
 #include <iostream>
 
-uint32_t RDMAHandler::setupCommunicationBuffer(config_t& config) {
+void RDMAHandler::setupCommunicationBuffer(config_t& config) {
     std::cout << "Handler creating a new ressource." << std::endl;
  	RDMARegion* region = new RDMARegion();
     // create resources before using them
@@ -9,9 +9,8 @@ uint32_t RDMAHandler::setupCommunicationBuffer(config_t& config) {
 
 	// connect the QPs
 	connect_qp_tcp(config, *region);
-
-    regions.insert( {current_id, region} );
-    return current_id++;
+    std::cout << "Region is: " << region << std::endl;
+    communicationBuffer = region;
 }
 
 
