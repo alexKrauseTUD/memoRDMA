@@ -265,7 +265,7 @@ static int post_receive(struct resources *res) {
 }
 
 // Connect the QP, then transition the server side to RTR, sender side to RTS.
-static int connect_qp(struct config_t& config, RDMARegion& region) {
+static int connect_qp_tcp(struct config_t& config, RDMARegion& region) {
     struct cm_con_data_t local_con_data;
     struct cm_con_data_t remote_con_data;
     struct cm_con_data_t tmp_con_data;

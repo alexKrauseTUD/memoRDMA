@@ -1,5 +1,7 @@
 project(memoRDMA)
 
+cmake_minimum_required(VERSION 3.16)
+
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(INC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

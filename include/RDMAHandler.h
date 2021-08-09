@@ -5,6 +5,12 @@
 #include "RDMARegion.h"
 #include <unordered_map>
 
+enum rdma_handler_communication {
+    rdma_create_region = 1 << 0,
+    rdma_delete_region = 1 << 1,
+    rdma_data_ready    = 1 << 2
+};
+
 class RDMAHandler
 {
     public:
@@ -28,14 +34,12 @@ class RDMAHandler
         void operator=(RDMAHandler const&)  = delete;
 
         /* Functions */
+        uint32_t setupCommunicationBuffer(config_t& config);
         uint32_t create_and_setup_region(config_t& config);
+        void connect_qp_rdma(struct config_t& config, RDMARegion& region);
         RDMARegion* getRegion( uint32_t id );
 
-        // Note: Scott Meyers mentions in his Effective Modern
-        //       C++ book, that deleted functions should generally
-        //       be public as it results in better error messages
-        //       due to the compilers behavior to check accessibility
-        //       before deleted status
+        RDMARegion* communicationBuffer;
 };
 
 #endif // MEMORDMA_RDMA_HANDLER_H
