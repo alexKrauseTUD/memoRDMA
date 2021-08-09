@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include "util.h"
 
 // structure to exchange data which is needed to connect the QPs
 struct cm_con_data_t {
@@ -32,8 +33,8 @@ struct resources {
 class RDMARegion {
     public:
         RDMARegion();
-        void resources_init();
-        int resources_create(struct config_t& config);
+        int resources_create(struct config_t& config, bool initTCP = true );
+        void resources_sync_local( config_t* config, struct cm_con_data_t& tmp_con_data );
         int modify_qp_to_init(struct config_t& config, struct ibv_qp *qp);
         int modify_qp_to_rtr(struct config_t& config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
         int modify_qp_to_rts(struct ibv_qp *qp);

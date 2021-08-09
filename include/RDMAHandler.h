@@ -35,8 +35,14 @@ class RDMAHandler {
 
         /* Functions */
         void setupCommunicationBuffer( config_t& config );
+        void sendRegionInfo( config_t* config, RDMARegion& region);
+        void receiveRegionInfo( config_t* config, RDMARegion& region);
+        
         static void create_and_setup_region( config_t* config, bool* isReady = nullptr );
+        
         void connect_qp_rdma( config_t* config, RDMARegion& region );
+        void registerRegion( RDMARegion* region );
+        
         RDMARegion* getRegion( uint32_t id );
 
         RDMARegion* communicationBuffer;

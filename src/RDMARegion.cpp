@@ -5,7 +5,7 @@ RDMARegion::RDMARegion() {
 
 }
 
-int RDMARegion::resources_create(struct config_t& config) {
+int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     memset(&res, 0, sizeof(res));
     res.sock = -1;
 
@@ -19,26 +19,28 @@ int RDMARegion::resources_create(struct config_t& config) {
     int cq_size = 0;
     int num_devices;
 
-    if (config.server_name) {
-        // @client
-        res.sock = sock_connect(config.server_name, config.tcp_port);
-        if (res.sock < 0) {
-            ERROR("Failed to establish TCP connection to server %s, port %d\n",
-                  config.server_name, config.tcp_port);
-            goto die;
+    if ( initTCP ) {
+        if (config.server_name) {
+            // @client
+            res.sock = sock_connect(config.server_name, config.tcp_port);
+            if (res.sock < 0) {
+                ERROR("Failed to establish TCP connection to server %s, port %d\n",
+                    config.server_name, config.tcp_port);
+                goto die;
+            }
+        } else {
+            // @server
+            INFO("Waiting on port %d for TCP connection\n", config.tcp_port);
+            res.sock = sock_connect(NULL, config.tcp_port);
+            if (res.sock < 0) {
+                ERROR("Failed to establish TCP connection with client on port %d\n",
+                    config.tcp_port);
+                goto die;
+            }
         }
-    } else {
-        // @server
-        INFO("Waiting on port %d for TCP connection\n", config.tcp_port);
-        res.sock = sock_connect(NULL, config.tcp_port);
-        if (res.sock < 0) {
-            ERROR("Failed to establish TCP connection with client on port %d\n",
-                  config.tcp_port);
-            goto die;
-        }
+        INFO("TCP connection was established\n");
     }
 
-    INFO("TCP connection was established\n");
     INFO("Searching for IB devices in host\n");
 
     // \begin acquire a specific device
@@ -129,6 +131,30 @@ die:
     exit(EXIT_FAILURE);
 }
 
+// Adding remote info to local region and set local QP to INIT->RTR->RTS
+void RDMARegion::resources_sync_local( config_t* config, struct cm_con_data_t& tmp_con_data ) {
+    struct cm_con_data_t remote_con_data;
+    remote_con_data.addr = ntohll(tmp_con_data.addr);
+    remote_con_data.rkey = ntohl(tmp_con_data.rkey);
+    remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
+    remote_con_data.lid = ntohs(tmp_con_data.lid);
+    memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
+
+    res.remote_props = remote_con_data;
+
+    if (config->gid_idx >= 0) {
+        uint8_t *p = remote_con_data.gid;
+        int i;
+        printf("Remote GID = ");
+        for (i = 0; i < 15; i++)
+            printf("%02x:", p[i]);
+        printf("%02x\n", p[15]);
+    }
+
+    modify_qp_to_init(*config, res.qp);
+    modify_qp_to_rtr(*config, res.qp, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid);
+    modify_qp_to_rts(res.qp);
+}
 
 // Transition a QP from the RESET to INIT state
 int RDMARegion::modify_qp_to_init(struct config_t& config, struct ibv_qp *qp) {

@@ -11,19 +11,19 @@ double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
 }
 
-void check_receive( RDMARegion* region, bool* abort ) {
+void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 	std::cout << "Starting Client-side monitoring thread" << std::endl;
 	using namespace std::chrono_literals;
 	while( !*abort ) {
 		switch( region->receivePtr()[0] ) {
 			case rdma_create_region: {
-				struct cm_con_data_t tmp_con_data;
-				memcpy( &tmp_con_data, region->receivePtr()+1, sizeof( cm_con_data_t ) );
-				std::cout << "### Received RDMA Region ###" << std::endl;
-			    INFO("Remote address = 0x%" PRIx64 "\n", tmp_con_data.addr);
-			    INFO("Remote rkey = 0x%x\n", tmp_con_data.rkey);
-			    INFO("Remote QP number = 0x%x\n", tmp_con_data.qp_num);
-			    INFO("Remote LID = 0x%x\n", tmp_con_data.lid);
+				RDMARegion* newRegion = new RDMARegion();
+				newRegion->resources_create(*config, false);
+				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
+				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion );
+				RDMAHandler::getInstance().registerRegion( newRegion );
+
+				region->clearBuffer();
 			}; break;
 			case rdma_delete_region: {}; break;
 			case rdma_data_ready: {
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
 	std::string op;
 	bool abort = false;
 
-	std::thread t(check_receive, region, &abort);
+	std::thread t(check_receive, region, &config, &abort);
 	while ( !abort ) {
 		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
   		std::cin >> op;
