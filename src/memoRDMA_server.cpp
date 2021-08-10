@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 				}; break;
 				case rdma_delete_region: {}; break;
 				case rdma_data_ready: {
-					std::cout << "Received data: " << communicationRegion->receivePtr()+1 << std::endl;
+					std::cout << "Received data [" << communicationRegion << "]: " << communicationRegion->receivePtr()+1 << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				}; break;
 				default: {
@@ -157,17 +157,51 @@ int main(int argc, char *argv[]) {
 		std::getline(std::cin, content);
 
 		if ( op == "1" ) {
+			std::cout << "Which region?" << std::endl;
+			RDMAHandler::getInstance().printRegions();
+			uint64_t rid;
 			std::getline(std::cin, content);
-			std::cout << std::endl << "Server side sending: " << content << std::endl;
-			strcpy( region->writePtr()+1, content.c_str() );
-			post_send(&region->res, content.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
-			poll_completion(&region->res);
+			try {
+				char* pEnd;
+				rid = strtoull(content.c_str(), &pEnd, 10);
+
+			} catch (...) {
+				std::cout << "[Error] Couldn't convert number." << std::endl;
+				continue;
+			}
+			std::cout << "Content: " << std::flush;
+			std::getline(std::cin, content);
+			RDMARegion* sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			if ( sendingRegion ) {
+				strcpy( sendingRegion->writePtr()+1, content.c_str() );
+				post_send(&sendingRegion->res, content.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+				poll_completion(&sendingRegion->res);
+			} else {
+				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
+			}
 		} else if ( op == "2" ) {
-			std::cout << std::endl << "Server side commiting." << std::endl;
-			region->writePtr()[0] = rdma_data_ready;
-			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-			poll_completion(&region->res);
-			region->clearCompleteBuffer();
+			std::cout << "Which region?" << std::endl;
+			RDMAHandler::getInstance().printRegions();
+			uint64_t rid;
+			std::getline(std::cin, content);
+			try {
+				char* pEnd;
+				rid = strtoull(content.c_str(), &pEnd, 10);
+
+			} catch (...) {
+				std::cout << "[Error] Couldn't convert number." << std::endl;
+				continue;
+			}
+			RDMARegion* sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			if ( sendingRegion ) {
+				std::cout << std::endl << "Server side commiting." << std::endl;
+				sendingRegion->writePtr()[0] = rdma_data_ready;
+				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+				poll_completion(&sendingRegion->res);
+				sendingRegion->clearCompleteBuffer();
+			} else {
+				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
+			}
 		} else if ( op == "3" ) {
 			bool* b = new bool();
 			*b = false;
