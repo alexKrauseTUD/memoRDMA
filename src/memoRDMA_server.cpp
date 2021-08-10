@@ -25,12 +25,12 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 				RDMAHandler::getInstance().receiveRegionInfo( config, newRegion );
 				RDMAHandler::getInstance().sendRegionInfo( config, newRegion, rdma_receive_region );
 				RDMAHandler::getInstance().registerRegion( newRegion );
-				region->clearBuffer();
+				region->clearCompleteBuffer();
 			}; break;
 			case rdma_delete_region: {}; break;
 			case rdma_data_ready: {
 				std::cout << "Received data: " << region->receivePtr()+1 << std::endl;
-				region->clearBuffer();
+				region->clearCompleteBuffer();
 			}; break;
 			default: {
 				continue;
@@ -104,11 +104,8 @@ int main(int argc, char *argv[]) {
 	print_config(config);
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
-	region->clearBuffer();
+	region->clearCompleteBuffer();
 	
-	using hrc = std::chrono::high_resolution_clock;
-	typedef std::chrono::duration<float> secs;
-
 	std::string content;
 	std::string op;
 	bool abort = false;
@@ -140,7 +137,7 @@ int main(int argc, char *argv[]) {
 			region->writePtr()[0] = rdma_data_ready;
 			post_send(&region->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 			poll_completion(&region->res);
-			region->clearBuffer();
+			region->clearCompleteBuffer();
 		} else if ( op == "3" ) {
 			bool* b = new bool();
 			*b = false;

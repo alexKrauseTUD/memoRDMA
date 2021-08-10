@@ -282,6 +282,18 @@ void RDMARegion::print() const {
     std::cout.flags( f );
 }
 
-void RDMARegion::clearBuffer() {
+void RDMARegion::clearReadCode() {
+    res.buf[0] = '0';
+}
+
+void RDMARegion::clearCompleteBuffer() {
     memset( res.buf, 0, BUFF_SIZE );
+}
+
+void RDMARegion::clearWriteBuffer() {
+    memset( res.buf, 0, maxWriteSize() );
+}
+
+void RDMARegion::clearReadBuffer() {
+    memset( res.buf + maxWriteSize(), 0, maxWriteSize() );
 }

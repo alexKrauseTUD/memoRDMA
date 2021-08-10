@@ -46,7 +46,10 @@ class RDMARegion {
 
         void print() const;
 
-        void clearBuffer();
+        void clearReadCode();
+        void clearCompleteBuffer();
+        void clearWriteBuffer();
+        void clearReadBuffer();
 
         struct resources res;
 };

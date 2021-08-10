@@ -198,7 +198,7 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
     memset(&sge, 0, sizeof(sge));
 
     sge.addr = (uintptr_t)res->buf;
-    sge.length = len+1;
+    sge.length = len;
     sge.lkey = res->mr->lkey;
 
     // prepare the send work request
@@ -218,8 +218,6 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
         // std::cout << "Setting offset: " << offset << " ptr is now: " << (void*)sr.wr.rdma.remote_addr << " was: " << (void*)res->remote_props.addr << std::endl;
     }
 
-    // there is a receive request in the responder side, so we won't get any
-    // into RNR flow
     CHECK(ibv_post_send(res->qp, &sr, &bad_wr));
 
     switch (opcode) {
