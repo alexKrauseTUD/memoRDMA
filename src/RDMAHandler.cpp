@@ -25,23 +25,15 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
 	// connect the QPs
 	getInstance().sendRegionInfo( config, *region, rdma_create_region );
     
-    std::cout << "My Receive Pointer: " << (void*)getInstance().communicationBuffer->receivePtr() << " - checking all " << BUFF_SIZE << " Byte for receive info." << std::endl;
-    bool abort = false;
-    while( !abort ) {
+    while( getInstance().communicationBuffer->receivePtr()[0] != rdma_receive_region ) {
         using namespace std::chrono_literals;
-        std::this_thread::sleep_for( 1000ms );
-        for ( size_t i = 0; i < BUFF_SIZE; ++i ) {
-            if ( getInstance().communicationBuffer->receivePtr()[i] == rdma_receive_region ) {
-                std::cout << "Found rdma_receive_region at offset " << i << " (" << (void*)(getInstance().communicationBuffer->receivePtr()+i) << ")" << std::endl;
-            }
-        }
-        std::cout << "Waiting for next round." << std::endl;
+        std::this_thread::sleep_for( 100ms );
     }
 
     getInstance().receiveRegionInfo( config, *region );
 
     getInstance().registerRegion( region );
-    
+
     if ( isReady ) {
         *isReady = true;
     }

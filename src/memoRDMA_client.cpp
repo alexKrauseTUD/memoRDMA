@@ -12,6 +12,7 @@ double BtoMB( uint32_t byte ) {
 }
 
 void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
+	std::ios_base::fmtflags f( std::cout.flags() );
 	std::cout << "Starting Client-side monitoring thread" << std::endl;
 	using namespace std::chrono_literals;
 	while( !*abort ) {
@@ -38,6 +39,7 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 				std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
 			}; break;
 		}
+		std::cout.flags( f );
 		std::this_thread::sleep_for( 1000ms );
 	}
 }
