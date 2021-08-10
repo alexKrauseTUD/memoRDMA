@@ -39,10 +39,13 @@ class RDMAHandler {
         void receiveRegionInfo( config_t* config, RDMARegion& region);
         
         static void create_and_setup_region( config_t* config, bool* isReady = nullptr );
+        void create_and_setup_region_nonstat( config_t* config, bool* isReady = nullptr );
         
         void connect_qp_rdma( config_t* config, RDMARegion& region );
         void registerRegion( RDMARegion* region );
         
+        void printRegions() const;
+
         RDMARegion* getRegion( uint32_t id );
 
         RDMARegion* communicationBuffer;

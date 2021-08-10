@@ -14,6 +14,29 @@ void RDMAHandler::setupCommunicationBuffer(config_t& config) {
     communicationBuffer = region;
 }
 
+void RDMAHandler::create_and_setup_region_nonstat( config_t* config, bool* isReady ) {
+    std::cout << "Handler creating a new ressource." << std::endl;
+ 	
+    RDMARegion* region = new RDMARegion();
+    // create resources before using them
+	region->resources_create(*config, false);
+
+	// connect the QPs
+	sendRegionInfo( config, *region, rdma_create_region );
+    
+    while( communicationBuffer->receivePtr()[0] != rdma_receive_region ) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for( 100ms );
+    }
+
+    receiveRegionInfo( config, *region );
+    registerRegion( region );
+
+    if ( isReady ) {
+        *isReady = true;
+    }
+    // return current_id++;
+}
 
 void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
     std::cout << "Handler creating a new ressource." << std::endl;
@@ -95,4 +118,12 @@ void RDMAHandler::receiveRegionInfo( config_t* config, RDMARegion& region) {
 
 void RDMAHandler::registerRegion( RDMARegion* region ) {
     regions.insert( {current_id++, region} );   
+}
+
+void RDMAHandler::printRegions() const {
+    for ( auto it = regions.begin(); it != regions.end(); ++it ) {
+        std::cout << "Region [" << (*it).first << "]:" << std::endl;
+        (*it).second->print();
+        std::cout << std::endl;
+    }
 }

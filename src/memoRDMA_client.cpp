@@ -18,29 +18,26 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 	while( !*abort ) {
 		switch( region->receivePtr()[0] ) {
 			case rdma_create_region: {
-				std::cout << "[Rcv Region] Got data, initializing new region." << std::endl;
 				RDMARegion* newRegion = new RDMARegion();
 				newRegion->resources_create(*config, false);
-				std::cout << "[Rcv Region] Reading remote data from memory." << std::endl;
 				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
-				std::cout << "[Rcv Region] Sending local data back to host." << std::endl;
 				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion, rdma_receive_region );
 				RDMAHandler::getInstance().registerRegion( newRegion );
 				region->clearBuffer();
 			}; break;
 			case rdma_delete_region: {}; break;
 			case rdma_data_ready: {
-				std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << std::endl;
 				std::cout << "Client side received (rcv): " << region->receivePtr()+1 << std::endl;
 				std::cout << "Client side received (all):" << region->writePtr() << std::endl;
 				region->clearBuffer();
 			}; break;
 			default: {
-				std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
+				// std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
+				continue;
 			}; break;
 		}
 		std::cout.flags( f );
-		std::this_thread::sleep_for( 1000ms );
+		std::this_thread::sleep_for( 100ms );
 	}
 }
 
@@ -112,21 +109,19 @@ int main(int argc, char *argv[]) {
 
 	std::string op;
 	bool abort = false;
+	std::thread readWorker(check_receive, region, &config, &abort);
 
-	std::thread t(check_receive, region, &config, &abort);
 	while ( !abort ) {
-		std::cout << "Choose an opcode: [1] Read from region [2] Exit.";
+		std::cout << "[1] Exit.";
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 
 		if ( op == "1" ) {
-			// std::cout << "Client side received: " << region->res.buf << std::endl << std::endl;
-		} else if ( op == "2" ) {
 			abort = true;
 		}
 	}
 	std::cout << "Waiting for receiver thread to finish..." << std::endl;
-	t.join();
+	readWorker.join();
 	return 0;
 
 	// // @Client

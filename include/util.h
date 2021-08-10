@@ -215,7 +215,7 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
     if (opcode != IBV_WR_SEND) {
         sr.wr.rdma.remote_addr = res->remote_props.addr + offset;
         sr.wr.rdma.rkey = res->remote_props.rkey;
-        std::cout << "Setting offset: " << offset << " ptr is now: " << (void*)sr.wr.rdma.remote_addr << " was: " << (void*)res->remote_props.addr << std::endl;
+        // std::cout << "Setting offset: " << offset << " ptr is now: " << (void*)sr.wr.rdma.remote_addr << " was: " << (void*)res->remote_props.addr << std::endl;
     }
 
     // there is a receive request in the responder side, so we won't get any

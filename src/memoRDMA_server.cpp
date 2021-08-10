@@ -13,6 +13,35 @@ double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
 }
 
+void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
+	std::ios_base::fmtflags f( std::cout.flags() );
+	std::cout << "Starting Client-side monitoring thread" << std::endl;
+	using namespace std::chrono_literals;
+	while( !*abort ) {
+		switch( region->receivePtr()[0] ) {
+			case rdma_create_region: {
+				RDMARegion* newRegion = new RDMARegion();
+				newRegion->resources_create(*config, false);
+				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
+				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion, rdma_receive_region );
+				RDMAHandler::getInstance().registerRegion( newRegion );
+				region->clearBuffer();
+			}; break;
+			case rdma_delete_region: {}; break;
+			case rdma_data_ready: {
+				std::cout << "Received data: " << region->receivePtr()+1 << std::endl;
+				region->clearBuffer();
+			}; break;
+			default: {
+				// std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
+				continue;
+			}; break;
+		}
+		std::cout.flags( f );
+		std::this_thread::sleep_for( 100ms );
+	}
+}
+
 int main(int argc, char *argv[]) {
 	config_t config = {.dev_name = NULL,
                           .server_name = NULL,
@@ -84,7 +113,6 @@ int main(int argc, char *argv[]) {
 	typedef std::chrono::duration<float> secs;
 	// @Server
 	std::string content;
-	std::cout << "Entering Server side event loop." << std::endl;
 	
 	std::string op;
 	bool abort = false;
@@ -92,11 +120,19 @@ int main(int argc, char *argv[]) {
 	std::map< uint32_t, std::pair< bool*, std::thread* > > pool;
 	std::atomic< size_t > global_id = {0};
 
+	std::thread readWorker(check_receive, region, &config, &abort);
+	std::cout << "Entering Server side event loop." << std::endl;
 	while ( !abort ) {
-		std::cout << "Choose an opcode: [1] Direct write [2] Commit [3] Create new region [4] Check Threads [5] Exit";
+		std::cout << "Choose an opcode: [1] Direct write ";
+		std::cout << "[2] Commit ";
+		std::cout << "[3] Create new region ";
+		std::cout << "[4] Check Threads ";
+		std::cout << "[5] Print Regions ";
+		std::cout << "[6] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
+
 		if ( op == "1" ) {
 			std::getline(std::cin, content);
 			std::cout << std::endl << "Server side sending: " << content << std::endl;
@@ -120,7 +156,7 @@ int main(int argc, char *argv[]) {
 			for ( auto it = pool.begin(); it != pool.end(); ) {
 				std::cout << "Checking thread..." << it->first << std::flush;
 				if ( *it->second.first ) {
-					std::cout << "joining thread " << it->first << std::endl;
+					std::cout << " -- joining thread " << it->first << std::endl;
 					it->second.second->join();
 					it = pool.erase( it );
 				} else {
@@ -129,20 +165,11 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		} else if ( op == "5" ) {
+			RDMAHandler::getInstance().printRegions();
+		} else if ( op == "6" ) {
 			abort = true;
 		}
 	}
+	readWorker.join();
 	return 0;
-  		
-	while( true ) {
-		std::getline(std::cin, content);
-		std::cout << std::endl << "Server side sending: " << content << std::endl;
-		strcpy( region->res.buf, content.c_str() );
-		auto t_start = hrc::now();
-		post_send(&region->res, content.size(), IBV_WR_SEND);
-		poll_completion(&region->res);
-		auto t_end = hrc::now();
-		secs dur = t_end - t_start;
-		std::cout << "Transmission of " << content.size() << " Bytes (" << BtoMB(content.size()) << " MB) took " << dur.count() << " us (" << BtoMB(content.size()) / dur.count() << " MB/s)" << std::endl;
-	}
 }

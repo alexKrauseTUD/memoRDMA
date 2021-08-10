@@ -44,6 +44,8 @@ class RDMARegion {
         char* receivePtr();
         uint64_t inline maxWriteSize() const;
 
+        void print() const;
+
         void clearBuffer();
 
         struct resources res;
