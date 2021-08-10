@@ -275,10 +275,10 @@ uint64_t inline RDMARegion::maxWriteSize() const {
 void RDMARegion::print() const {
     std::ios_base::fmtflags f( std::cout.flags() );
     std::cout << std::hex;
-    std::cout << "Remote address = " << res.remote_props.addr << std::endl;
-    std::cout << "Remote rkey = " <<  res.remote_props.rkey << std::endl;
-    std::cout << "Remote QP number = " << res.remote_props.qp_num << std::endl;
-    std::cout << "Remote LID = " << res.remote_props.lid << std::endl;
+    std::cout << "\tRemote address = " << res.remote_props.addr << std::endl;
+    std::cout << "\tRemote rkey = " <<  res.remote_props.rkey << std::endl;
+    std::cout << "\tRemote QP number = " << res.remote_props.qp_num << std::endl;
+    std::cout << "\tRemote LID = " << res.remote_props.lid << std::endl;
     std::cout.flags( f );
 }
 

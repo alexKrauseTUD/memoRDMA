@@ -157,21 +157,27 @@ int main(int argc, char *argv[]) {
 		std::getline(std::cin, content);
 
 		if ( op == "1" ) {
-			std::cout << "Which region?" << std::endl;
+			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
 			uint64_t rid;
+			RDMARegion* sendingRegion;
 			std::getline(std::cin, content);
-			try {
-				char* pEnd;
-				rid = strtoull(content.c_str(), &pEnd, 10);
+			if (content != "d") {
+				try {
+					char* pEnd;
+					rid = strtoull(content.c_str(), &pEnd, 10);
 
-			} catch (...) {
-				std::cout << "[Error] Couldn't convert number." << std::endl;
-				continue;
+				} catch (...) {
+					std::cout << "[Error] Couldn't convert number." << std::endl;
+					continue;
+				}
+				sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			} else {
+				sendingRegion = RDMAHandler::getInstance().communicationBuffer;
 			}
 			std::cout << "Content: " << std::flush;
 			std::getline(std::cin, content);
-			RDMARegion* sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			
 			if ( sendingRegion ) {
 				strcpy( sendingRegion->writePtr()+1, content.c_str() );
 				post_send(&sendingRegion->res, content.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
@@ -180,19 +186,25 @@ int main(int argc, char *argv[]) {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "2" ) {
-			std::cout << "Which region?" << std::endl;
+			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
 			uint64_t rid;
+			RDMARegion* sendingRegion;
 			std::getline(std::cin, content);
-			try {
-				char* pEnd;
-				rid = strtoull(content.c_str(), &pEnd, 10);
+			if (content != "d") {
+				try {
+					char* pEnd;
+					rid = strtoull(content.c_str(), &pEnd, 10);
 
-			} catch (...) {
-				std::cout << "[Error] Couldn't convert number." << std::endl;
-				continue;
+				} catch (...) {
+					std::cout << "[Error] Couldn't convert number." << std::endl;
+					continue;
+				}
+				sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			} else {
+				sendingRegion = RDMAHandler::getInstance().communicationBuffer;
 			}
-			RDMARegion* sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side commiting." << std::endl;
 				sendingRegion->writePtr()[0] = rdma_data_ready;
