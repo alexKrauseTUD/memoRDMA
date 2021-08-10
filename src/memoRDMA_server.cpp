@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <functional>
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -87,10 +88,12 @@ int main(int argc, char *argv[]) {
 	std::vector< std::thread* > regionThreads;
 	std::atomic< size_t > global_id = {0};
 
-	auto check_receive = []( RDMARegion* communicationRegion, config_t* config, bool* abort ) {
+	std::function<void (RDMARegion*, config_t*, bool*)> check_receive;
+	
+	check_receive = [&regionThreads,&check_receive]( RDMARegion* communicationRegion, config_t* config, bool* abort ) {
 		using namespace std::chrono_literals;
 		std::ios_base::fmtflags f( std::cout.flags() );
-		std::cout << "Starting Client-side monitoring thread" << std::endl;
+		std::cout << "Starting monitoring thread for region " << communicationRegion << std::endl;
 		while( !*abort ) {
 			switch( communicationRegion->receivePtr()[0] ) {
 				case rdma_create_region: {
@@ -99,6 +102,8 @@ int main(int argc, char *argv[]) {
 					RDMAHandler::getInstance().receiveRegionInfo( config, communicationRegion, newRegion );
 					RDMAHandler::getInstance().sendRegionInfo( config, communicationRegion, newRegion, rdma_receive_region );
 					RDMAHandler::getInstance().registerRegion( newRegion );
+					regionThreads.emplace_back( new std::thread(check_receive, newRegion, config, abort) );
+					std::cout << "Monitor created new region thread." << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				}; break;
 				case rdma_delete_region: {}; break;
@@ -127,7 +132,9 @@ int main(int argc, char *argv[]) {
 					auto newRegion = RDMAHandler::getInstance().getRegion( *std::get<1>(it->second) );
 					regionThreads.emplace_back( new std::thread(check_receive, newRegion, &config, abort) );
 					std::cout << "Spawned new listener thread for region: " << *std::get<1>(it->second) << std::endl;
-					/* Remove element from global map */
+					/* Cleanup & remove element from global map */
+					delete std::get<2>( it->second );
+					delete std::get<1>( it->second );
 					it = pool.erase( it );
 				}
 			}
@@ -173,8 +180,25 @@ int main(int argc, char *argv[]) {
 			abort = true;
 		}
 	}
+	std::cout << "Joining general workers..." << std::endl;
 	readWorker.join();
 	creationWorker.join();
+	std::cout << "Joining region workers..." << std::endl;
+	for ( auto t : regionThreads ) {
+		t->join();
+		delete t;
+	}
+	std::cout << "Cleaning pool..." << std::endl;
+	for ( auto it = pool.begin(); it != pool.end(); ) {
+		for ( auto it = pool.begin(); it != pool.end(); ) {
+			if ( *std::get<0>(it->second) ) {
+				std::get<2>(it->second)->join();
+				delete std::get<2>( it->second );
+				delete std::get<1>( it->second );
+				it = pool.erase( it );
+			}
+		}		
+	}
 
 	return 0;
 }
