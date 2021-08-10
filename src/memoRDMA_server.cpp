@@ -200,7 +200,6 @@ int main(int argc, char *argv[]) {
 				try {
 					char* pEnd;
 					rid = strtoull(content.c_str(), &pEnd, 10);
-
 				} catch (...) {
 					std::cout << "[Error] Couldn't convert number." << std::endl;
 					continue;
@@ -228,7 +227,7 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "4" ) {
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) {
-			std::cout << "Which region?" << std::endl;
+			std::cout << "Delete which region?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
 			uint64_t rid;
 			RDMARegion* sendingRegion;
@@ -236,7 +235,6 @@ int main(int argc, char *argv[]) {
 			try {
 				char* pEnd;
 				rid = strtoull(content.c_str(), &pEnd, 10);
-
 			} catch (...) {
 				std::cout << "[Error] Couldn't convert number." << std::endl;
 				continue;
@@ -248,7 +246,7 @@ int main(int argc, char *argv[]) {
 				sendingRegion->writePtr()[0] = rdma_delete_region;
 				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 				poll_completion(&sendingRegion->res);
-				sendingRegion->receivePtr()[0] = rdma_delete_region;
+				// sendingRegion->receivePtr()[0] = rdma_delete_region;
 			} else {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
