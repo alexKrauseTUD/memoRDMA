@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
 				post_send(&r->res, 24, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
 				poll_completion(&r->res);
 
-				r->writePtr()[0] = rdma_delete_region;
+				r->writePtr()[0] = rdma_data_ready;
 				post_send(&r->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 				poll_completion(&r->res);
 			}
