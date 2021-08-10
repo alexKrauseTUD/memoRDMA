@@ -7,38 +7,11 @@
 #include "RDMAHandler.h"
 #include <map>
 #include <thread>
+#include <vector>
 #include <atomic>
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
-}
-
-void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
-	std::ios_base::fmtflags f( std::cout.flags() );
-	std::cout << "Starting Client-side monitoring thread" << std::endl;
-	using namespace std::chrono_literals;
-	while( !*abort ) {
-		switch( region->receivePtr()[0] ) {
-			case rdma_create_region: {
-				RDMARegion* newRegion = new RDMARegion();
-				newRegion->resources_create(*config, false);
-				RDMAHandler::getInstance().receiveRegionInfo( config, newRegion );
-				RDMAHandler::getInstance().sendRegionInfo( config, newRegion, rdma_receive_region );
-				RDMAHandler::getInstance().registerRegion( newRegion );
-				region->clearCompleteBuffer();
-			}; break;
-			case rdma_delete_region: {}; break;
-			case rdma_data_ready: {
-				std::cout << "Received data: " << region->receivePtr()+1 << std::endl;
-				region->clearCompleteBuffer();
-			}; break;
-			default: {
-				continue;
-			}; break;
-		}
-		std::cout.flags( f );
-		std::this_thread::sleep_for( 100ms );
-	}
 }
 
 int main(int argc, char *argv[]) {
@@ -110,18 +83,68 @@ int main(int argc, char *argv[]) {
 	std::string op;
 	bool abort = false;
 
-	std::map< uint32_t, std::pair< bool*, std::thread* > > pool;
+	std::map< uint32_t, std::tuple< bool*, uint64_t*, std::thread* > > pool;
+	std::vector< std::thread* > regionThreads;
 	std::atomic< size_t > global_id = {0};
 
+	auto check_receive = []( RDMARegion* communicationRegion, config_t* config, bool* abort ) {
+		using namespace std::chrono_literals;
+		std::ios_base::fmtflags f( std::cout.flags() );
+		std::cout << "Starting Client-side monitoring thread" << std::endl;
+		while( !*abort ) {
+			switch( communicationRegion->receivePtr()[0] ) {
+				case rdma_create_region: {
+					RDMARegion* newRegion = new RDMARegion();
+					newRegion->resources_create(*config, false);
+					RDMAHandler::getInstance().receiveRegionInfo( config, communicationRegion, newRegion );
+					RDMAHandler::getInstance().sendRegionInfo( config, communicationRegion, newRegion, rdma_receive_region );
+					RDMAHandler::getInstance().registerRegion( newRegion );
+					communicationRegion->clearCompleteBuffer();
+				}; break;
+				case rdma_delete_region: {}; break;
+				case rdma_data_ready: {
+					std::cout << "Received data: " << communicationRegion->receivePtr()+1 << std::endl;
+					communicationRegion->clearCompleteBuffer();
+				}; break;
+				default: {
+					continue;
+				}; break;
+			}
+			std::cout.flags( f );
+			std::this_thread::sleep_for( 100ms );
+		}
+	};
+
+	auto check_regions = [&pool,&regionThreads,&global_id,&check_receive,&config]( bool* abort ) {
+		using namespace std::chrono_literals;
+		while (!*abort) {
+			for ( auto it = pool.begin(); it != pool.end(); ) {
+				if ( *std::get<0>(it->second) ) {
+					/* Memory region created, old thread can be let go */
+					std::cout << "Joining thread " << it->first << std::endl;
+					std::get<2>(it->second)->join();
+					/* Spawning new thread to listen to it */
+					auto newRegion = RDMAHandler::getInstance().getRegion( *std::get<1>(it->second) );
+					regionThreads.emplace_back( new std::thread(check_receive, newRegion, &config, abort) );
+					std::cout << "Spawned new listener thread for region: " << *std::get<1>(it->second) << std::endl;
+					/* Remove element from global map */
+					it = pool.erase( it );
+				}
+			}
+			std::this_thread::sleep_for( 1ms );
+		}
+	};
+
 	std::thread readWorker(check_receive, region, &config, &abort);
+	std::thread creationWorker(check_regions, &abort);
+
 	std::cout << "Entering Server side event loop." << std::endl;
 	while ( !abort ) {
 		std::cout << "Choose an opcode: [1] Direct write ";
 		std::cout << "[2] Commit ";
 		std::cout << "[3] Create new region ";
-		std::cout << "[4] Check Threads ";
-		std::cout << "[5] Print Regions ";
-		std::cout << "[6] Exit" << std::endl;
+		std::cout << "[4] Print Regions ";
+		std::cout << "[5] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
@@ -141,27 +164,17 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "3" ) {
 			bool* b = new bool();
 			*b = false;
-			std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, &RDMAHandler::getInstance(), &config, b );
-			pool.insert( {global_id++, {b,t}} );
+			uint64_t* tid = new uint64_t();
+			std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, &RDMAHandler::getInstance(), &config, tid, b );
+			pool.insert( {global_id++, {b,tid,t}} );
 		} else if ( op == "4" ) {
-			std::cout << "There are " << pool.size() << " threads to check." << std::endl;
-			for ( auto it = pool.begin(); it != pool.end(); ) {
-				std::cout << "Checking thread..." << it->first << std::flush;
-				if ( *it->second.first ) {
-					std::cout << " -- joining thread " << it->first << std::endl;
-					it->second.second->join();
-					it = pool.erase( it );
-				} else {
-					std::cout << "not ready yet." << std::endl;
-					++it;
-				}
-			}
-		} else if ( op == "5" ) {
 			RDMAHandler::getInstance().printRegions();
-		} else if ( op == "6" ) {
+		} else if ( op == "5" ) {
 			abort = true;
 		}
 	}
 	readWorker.join();
+	creationWorker.join();
+
 	return 0;
 }
