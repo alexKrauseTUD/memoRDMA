@@ -5,6 +5,10 @@ RDMARegion::RDMARegion() {
 
 }
 
+RDMARegion::~RDMARegion() {
+    resources_destroy();
+}
+
 int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     memset(&res, 0, sizeof(res));
     res.sock = -1;

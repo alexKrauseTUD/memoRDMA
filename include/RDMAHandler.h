@@ -42,6 +42,7 @@ class RDMAHandler {
         
         void connect_qp_rdma( config_t* config, RDMARegion& region );
         uint64_t registerRegion( RDMARegion* region );
+        void removeRegion( RDMARegion* region );
         
         void printRegions() const;
 

@@ -100,6 +100,18 @@ uint64_t RDMAHandler::registerRegion( RDMARegion* region ) {
     return current_id++;
 }
 
+void RDMAHandler::removeRegion( RDMARegion* region ) {
+    for ( auto it = regions.begin(); it != regions.end(); ++it ) {
+        if ( it->second == region ) {
+            std::cout << "Removing Region [" << it->first << "] " << it->second << std::endl;
+            it = regions.erase( it );
+            delete region;
+        } else {
+            it++;
+        }
+    }
+}
+
 void RDMAHandler::printRegions() const {
     for ( auto it = regions.begin(); it != regions.end(); ++it ) {
         std::cout << "Region [" << (*it).first << "]:" << std::endl;

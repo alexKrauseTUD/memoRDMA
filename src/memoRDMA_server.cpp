@@ -106,7 +106,11 @@ int main(int argc, char *argv[]) {
 					std::cout << "Monitor created new region thread." << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				}; break;
-				case rdma_delete_region: {}; break;
+				case rdma_delete_region: {
+					RDMAHandler::getInstance().removeRegion( communicationRegion );
+					std::cout << "Monitoring thread for Region " << communicationRegion << " stopping." << std::endl;
+					return;
+				}; break;
 				case rdma_data_ready: {
 					std::cout << "Received data [" << communicationRegion << "]: " << communicationRegion->receivePtr()+1 << std::endl;
 					communicationRegion->clearCompleteBuffer();
@@ -151,7 +155,8 @@ int main(int argc, char *argv[]) {
 		std::cout << "[2] Commit ";
 		std::cout << "[3] Create new region ";
 		std::cout << "[4] Print Regions ";
-		std::cout << "[5] Exit" << std::endl;
+		std::cout << "[5] Delete Region" << std::endl;
+		std::cout << "[6] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
@@ -204,7 +209,7 @@ int main(int argc, char *argv[]) {
 			} else {
 				sendingRegion = RDMAHandler::getInstance().communicationBuffer;
 			}
-			
+
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side commiting." << std::endl;
 				sendingRegion->writePtr()[0] = rdma_data_ready;
@@ -223,6 +228,31 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "4" ) {
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) {
+			std::cout << "Which region?" << std::endl;
+			RDMAHandler::getInstance().printRegions();
+			uint64_t rid;
+			RDMARegion* sendingRegion;
+			std::getline(std::cin, content);
+			try {
+				char* pEnd;
+				rid = strtoull(content.c_str(), &pEnd, 10);
+
+			} catch (...) {
+				std::cout << "[Error] Couldn't convert number." << std::endl;
+				continue;
+			}
+			sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+
+			if ( sendingRegion ) {
+				std::cout << std::endl << "Server side asking to delete region." << std::endl;
+				sendingRegion->writePtr()[0] = rdma_delete_region;
+				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+				poll_completion(&sendingRegion->res);
+				sendingRegion->receivePtr()[0] = rdma_delete_region;
+			} else {
+				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
+			}
+		} else if ( op == "6" ) {
 			abort = true;
 		}
 	}

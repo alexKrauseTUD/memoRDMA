@@ -33,12 +33,13 @@ struct resources {
 class RDMARegion {
     public:
         RDMARegion();
+        ~RDMARegion();
+
         int resources_create(struct config_t& config, bool initTCP = true );
         void resources_sync_local( config_t* config, struct cm_con_data_t& tmp_con_data );
         int modify_qp_to_init(struct config_t& config, struct ibv_qp *qp);
         int modify_qp_to_rtr(struct config_t& config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
         int modify_qp_to_rts(struct ibv_qp *qp);
-        int resources_destroy();
 
         char* writePtr();
         char* receivePtr();
@@ -52,6 +53,9 @@ class RDMARegion {
         void clearReadBuffer();
 
         struct resources res;
+    
+    private:
+        int resources_destroy();
 };
 
 #endif // MEMORDMA_RDMA_REGION_H
