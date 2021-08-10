@@ -262,6 +262,7 @@ int main(int argc, char *argv[]) {
 				r->writePtr()[0] = rdma_data_ready;
 				post_send(&r->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 				poll_completion(&r->res);
+				r->clearCompleteBuffer();
 			}
 		} else if ( op == "7" ) {
 			abort = true;
