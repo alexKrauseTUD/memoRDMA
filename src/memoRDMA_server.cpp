@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
 					it = pool.erase( it );
 				}
 			}
-			std::this_thread::sleep_for( 1ms );
+			std::this_thread::sleep_for( 50ms );
 		}
 	};
 
