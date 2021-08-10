@@ -31,7 +31,7 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
 
     receiveRegionInfo( config, region );
     registerRegion( region );
-    communicationBuffer->clearReadCode();
+    communicationBuffer->clearCompleteBuffer();
 
     if ( isReady ) {
         *isReady = true;
