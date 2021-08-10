@@ -6,10 +6,10 @@
 #include <unordered_map>
 
 enum rdma_handler_communication {
-    rdma_create_region  = 1 << 0,
-    rdma_delete_region  = 1 << 1,
-    rdma_receive_region = 1 << 2,
-    rdma_data_ready     = 1 << 3
+    rdma_create_region  = 1,
+    rdma_delete_region  = 2,
+    rdma_receive_region = 3,
+    rdma_data_ready     = 4
 };
 
 class RDMAHandler {
@@ -35,11 +35,10 @@ class RDMAHandler {
 
         /* Functions */
         void setupCommunicationBuffer( config_t& config );
-        void sendRegionInfo( config_t* config, RDMARegion& region, rdma_handler_communication flag );
-        void receiveRegionInfo( config_t* config, RDMARegion& region);
+        void sendRegionInfo( config_t* config, RDMARegion* region, rdma_handler_communication opcode );
+        void receiveRegionInfo( config_t* config, RDMARegion* region);
         
-        static void create_and_setup_region( config_t* config, bool* isReady = nullptr );
-        void create_and_setup_region_nonstat( config_t* config, bool* isReady = nullptr );
+        void create_and_setup_region( config_t* config, bool* isReady = nullptr );
         
         void connect_qp_rdma( config_t* config, RDMARegion& region );
         void registerRegion( RDMARegion* region );

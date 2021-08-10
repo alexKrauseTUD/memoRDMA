@@ -33,7 +33,6 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 				region->clearBuffer();
 			}; break;
 			default: {
-				// std::cout << "Current postbox byte: " << std::hex << region->receivePtr()[0] << " Reading at " << (void*)region->receivePtr() << std::endl;
 				continue;
 			}; break;
 		}
@@ -101,19 +100,16 @@ int main(int argc, char *argv[]) {
 		print_usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	// \end parse command line parameters
 
 	print_config(config);
-
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
 	region->clearBuffer();
 	
 	using hrc = std::chrono::high_resolution_clock;
 	typedef std::chrono::duration<float> secs;
-	// @Server
+
 	std::string content;
-	
 	std::string op;
 	bool abort = false;
 
@@ -148,8 +144,7 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "3" ) {
 			bool* b = new bool();
 			*b = false;
-			// std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, RDMAHandler::getInstance(), &config, b );
-			std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, &config, b );
+			std::thread* t = new std::thread( &RDMAHandler::create_and_setup_region, &RDMAHandler::getInstance(), &config, b );
 			pool.insert( {global_id++, {b,t}} );
 		} else if ( op == "4" ) {
 			std::cout << "There are " << pool.size() << " threads to check." << std::endl;
