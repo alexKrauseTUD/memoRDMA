@@ -43,14 +43,6 @@ void RDMAHandler::create_and_setup_region( config_t* config, uint64_t* newRegion
     }
 }
 
-RDMARegion* RDMAHandler::getRegion( uint32_t id ) {
-    auto it = regions.find( id );
-    if ( it != regions.end() ) {
-        return it->second;
-    } 
-    return nullptr;
-}
-
 void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode ) {
     struct cm_con_data_t local_con_data;
     union ibv_gid my_gid;
@@ -118,4 +110,21 @@ void RDMAHandler::printRegions() const {
         (*it).second->print();
         std::cout << std::endl;
     }
+}
+
+RDMARegion* RDMAHandler::getRegion( uint32_t id ) const {
+    auto it = regions.find( id );
+    if ( it != regions.end() ) {
+        return it->second;
+    } 
+    return nullptr;
+}
+
+
+std::vector< RDMARegion* > RDMAHandler::getAllRegions() const {
+    std::vector< RDMARegion* > rs;
+    for ( auto it = regions.begin(); it != regions.end(); ++it ) {    
+        rs.emplace_back( it->second );
+    }
+     return rs;
 }

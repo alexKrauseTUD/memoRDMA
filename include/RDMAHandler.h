@@ -4,6 +4,7 @@
 #include "util.h"
 #include "RDMARegion.h"
 #include <unordered_map>
+#include <vector>
 
 enum rdma_handler_communication {
     rdma_create_region  = 1,
@@ -44,9 +45,11 @@ class RDMAHandler {
         uint64_t registerRegion( RDMARegion* region );
         void removeRegion( RDMARegion* region );
         
+
         void printRegions() const;
 
-        RDMARegion* getRegion( uint32_t id );
+        std::vector< RDMARegion* > getAllRegions() const;
+        RDMARegion* getRegion( uint32_t id ) const;
 
         RDMARegion* communicationBuffer;
 };

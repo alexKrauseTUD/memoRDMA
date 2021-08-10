@@ -151,12 +151,13 @@ int main(int argc, char *argv[]) {
 
 	std::cout << "Entering Server side event loop." << std::endl;
 	while ( !abort ) {
-		std::cout << "Choose an opcode: [1] Direct write ";
+		std::cout << "Choose an opcode:\n[1] Direct write ";
 		std::cout << "[2] Commit ";
-		std::cout << "[3] Create new region ";
+		std::cout << "[3] Create new region\n";
 		std::cout << "[4] Print Regions ";
 		std::cout << "[5] Delete Region" << std::endl;
-		std::cout << "[6] Exit" << std::endl;
+		std::cout << "[6] Send dummy to all regions." << std::endl;
+		std::cout << "[7] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
@@ -246,11 +247,23 @@ int main(int argc, char *argv[]) {
 				sendingRegion->writePtr()[0] = rdma_delete_region;
 				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
 				poll_completion(&sendingRegion->res);
-				// sendingRegion->receivePtr()[0] = rdma_delete_region;
+				sendingRegion->receivePtr()[0] = rdma_delete_region;
 			} else {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "6" ) {
+			auto regs = RDMAHandler::getInstance().getAllRegions();
+			char* dummy = "This is a dummy message.";
+			for ( auto r : regs ) {
+				strcpy( r->writePtr()+1, dummy );
+				post_send(&r->res, 24, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+				poll_completion(&r->res);
+
+				r->writePtr()[0] = rdma_delete_region;
+				post_send(&r->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+				poll_completion(&r->res);
+			}
+		} else if ( op == "7" ) {
 			abort = true;
 		}
 	}
