@@ -22,8 +22,8 @@ void check_receive( RDMARegion* region, config_t* config, bool* abort ) {
 			case rdma_create_region: {
 				RDMARegion* newRegion = new RDMARegion();
 				newRegion->resources_create(*config, false);
-				RDMAHandler::getInstance().receiveRegionInfo( config, *newRegion );
-				RDMAHandler::getInstance().sendRegionInfo( config, *newRegion, rdma_receive_region );
+				RDMAHandler::getInstance().receiveRegionInfo( config, newRegion );
+				RDMAHandler::getInstance().sendRegionInfo( config, newRegion, rdma_receive_region );
 				RDMAHandler::getInstance().registerRegion( newRegion );
 				region->clearBuffer();
 			}; break;

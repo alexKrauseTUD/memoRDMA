@@ -29,7 +29,7 @@ void RDMAHandler::create_and_setup_region( config_t* config, bool* isReady ) {
         std::this_thread::sleep_for( 100ms );
     }
 
-    receiveRegionInfo( config, *region );
+    receiveRegionInfo( config, region );
     registerRegion( region );
 
     if ( isReady ) {
@@ -53,7 +53,7 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* region, rdma_han
     memset(&my_gid, 0, sizeof(my_gid));
 
     if (config->gid_idx >= 0) {
-        CHECK(ibv_query_gid(region.res.ib_ctx, config->ib_port, config->gid_idx, &my_gid));
+        CHECK(ibv_query_gid(region->res.ib_ctx, config->ib_port, config->gid_idx, &my_gid));
     }
 
     local_con_data.addr = (uint64_t)region->res.buf;
