@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
 					while ( size + 9 > BUFF_SIZE/2 ) {  
 						communicationRegion->clearReadCode();
 						std::cout << "Size to write left: " << size << std::endl;
-						dataToWrite = communicationRegion->maxWriteSize() - 5;
+						dataToWrite = communicationRegion->maxWriteSize() - 9;
 						std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, totalSize, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
