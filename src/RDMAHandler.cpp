@@ -53,10 +53,10 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* communicationReg
         CHECK(ibv_query_gid(newRegion->res.ib_ctx, config->ib_port, config->gid_idx, &my_gid));
     }
 
-    local_con_data.addr = htonll((uintptr_t)newRegion->res.buf);
-    local_con_data.rkey = htonl(newRegion->res.mr->rkey);
-    local_con_data.qp_num = htonl(newRegion->res.qp->qp_num);
-    local_con_data.lid = htons(newRegion->res.port_attr.lid);
+    local_con_data.addr = (uint64_t)newRegion->res.buf;
+    local_con_data.rkey = newRegion->res.mr->rkey;
+    local_con_data.qp_num = newRegion->res.qp->qp_num;
+    local_con_data.lid = newRegion->res.port_attr.lid;
     memcpy(local_con_data.gid, &my_gid, 16);
     INFO("\n Local LID      = 0x%x\n", newRegion->res.port_attr.lid);
 

@@ -138,10 +138,10 @@ die:
 // Adding remote info to local region and set local QP to INIT->RTR->RTS
 void RDMARegion::resources_sync_local( config_t* config, struct cm_con_data_t& tmp_con_data ) {
     struct cm_con_data_t remote_con_data;
-    remote_con_data.addr = ntohll(tmp_con_data.addr);
-    remote_con_data.rkey = ntohl(tmp_con_data.rkey);
-    remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
-    remote_con_data.lid = ntohs(tmp_con_data.lid);
+    remote_con_data.addr = tmp_con_data.addr;
+    remote_con_data.rkey = tmp_con_data.rkey;
+    remote_con_data.qp_num = tmp_con_data.qp_num;
+    remote_con_data.lid = tmp_con_data.lid;
     memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
 
     res.remote_props = remote_con_data;
@@ -287,7 +287,7 @@ void RDMARegion::print() const {
 }
 
 void RDMARegion::clearReadCode() {
-    res.buf[0] = '0';
+    memset( res.buf, 0, 1 );
 }
 
 void RDMARegion::clearCompleteBuffer() {
@@ -295,9 +295,26 @@ void RDMARegion::clearCompleteBuffer() {
 }
 
 void RDMARegion::clearWriteBuffer() {
-    memset( res.buf, 0, maxWriteSize() );
+    memset( res.buf, 0, maxWriteSize()/2 );
 }
 
 void RDMARegion::clearReadBuffer() {
-    memset( res.buf + maxWriteSize(), 0, maxWriteSize() );
+    memset( res.buf + maxWriteSize(), 0, maxWriteSize()/2 );
+}
+
+void RDMARegion::setSendData( std::string s ) {
+    strcpy( writePtr()+1, s.c_str() );
+    post_send(&res, s.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+    poll_completion(&res);
+}
+
+void RDMARegion::setSendData( uint64_t* data, size_t size ) {
+
+}
+
+void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
+    writePtr()[0] = opcode;
+    post_send(&res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    poll_completion(&res);
+    clearCompleteBuffer();
 }

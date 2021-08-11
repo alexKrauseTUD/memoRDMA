@@ -1,17 +1,11 @@
 #ifndef MEMORDMA_RDMA_HANDLER_H
 #define MEMORDMA_RDMA_HANDLER_H
 
+#include "common.h"
 #include "util.h"
 #include "RDMARegion.h"
 #include <unordered_map>
 #include <vector>
-
-enum rdma_handler_communication {
-    rdma_create_region  = 1,
-    rdma_delete_region  = 2,
-    rdma_receive_region = 3,
-    rdma_data_ready     = 4
-};
 
 class RDMAHandler {
     public:

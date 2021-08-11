@@ -5,6 +5,8 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <string>
+#include "common.h"
 #include "util.h"
 
 // structure to exchange data which is needed to connect the QPs
@@ -40,6 +42,10 @@ class RDMARegion {
         int modify_qp_to_init(struct config_t& config, struct ibv_qp *qp);
         int modify_qp_to_rtr(struct config_t& config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
         int modify_qp_to_rts(struct ibv_qp *qp);
+
+        void setSendData( std::string s );
+        void setSendData( uint64_t* data, size_t size );
+        void setCommitCode( rdma_handler_communication opcode );
 
         char* writePtr();
         char* receivePtr();

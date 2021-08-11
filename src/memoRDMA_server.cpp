@@ -2,14 +2,15 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
-#include "util.h"
-#include "RDMARegion.h"
-#include "RDMAHandler.h"
 #include <map>
 #include <thread>
 #include <vector>
 #include <atomic>
 #include <functional>
+#include "util.h"
+#include "RDMARegion.h"
+#include "RDMAHandler.h"
+#include "DataProvider.h"
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -79,7 +80,9 @@ int main(int argc, char *argv[]) {
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
 	region->clearCompleteBuffer();
-	
+	DataProvider d;
+	d.generateDummyData( 1024 );
+
 	std::string content;
 	std::string op;
 	bool abort = false;
@@ -115,6 +118,9 @@ int main(int argc, char *argv[]) {
 					std::cout << "Received data [" << communicationRegion << "]: " << communicationRegion->receivePtr()+1 << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				}; break;
+				case rdma_fetch_data: {
+
+				} break;
 				default: {
 					continue;
 				}; break;
@@ -137,12 +143,39 @@ int main(int argc, char *argv[]) {
 					regionThreads.emplace_back( new std::thread(check_receive, newRegion, &config, abort) );
 					std::cout << "Spawned new listener thread for region: " << *std::get<1>(it->second) << std::endl;
 					/* Cleanup & remove element from global map */
-					delete std::get<2>( it->second );
-					delete std::get<1>( it->second );
+					delete std::get<2>( it->second ); // thread pointer
+					delete std::get<1>( it->second ); // regionid pointer
 					it = pool.erase( it );
 				}
 			}
 			std::this_thread::sleep_for( 50ms );
+		}
+	};
+
+	auto selectRegion = []( bool withDefault ) -> RDMARegion* {
+		if ( withDefault ) {
+			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
+		} else {
+			std::cout << "Which region?" << std::endl;
+		}
+		std::string content;
+		std::getline(std::cin, content);
+		uint64_t rid;
+		if (content != "d") {
+			try {
+				char* pEnd;
+				rid = strtoull(content.c_str(), &pEnd, 10);
+
+			} catch (...) {
+				std::cout << "[Error] Couldn't convert number." << std::endl;
+				return nullptr;
+			}
+			return RDMAHandler::getInstance().getRegion( rid );
+		} else {
+			if ( !withDefault ) {
+				return nullptr;
+			}
+			return RDMAHandler::getInstance().communicationBuffer;
 		}
 	};
 
@@ -163,59 +196,24 @@ int main(int argc, char *argv[]) {
 		std::getline(std::cin, content);
 
 		if ( op == "1" ) {
-			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
-			uint64_t rid;
-			RDMARegion* sendingRegion;
-			std::getline(std::cin, content);
-			if (content != "d") {
-				try {
-					char* pEnd;
-					rid = strtoull(content.c_str(), &pEnd, 10);
-
-				} catch (...) {
-					std::cout << "[Error] Couldn't convert number." << std::endl;
-					continue;
-				}
-				sendingRegion = RDMAHandler::getInstance().getRegion( rid );
-			} else {
-				sendingRegion = RDMAHandler::getInstance().communicationBuffer;
-			}
+			RDMARegion* sendingRegion = selectRegion( true );
+			
 			std::cout << "Content: " << std::flush;
 			std::getline(std::cin, content);
 			
 			if ( sendingRegion ) {
-				strcpy( sendingRegion->writePtr()+1, content.c_str() );
-				post_send(&sendingRegion->res, content.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
-				poll_completion(&sendingRegion->res);
+				sendingRegion->setSendData( content );
 			} else {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "2" ) {
-			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
-			uint64_t rid;
-			RDMARegion* sendingRegion;
-			std::getline(std::cin, content);
-			if (content != "d") {
-				try {
-					char* pEnd;
-					rid = strtoull(content.c_str(), &pEnd, 10);
-				} catch (...) {
-					std::cout << "[Error] Couldn't convert number." << std::endl;
-					continue;
-				}
-				sendingRegion = RDMAHandler::getInstance().getRegion( rid );
-			} else {
-				sendingRegion = RDMAHandler::getInstance().communicationBuffer;
-			}
+			RDMARegion* sendingRegion = selectRegion( true );
 
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side commiting." << std::endl;
-				sendingRegion->writePtr()[0] = rdma_data_ready;
-				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-				poll_completion(&sendingRegion->res);
-				sendingRegion->clearCompleteBuffer();
+				sendingRegion->setCommitCode( rdma_data_ready );
 			} else {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
@@ -228,25 +226,12 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "4" ) {
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) {
-			std::cout << "Delete which region?" << std::endl;
 			RDMAHandler::getInstance().printRegions();
-			uint64_t rid;
-			RDMARegion* sendingRegion;
-			std::getline(std::cin, content);
-			try {
-				char* pEnd;
-				rid = strtoull(content.c_str(), &pEnd, 10);
-			} catch (...) {
-				std::cout << "[Error] Couldn't convert number." << std::endl;
-				continue;
-			}
-			sendingRegion = RDMAHandler::getInstance().getRegion( rid );
+			RDMARegion* sendingRegion = selectRegion( false );
 
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side asking to delete region." << std::endl;
-				sendingRegion->writePtr()[0] = rdma_delete_region;
-				post_send(&sendingRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-				poll_completion(&sendingRegion->res);
+				sendingRegion->setCommitCode( rdma_delete_region );
 				sendingRegion->receivePtr()[0] = rdma_delete_region;
 			} else {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
