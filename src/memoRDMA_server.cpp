@@ -7,6 +7,7 @@
 #include <vector>
 #include <atomic>
 #include <functional>
+#include "common.h"
 #include "util.h"
 #include "RDMARegion.h"
 #include "RDMAHandler.h"
@@ -80,8 +81,6 @@ int main(int argc, char *argv[]) {
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
 	region->clearCompleteBuffer();
-	DataProvider d;
-	d.generateDummyData( 1024 );
 
 	std::string content;
 	std::string op;
@@ -93,7 +92,7 @@ int main(int argc, char *argv[]) {
 
 	std::function<void (RDMARegion*, config_t*, bool*)> check_receive;
 	
-	check_receive = [&regionThreads,&check_receive]( RDMARegion* communicationRegion, config_t* config, bool* abort ) {
+	check_receive = [&regionThreads,&check_receive]( RDMARegion* communicationRegion, config_t* config, bool* abort ) -> void {
 		using namespace std::chrono_literals;
 		std::ios_base::fmtflags f( std::cout.flags() );
 		std::cout << "Starting monitoring thread for region " << communicationRegion << std::endl;
@@ -118,8 +117,69 @@ int main(int argc, char *argv[]) {
 					std::cout << "Received data [" << communicationRegion << "]: " << communicationRegion->receivePtr()+1 << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				}; break;
-				case rdma_fetch_data: {
+				case rdma_data_fetch: {
+					/* provide data to remote */
+					DataProvider d;
+					uint32_t totalSize = 1024;
+					uint32_t size = totalSize;
+					uint32_t dataToWrite;
+					
+					std::cout << "Generating " << size << " data elements and send them over." << std::endl;
+					d.generateDummyData( totalSize );
+					uint64_t* copy = d.data;
+					
+					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
+					while ( size + 9 > BUFF_SIZE/2 ) {  
+						dataToWrite = communicationRegion->maxWriteSize() - 5;
+						communicationRegion->setSendData( copy, totalSize, dataToWrite );
+						communicationRegion->setCommitCode( rdma_data_receive );
 
+						size -= dataToWrite;
+						copy += dataToWrite;
+
+						// Wait for receiver to consume.
+						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
+							continue; // Busy waiting to ensure fastest possible transfer?
+						}
+						communicationRegion->clearCompleteBuffer();
+					}
+					communicationRegion->setSendData( copy, totalSize, size );
+					communicationRegion->setCommitCode( rdma_data_finished );
+				} break;
+				case rdma_data_receive: {
+					/* receive data from remote */
+					bool initDone = false;
+					uint64_t* localData;
+					uint64_t* localWritePtr;
+					uint32_t size;
+
+					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
+						communicationRegion->clearReadCode();
+						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
+						if (!initDone) {
+							initDone = true;
+							uint32_t totalSize;
+							memcpy( &totalSize, communicationRegion->receivePtr()+1, 4 );
+							localData = (uint64_t*) malloc( totalSize * sizeof( uint64_t ) );
+							localWritePtr = localData;
+							std::cout << "Created memory region for " << totalSize << " bytes (" << (totalSize/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+						}
+						memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
+						localWritePtr += size;
+						communicationRegion->setCommitCode( rdma_data_next );
+						while( communicationRegion->receivePtr()[0] != rdma_data_finished || communicationRegion->receivePtr()[0] != rdma_data_receive ) {
+							continue; // Busy waiting to ensure fastest possible transfer?
+						}
+					}
+					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
+					memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
+					communicationRegion->clearCompleteBuffer();
+
+					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
+					for ( size_t i = 0; i < 10; ++i ) {
+						std::cout << localData[i] << " " << std::flush;
+					}
+					std::cout << std::endl;
 				} break;
 				default: {
 					continue;
@@ -130,7 +190,7 @@ int main(int argc, char *argv[]) {
 		}
 	};
 
-	auto check_regions = [&pool,&regionThreads,&global_id,&check_receive,&config]( bool* abort ) {
+	auto check_regions = [&pool,&regionThreads,&check_receive,&config]( bool* abort ) -> void {
 		using namespace std::chrono_literals;
 		while (!*abort) {
 			for ( auto it = pool.begin(); it != pool.end(); ) {
@@ -153,6 +213,7 @@ int main(int argc, char *argv[]) {
 	};
 
 	auto selectRegion = []( bool withDefault ) -> RDMARegion* {
+		RDMAHandler::getInstance().printRegions();
 		if ( withDefault ) {
 			std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
 		} else {
@@ -186,19 +247,18 @@ int main(int argc, char *argv[]) {
 	while ( !abort ) {
 		std::cout << "Choose an opcode:\n[1] Direct write ";
 		std::cout << "[2] Commit ";
-		std::cout << "[3] Create new region\n";
+		std::cout << "[3] Create new region" << std::endl;
 		std::cout << "[4] Print Regions ";
-		std::cout << "[5] Delete Region" << std::endl;
+		std::cout << "[5] Delete Region ";
 		std::cout << "[6] Send dummy to all regions." << std::endl;
-		std::cout << "[7] Exit" << std::endl;
+		std::cout << "[7] Fetch data from a fixed source. ";
+		std::cout << "[8] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
 
 		if ( op == "1" ) {
-			RDMAHandler::getInstance().printRegions();
 			RDMARegion* sendingRegion = selectRegion( true );
-			
 			std::cout << "Content: " << std::flush;
 			std::getline(std::cin, content);
 			
@@ -208,9 +268,7 @@ int main(int argc, char *argv[]) {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "2" ) {
-			RDMAHandler::getInstance().printRegions();
 			RDMARegion* sendingRegion = selectRegion( true );
-
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side commiting." << std::endl;
 				sendingRegion->setCommitCode( rdma_data_ready );
@@ -226,9 +284,7 @@ int main(int argc, char *argv[]) {
 		} else if ( op == "4" ) {
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) {
-			RDMAHandler::getInstance().printRegions();
 			RDMARegion* sendingRegion = selectRegion( false );
-
 			if ( sendingRegion ) {
 				std::cout << std::endl << "Server side asking to delete region." << std::endl;
 				sendingRegion->setCommitCode( rdma_delete_region );
@@ -238,18 +294,16 @@ int main(int argc, char *argv[]) {
 			}
 		} else if ( op == "6" ) {
 			auto regs = RDMAHandler::getInstance().getAllRegions();
-			char* dummy = "This is a dummy message.";
+			std::string dummy = "This is a dummy message.";
 			for ( auto r : regs ) {
-				strcpy( r->writePtr()+1, dummy );
-				post_send(&r->res, 24, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
-				poll_completion(&r->res);
-
-				r->writePtr()[0] = rdma_data_ready;
-				post_send(&r->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-				poll_completion(&r->res);
-				r->clearCompleteBuffer();
+				r->setSendData( dummy );
+				r->setCommitCode( rdma_data_ready );
 			}
 		} else if ( op == "7" ) {
+			RDMARegion* requestRegion = selectRegion( false );
+			requestRegion->setSendData( "Please give data from Random source." );
+			requestRegion->setCommitCode( rdma_data_fetch );
+		} else if ( op == "8" ) {
 			abort = true;
 		}
 	}

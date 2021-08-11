@@ -44,7 +44,7 @@ class RDMARegion {
         int modify_qp_to_rts(struct ibv_qp *qp);
 
         void setSendData( std::string s );
-        void setSendData( uint64_t* data, size_t size );
+        void setSendData( uint64_t* data, uint32_t totalSize, uint32_t currentSize );
         void setCommitCode( rdma_handler_communication opcode );
 
         char* writePtr();

@@ -308,8 +308,11 @@ void RDMARegion::setSendData( std::string s ) {
     poll_completion(&res);
 }
 
-void RDMARegion::setSendData( uint64_t* data, size_t size ) {
-
+void RDMARegion::setSendData( uint64_t* data, uint32_t totalSize, uint32_t currentSize ) {
+    memcpy( writePtr()+1, &totalSize, 4 );
+    memcpy( writePtr()+5, &currentSize, 4 );
+    memcpy( writePtr()+9, data, currentSize );
+    poll_completion(&res);
 }
 
 void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
