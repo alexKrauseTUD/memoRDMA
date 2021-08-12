@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
 					while ( size + 9 > BUFF_SIZE/2 ) {  
 						communicationRegion->clearReadCode();
 						std::cout << "Size to write left: " << size << std::endl;
-						dataToWrite = communicationRegion->maxWriteSize() - 9;
+						dataToWrite = communicationRegion->maxWriteSize() - 9;  
 						std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, totalSize, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
@@ -171,6 +171,7 @@ int main(int argc, char *argv[]) {
 						memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr += size;
 						communicationRegion->setCommitCode( rdma_data_next );
+						std::cout << "Consume done, waiting for next package." << std::endl;
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished || communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
