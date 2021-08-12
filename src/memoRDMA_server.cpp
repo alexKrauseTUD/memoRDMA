@@ -131,6 +131,7 @@ int main(int argc, char *argv[]) {
 					std::cout << "Starting to loop. " << std::endl;
 					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
 					while ( size + 9 > BUFF_SIZE/2 ) {  
+						std::cout << "Clearing readcode." << std::endl;
 						communicationRegion->clearReadCode();
 						std::cout << "Size to write left: " << size << std::endl;
 						dataToWrite = communicationRegion->maxWriteSize() - 9;  
@@ -183,11 +184,12 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << totalSize << " bytes (" << (totalSize/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 						}
+						std::cout << "Writing " << size << " Bytes to local buffer." << std::endl;
 						memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr += size;
 						communicationRegion->setCommitCode( rdma_data_next );
 						std::cout << "Consume done, waiting for next package." << std::endl;
-						while( communicationRegion->receivePtr()[0] != rdma_data_finished || communicationRegion->receivePtr()[0] != rdma_data_receive ) {
+						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							using namespace std::chrono_literals;
 							std::this_thread::sleep_for(500ms);
 							std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
@@ -198,6 +200,7 @@ int main(int argc, char *argv[]) {
 								case rdma_data_fetch: { std::cout << "data fetch"; } break;
 								case rdma_data_receive: { std::cout << "data receive"; } break;
 								case rdma_data_next: { std::cout << "data next"; } break;
+								case rdma_data_finished: { std::cout << "data finished!"; } break;
 								default: { std::cout << "Don't know!";} break;
 							}
 							std::cout << std::endl;

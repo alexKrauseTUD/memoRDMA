@@ -287,19 +287,19 @@ void RDMARegion::print() const {
 }
 
 void RDMARegion::clearReadCode() {
-    memset( res.buf, 0, 1 );
+    memset( receivePtr(), 0, 1 );
 }
 
 void RDMARegion::clearCompleteBuffer() {
-    memset( res.buf, 0, BUFF_SIZE );
+    memset( writePtr(), 0, BUFF_SIZE );
 }
 
 void RDMARegion::clearWriteBuffer() {
-    memset( res.buf, 0, maxWriteSize()/2 );
+    memset( writePtr(), 0, maxWriteSize()/2 );
 }
 
 void RDMARegion::clearReadBuffer() {
-    memset( res.buf + maxWriteSize(), 0, maxWriteSize()/2 );
+    memset( receivePtr(), 0, maxWriteSize()/2 );
 }
 
 void RDMARegion::setSendData( std::string s ) {
