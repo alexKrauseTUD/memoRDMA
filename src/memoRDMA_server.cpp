@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
 					uint32_t size = totalSize;
 					uint32_t dataToWrite;
 					
-					std::cout << "Generating " << size << " data elements and send them over." << std::endl;
+					std::cout << "Generating " << size << " Byte of data and send them over." << std::endl;
 					d.generateDummyData( totalSize );
 					uint64_t* copy = d.data;
 					
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
 							using namespace std::chrono_literals;
 							std::this_thread::sleep_for(500ms);
-							std::cout << "Current code is [" << communicationRegion->receivePtr()[0] << "]: ";
+							std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
 							switch( communicationRegion->receivePtr()[0] ) {
 								case rdma_create_region: { std::cout << "create region"; } break;
 								case rdma_delete_region: { std::cout << "delete region"; } break;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished || communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							using namespace std::chrono_literals;
 							std::this_thread::sleep_for(500ms);
-							std::cout << "Current code is [" << communicationRegion->receivePtr()[0] << "]: ";
+							std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
 							switch( communicationRegion->receivePtr()[0] ) {
 								case rdma_create_region: { std::cout << "create region"; } break;
 								case rdma_delete_region: { std::cout << "delete region"; } break;
