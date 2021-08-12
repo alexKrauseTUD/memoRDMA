@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 				case rdma_data_fetch: {
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t totalSize = 1024;
+					uint32_t totalSize = 1024*1024*1024;
 					uint32_t size = totalSize;
 					uint32_t dataToWrite;
 					
