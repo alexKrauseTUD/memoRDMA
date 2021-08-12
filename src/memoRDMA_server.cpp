@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 				case rdma_data_fetch: {
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t totalSize = 1024*1024;
+					uint32_t totalSize = 1024*1024*128;
 					uint32_t size = totalSize;
 					uint32_t dataToWrite;
 					
@@ -156,6 +156,7 @@ int main(int argc, char *argv[]) {
 					uint64_t* localWritePtr;
 					uint32_t size;
 
+					size_t i = 0;
 					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
 						communicationRegion->clearReadCode();
 						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
@@ -169,12 +170,14 @@ int main(int argc, char *argv[]) {
 						}
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr += (uint64_t)size;
+						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 						communicationRegion->setCommitCode( rdma_data_next );
 
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
+					std::cout << std::endl;
 					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 					memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
 					communicationRegion->clearCompleteBuffer();
