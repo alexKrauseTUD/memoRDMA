@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
 					while ( size + 9 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
 						 std::cout << "Size to write left: " << size << std::endl;
-						dataToWrite = communicationRegion->maxWriteSize() - 9;  
+						dataToWrite = communicationRegion->maxWriteSize() - 10;  
 						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, elementCount, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
@@ -170,6 +170,7 @@ int main(int argc, char *argv[]) {
 					}
 					std::cout << std::endl;
 					free( localData );
+					communicationRegion->clearCompleteBuffer();
 				}; break;
 				case rdma_data_receive: {
 					/* receive data from remote */
