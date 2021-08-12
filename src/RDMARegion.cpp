@@ -272,10 +272,6 @@ char* RDMARegion::receivePtr() {
     return res.buf + maxWriteSize();
 }
 
-uint64_t inline RDMARegion::maxWriteSize() const {
-    return BUFF_SIZE / 2;
-}
-
 void RDMARegion::print() const {
     std::ios_base::fmtflags f( std::cout.flags() );
     std::cout << std::hex;

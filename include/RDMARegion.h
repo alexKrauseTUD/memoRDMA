@@ -49,7 +49,9 @@ class RDMARegion {
 
         char* writePtr();
         char* receivePtr();
-        uint64_t inline maxWriteSize() const;
+        uint64_t inline maxWriteSize() const {
+            return BUFF_SIZE / 2;
+        };
 
         void print() const;
 
