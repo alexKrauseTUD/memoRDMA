@@ -145,19 +145,19 @@ int main(int argc, char *argv[]) {
 						// Wait for receiver to consume.
 						std::cout << "Waiting for server to consume." << std::endl;
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
-							using namespace std::chrono_literals;
-							std::this_thread::sleep_for(500ms);
-							std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
-							switch( communicationRegion->receivePtr()[0] ) {
-								case rdma_create_region: { std::cout << "create region"; } break;
-								case rdma_delete_region: { std::cout << "delete region"; } break;
-								case rdma_data_ready: { std::cout << "data ready"; } break;
-								case rdma_data_fetch: { std::cout << "data fetch"; } break;
-								case rdma_data_receive: { std::cout << "data receive"; } break;
-								case rdma_data_next: { std::cout << "data next"; } break;
-								default: { std::cout << "Don't know!";} break;
-							}
-							std::cout << std::endl;
+							// using namespace std::chrono_literals;
+							// std::this_thread::sleep_for(500ms);
+							// std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
+							// switch( communicationRegion->receivePtr()[0] ) {
+							// 	case rdma_create_region: { std::cout << "create region"; } break;
+							// 	case rdma_delete_region: { std::cout << "delete region"; } break;
+							// 	case rdma_data_ready: { std::cout << "data ready"; } break;
+							// 	case rdma_data_fetch: { std::cout << "data fetch"; } break;
+							// 	case rdma_data_receive: { std::cout << "data receive"; } break;
+							// 	case rdma_data_next: { std::cout << "data next"; } break;
+							// 	default: { std::cout << "Don't know!";} break;
+							// }
+							// std::cout << std::endl;
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
@@ -184,26 +184,30 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << totalSize << " bytes (" << (totalSize/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 						}
+						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
 						std::cout << "Writing " << size << " Bytes to local buffer." << std::endl;
-						memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
-						localWritePtr += size;
+						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
+						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
+						localWritePtr += (uint64_t)size;
+						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
 						communicationRegion->setCommitCode( rdma_data_next );
+						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
 						std::cout << "Consume done, waiting for next package." << std::endl;
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
-							using namespace std::chrono_literals;
-							std::this_thread::sleep_for(500ms);
-							std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
-							switch( communicationRegion->receivePtr()[0] ) {
-								case rdma_create_region: { std::cout << "create region"; } break;
-								case rdma_delete_region: { std::cout << "delete region"; } break;
-								case rdma_data_ready: { std::cout << "data ready"; } break;
-								case rdma_data_fetch: { std::cout << "data fetch"; } break;
-								case rdma_data_receive: { std::cout << "data receive"; } break;
-								case rdma_data_next: { std::cout << "data next"; } break;
-								case rdma_data_finished: { std::cout << "data finished!"; } break;
-								default: { std::cout << "Don't know!";} break;
-							}
-							std::cout << std::endl;
+							// using namespace std::chrono_literals;
+							// std::this_thread::sleep_for(500ms);
+							// std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
+							// switch( communicationRegion->receivePtr()[0] ) {
+							// 	case rdma_create_region: { std::cout << "create region"; } break;
+							// 	case rdma_delete_region: { std::cout << "delete region"; } break;
+							// 	case rdma_data_ready: { std::cout << "data ready"; } break;
+							// 	case rdma_data_fetch: { std::cout << "data fetch"; } break;
+							// 	case rdma_data_receive: { std::cout << "data receive"; } break;
+							// 	case rdma_data_next: { std::cout << "data next"; } break;
+							// 	case rdma_data_finished: { std::cout << "data finished!"; } break;
+							// 	default: { std::cout << "Don't know!";} break;
+							// }
+							// std::cout << std::endl;
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 						std::cout << "Leaving busy waiting loop." << std::endl;
@@ -338,8 +342,10 @@ int main(int argc, char *argv[]) {
 			}
 		} else if ( op == "7" ) {
 			RDMARegion* requestRegion = selectRegion( false );
-			requestRegion->setSendData( "Please give data from Random source." );
-			requestRegion->setCommitCode( rdma_data_fetch );
+			if ( requestRegion ) {
+				requestRegion->setSendData( "Please give data from Random source." );
+				requestRegion->setCommitCode( rdma_data_fetch );
+			}
 		} else if ( op == "8" ) {
 			abort = true;
 		}
