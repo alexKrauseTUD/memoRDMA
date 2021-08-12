@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 				case rdma_data_fetch: {
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t totalSize = 1024*1024*1024;
+					uint32_t totalSize = 1024*1024;
 					uint32_t size = totalSize;
 					uint32_t dataToWrite;
 					
@@ -131,11 +131,10 @@ int main(int argc, char *argv[]) {
 					std::cout << "Starting to loop. " << std::endl;
 					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
 					while ( size + 9 > BUFF_SIZE/2 ) {  
-						std::cout << "Clearing readcode." << std::endl;
 						communicationRegion->clearReadCode();
-						std::cout << "Size to write left: " << size << std::endl;
+						// std::cout << "Size to write left: " << size << std::endl;
 						dataToWrite = communicationRegion->maxWriteSize() - 9;  
-						std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
+						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, totalSize, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
 
@@ -143,25 +142,10 @@ int main(int argc, char *argv[]) {
 						copy += dataToWrite;
 
 						// Wait for receiver to consume.
-						std::cout << "Waiting for server to consume." << std::endl;
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
-							// using namespace std::chrono_literals;
-							// std::this_thread::sleep_for(500ms);
-							// std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
-							// switch( communicationRegion->receivePtr()[0] ) {
-							// 	case rdma_create_region: { std::cout << "create region"; } break;
-							// 	case rdma_delete_region: { std::cout << "delete region"; } break;
-							// 	case rdma_data_ready: { std::cout << "data ready"; } break;
-							// 	case rdma_data_fetch: { std::cout << "data fetch"; } break;
-							// 	case rdma_data_receive: { std::cout << "data receive"; } break;
-							// 	case rdma_data_next: { std::cout << "data next"; } break;
-							// 	default: { std::cout << "Don't know!";} break;
-							// }
-							// std::cout << std::endl;
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					std::cout << "Leaving loop, sending last package of " << size << " bytes." << std::endl;
 					communicationRegion->setSendData( copy, totalSize, size );
 					communicationRegion->setCommitCode( rdma_data_finished );
 				} break;
@@ -173,7 +157,6 @@ int main(int argc, char *argv[]) {
 					uint32_t size;
 
 					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
-						std::cout << "Clearing readcode." << std::endl;
 						communicationRegion->clearReadCode();
 						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 						if (!initDone) {
@@ -184,33 +167,13 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << totalSize << " bytes (" << (totalSize/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 						}
-						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
-						std::cout << "Writing " << size << " Bytes to local buffer." << std::endl;
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
-						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
 						localWritePtr += (uint64_t)size;
-						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
 						communicationRegion->setCommitCode( rdma_data_next );
-						std::cout << "localData: " << localData << " localWritePtr: " << localWritePtr << std::endl;
-						std::cout << "Consume done, waiting for next package." << std::endl;
+
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
-							// using namespace std::chrono_literals;
-							// std::this_thread::sleep_for(500ms);
-							// std::cout << "Current code is [" << (uint32_t)((uint8_t)communicationRegion->receivePtr()[0]) << "]: ";
-							// switch( communicationRegion->receivePtr()[0] ) {
-							// 	case rdma_create_region: { std::cout << "create region"; } break;
-							// 	case rdma_delete_region: { std::cout << "delete region"; } break;
-							// 	case rdma_data_ready: { std::cout << "data ready"; } break;
-							// 	case rdma_data_fetch: { std::cout << "data fetch"; } break;
-							// 	case rdma_data_receive: { std::cout << "data receive"; } break;
-							// 	case rdma_data_next: { std::cout << "data next"; } break;
-							// 	case rdma_data_finished: { std::cout << "data finished!"; } break;
-							// 	default: { std::cout << "Don't know!";} break;
-							// }
-							// std::cout << std::endl;
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
-						std::cout << "Leaving busy waiting loop." << std::endl;
 					}
 					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 					memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
