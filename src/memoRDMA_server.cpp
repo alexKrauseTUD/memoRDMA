@@ -118,9 +118,10 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearCompleteBuffer();
 				}; break;
 				case rdma_data_fetch: {
+					communicationRegion->clearReadCode();
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t elementCount = 1024*1024;
+					uint32_t elementCount = 1024;
 					uint32_t size = elementCount * sizeof(uint64_t);
 					uint32_t dataToWrite;
 					
@@ -146,9 +147,30 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
+					std::cout << "Sending remainder." << std::endl;
 					communicationRegion->setSendData( copy, elementCount, size );
 					communicationRegion->setCommitCode( rdma_data_finished );
+					std::cout << "Remainder finished." << std::endl;
 				} break;
+				case rdma_data_finished: {
+					uint64_t* localData;
+					uint32_t size;
+					uint32_t elementCount;
+					
+					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
+					memcpy( &elementCount, communicationRegion->receivePtr()+1, 4 );
+					
+					localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
+					std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
+					
+					memcpy( localData, communicationRegion->receivePtr()+9, size );
+					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
+					for ( size_t i = 0; i < 10; ++i ) {
+						std::cout << localData[i] << " " << std::flush;
+					}
+					std::cout << std::endl;
+					free( localData );
+				}; break;
 				case rdma_data_receive: {
 					/* receive data from remote */
 					bool initDone = false;
