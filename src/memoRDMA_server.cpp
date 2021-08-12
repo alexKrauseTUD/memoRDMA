@@ -120,12 +120,12 @@ int main(int argc, char *argv[]) {
 				case rdma_data_fetch: {
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t totalSize = 1024*1024*128;
-					uint32_t size = totalSize;
+					uint32_t elementCount = 1024*1024;
+					uint32_t size = elementCount * sizeof(uint64_t);
 					uint32_t dataToWrite;
 					
 					std::cout << "Generating " << size << " Byte of data and send them over." << std::endl;
-					d.generateDummyData( totalSize );
+					d.generateDummyData( elementCount );
 					uint64_t* copy = d.data;
 					
 					std::cout << "Starting to loop. " << std::endl;
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 						 std::cout << "Size to write left: " << size << std::endl;
 						dataToWrite = communicationRegion->maxWriteSize() - 9;  
 						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
-						communicationRegion->setSendData( copy, totalSize, dataToWrite );
+						communicationRegion->setSendData( copy, elementCount, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						size -= dataToWrite;
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					communicationRegion->setSendData( copy, totalSize, size );
+					communicationRegion->setSendData( copy, elementCount, size );
 					communicationRegion->setCommitCode( rdma_data_finished );
 				} break;
 				case rdma_data_receive: {
@@ -162,11 +162,11 @@ int main(int argc, char *argv[]) {
 						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 						if (!initDone) {
 							initDone = true;
-							uint32_t totalSize;
-							memcpy( &totalSize, communicationRegion->receivePtr()+1, 4 );
-							localData = (uint64_t*) malloc( totalSize * sizeof( uint64_t ) );
+							uint32_t elementCount;
+							memcpy( &elementCount, communicationRegion->receivePtr()+1, 4 );
+							localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 							localWritePtr = localData;
-							std::cout << "Created memory region for " << totalSize << " bytes (" << (totalSize/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+							std::cout << "Created memory region for " << (elementCount/sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr += (uint64_t)size;
@@ -187,6 +187,7 @@ int main(int argc, char *argv[]) {
 						std::cout << localData[i] << " " << std::flush;
 					}
 					std::cout << std::endl;
+					free( localData );
 				} break;
 				default: {
 					continue;
