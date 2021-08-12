@@ -13,4 +13,4 @@ enum rdma_handler_communication {
 };
 
 
-#endif COMMON_H
+#endif // COMMON_H

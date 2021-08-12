@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
 					
 					std::cout << "Starting to loop. " << std::endl;
 					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
-					while ( size + 9 > BUFF_SIZE/2 ) {  
+					while ( size + 9 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
 						 std::cout << "Size to write left: " << size << std::endl;
 						dataToWrite = communicationRegion->maxWriteSize() - 9;  
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						size -= dataToWrite;
-						copy += dataToWrite;
+						copy += (uint64_t)dataToWrite;
 
 						// Wait for receiver to consume.
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
 							memcpy( &elementCount, communicationRegion->receivePtr()+1, 4 );
 							localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 							localWritePtr = localData;
-							std::cout << "Created memory region for " << (elementCount/sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
+							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr += (uint64_t)size;

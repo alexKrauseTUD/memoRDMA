@@ -198,7 +198,7 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
     memset(&sge, 0, sizeof(sge));
 
     sge.addr = (uintptr_t)res->buf;
-    sge.length = len + 1;
+    sge.length = len;
     sge.lkey = res->mr->lkey;
 
     // prepare the send work request

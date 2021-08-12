@@ -312,7 +312,7 @@ void RDMARegion::setSendData( uint64_t* data, uint32_t totalSize, uint32_t curre
     memcpy( writePtr()+1, &totalSize, 4 );
     memcpy( writePtr()+5, &currentSize, 4 );
     memcpy( writePtr()+9, data, currentSize );
-    post_send(&res, currentSize, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+    post_send(&res, currentSize+9, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
     poll_completion(&res);
 }
 
