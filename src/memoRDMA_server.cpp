@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
 					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
 					while ( size + 9 > BUFF_SIZE/2 ) {  
 						communicationRegion->clearReadCode();
-						// std::cout << "Size to write left: " << size << std::endl;
+						 std::cout << "Size to write left: " << size << std::endl;
 						dataToWrite = communicationRegion->maxWriteSize() - 9;  
 						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, totalSize, dataToWrite );

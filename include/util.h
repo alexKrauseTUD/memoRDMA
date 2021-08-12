@@ -173,7 +173,7 @@ static int poll_completion(struct resources *res) {
         goto die;
     } else {
         // CQE found
-        INFO("Completion was found in CQ with status 0x%x\n", wc.status);
+        // INFO("Completion was found in CQ with status 0x%x\n", wc.status);
     }
 
     if (wc.status != IBV_WC_SUCCESS) {
@@ -215,27 +215,25 @@ static int post_send(struct resources *res, int len, ibv_wr_opcode opcode, size_
     if (opcode != IBV_WR_SEND) {
         sr.wr.rdma.remote_addr = res->remote_props.addr + offset;
         sr.wr.rdma.rkey = res->remote_props.rkey;
-        // std::cout << "Setting offset: " << offset << " ptr is now: " << (void*)sr.wr.rdma.remote_addr << " was: " << (void*)res->remote_props.addr << std::endl;
     }
 
     CHECK(ibv_post_send(res->qp, &sr, &bad_wr));
 
-    switch (opcode) {
-    case IBV_WR_SEND:
-        INFO("Send request was posted\n");
-        break;
-    case IBV_WR_RDMA_READ:
-        INFO("RDMA read request was posted\n");
-        break;
-    case IBV_WR_RDMA_WRITE:
-        INFO("RDMA write request was posted\n");
-        break;
-    default:
-        INFO("Unknown request was posted\n");
-        break;
-    }
+    // switch (opcode) {
+    // case IBV_WR_SEND:
+    //     INFO("Send request was posted\n");
+    //     break;
+    // case IBV_WR_RDMA_READ:
+    //     INFO("RDMA read request was posted\n");
+    //     break;
+    // case IBV_WR_RDMA_WRITE:
+    //     INFO("RDMA write request was posted\n");
+    //     break;
+    // default:
+    //     INFO("Unknown request was posted\n");
+    //     break;
+    // }
 
-    // FIXME: ;)
     return 0;
 }
 
