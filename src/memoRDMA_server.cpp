@@ -132,8 +132,14 @@ int main(int argc, char *argv[]) {
 					std::cout << "Starting to loop. " << std::endl;
 					// Add 17 Byte to the size - 1 Byte commit code, 8 Byte elementCount, 8 byte maxDataToWrite.
 					while ( remainingSize + 17 > communicationRegion->maxWriteSize() ) {  
+						std::cout << "Remaining size: " << remainingSize << std::endl;
 						communicationRegion->clearReadCode();
+						std::cout << "Setting data to send with " << copy << " " << elementCount << " " << maxDataToWrite << std::endl;
+						std::cout << "Data Pointer is accessible at start: " << *copy << std::flush;
+						std::cout << "Data Pointer is accessible at end: " << *(copy+maxDataToWrite) << std::flush;
+						
 						communicationRegion->setSendData( copy, elementCount, maxDataToWrite );
+						std::cout << "Commitinng..." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						remainingSize -= maxDataToWrite;
