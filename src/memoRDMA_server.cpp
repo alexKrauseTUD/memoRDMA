@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearReadCode();
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t elementCount = 1024;
+					uint32_t elementCount = 1024*1024*512;
 					uint32_t size = elementCount * sizeof(uint64_t);
 					uint32_t dataToWrite;
 					
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
 					while ( size + 9 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
 						 std::cout << "Size to write left: " << size << std::endl;
-						dataToWrite = communicationRegion->maxWriteSize() - 10;  
+						dataToWrite = communicationRegion->maxWriteSize() - 9;  
 						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
 						communicationRegion->setSendData( copy, elementCount, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
@@ -204,6 +204,7 @@ int main(int argc, char *argv[]) {
 					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 					memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
 					communicationRegion->clearCompleteBuffer();
+					std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 
 					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
 					for ( size_t i = 0; i < 10; ++i ) {
