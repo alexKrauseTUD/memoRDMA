@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 					DataProvider d;
 					uint64_t elementCount = 1024*1024*512;
 					uint64_t remainingSize = elementCount * sizeof(uint64_t);
-					uint64_t maxDataToWrite = communicationRegion->maxWriteSize() - 1 - 8 - 8; // Commit code - totalSize - maxDataToWrite
+					uint64_t maxDataToWrite = communicationRegion->maxWriteSize() - 1 - sizeof(elementCount) - sizeof(remainingSize); // Commit code - totalSize - maxDataToWrite
 					
 					std::cout << "Generating " << remainingSize << " Byte of data and send them over." << std::endl;
 					d.generateDummyData( elementCount );
