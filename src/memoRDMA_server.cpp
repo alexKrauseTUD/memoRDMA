@@ -121,21 +121,19 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearReadCode();
 					/* provide data to remote */
 					DataProvider d;
-					uint32_t elementCount = 1024*1024*512;
-					uint32_t size = elementCount * sizeof(uint64_t);
-					uint32_t dataToWrite;
+					uint64_t elementCount = 1024*1024*512;
+					uint64_t size = elementCount * sizeof(uint64_t);
+					uint64_t dataToWrite;
 					
 					std::cout << "Generating " << size << " Byte of data and send them over." << std::endl;
 					d.generateDummyData( elementCount );
 					uint64_t* copy = d.data;
 					
 					std::cout << "Starting to loop. " << std::endl;
-					// Add 9 Byte to the size - 1 Byte commit code, 4 Byte uint32_t total size, 4 byte data size.
+					// Add 9 Byte to the size - 1 Byte commit code, 8 Byte uint64_t total size, 8 byte data size.
 					while ( size + 9 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
-						 std::cout << "Size to write left: " << size << std::endl;
-						dataToWrite = communicationRegion->maxWriteSize() - 9;  
-						// std::cout << "\tSending over: " << totalSize << " " << dataToWrite << std::endl;
+						dataToWrite = communicationRegion->maxWriteSize() - 17;  
 						communicationRegion->setSendData( copy, elementCount, dataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
 
@@ -154,16 +152,16 @@ int main(int argc, char *argv[]) {
 				} break;
 				case rdma_data_finished: {
 					uint64_t* localData;
-					uint32_t size;
-					uint32_t elementCount;
+					uint64_t elementCount;
+					uint64_t size;
 					
-					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
-					memcpy( &elementCount, communicationRegion->receivePtr()+1, 4 );
+					memcpy( &elementCount, communicationRegion->receivePtr()+1, 8 );
+					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
 					
 					localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 					std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 					
-					memcpy( localData, communicationRegion->receivePtr()+9, size );
+					memcpy( localData, communicationRegion->receivePtr()+17, size );
 					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
 					for ( size_t i = 0; i < 10; ++i ) {
 						std::cout << localData[i] << " " << std::flush;
