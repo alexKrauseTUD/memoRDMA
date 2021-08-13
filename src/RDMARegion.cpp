@@ -300,7 +300,7 @@ void RDMARegion::clearReadBuffer() {
 
 void RDMARegion::setSendData( std::string s ) {
     strcpy( writePtr()+1, s.c_str() );
-    post_send(&res, s.size(), IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+    post_send(&res, s.size()+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
     poll_completion(&res);
 }
 

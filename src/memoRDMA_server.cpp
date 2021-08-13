@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
 					
 					std::cout << "Starting to loop. " << std::endl;
 					// Add 9 Byte to the size - 1 Byte commit code, 8 Byte uint64_t total size, 8 byte data size.
-					while ( size + 9 > communicationRegion->maxWriteSize() ) {  
+					while ( size + 17 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
 						dataToWrite = communicationRegion->maxWriteSize() - 17;  
 						communicationRegion->setSendData( copy, elementCount, dataToWrite );
