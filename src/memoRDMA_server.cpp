@@ -122,23 +122,22 @@ int main(int argc, char *argv[]) {
 					/* provide data to remote */
 					DataProvider d;
 					uint64_t elementCount = 1024*1024*512;
-					uint64_t size = elementCount * sizeof(uint64_t);
-					uint64_t dataToWrite;
+					uint64_t remainingSize = elementCount * sizeof(uint64_t);
+					uint64_t maxDataToWrite = communicationRegion->maxWriteSize() - 1 - 8 - 8; // Commit code - totalSize - maxDataToWrite
 					
-					std::cout << "Generating " << size << " Byte of data and send them over." << std::endl;
+					std::cout << "Generating " << remainingSize << " Byte of data and send them over." << std::endl;
 					d.generateDummyData( elementCount );
 					uint64_t* copy = d.data;
 					
 					std::cout << "Starting to loop. " << std::endl;
-					// Add 9 Byte to the size - 1 Byte commit code, 8 Byte uint64_t total size, 8 byte data size.
-					while ( size + 17 > communicationRegion->maxWriteSize() ) {  
+					// Add 17 Byte to the size - 1 Byte commit code, 8 Byte elementCount, 8 byte maxDataToWrite.
+					while ( remainingSize + 17 > communicationRegion->maxWriteSize() ) {  
 						communicationRegion->clearReadCode();
-						dataToWrite = communicationRegion->maxWriteSize() - 17;  
-						communicationRegion->setSendData( copy, elementCount, dataToWrite );
+						communicationRegion->setSendData( copy, elementCount, maxDataToWrite );
 						communicationRegion->setCommitCode( rdma_data_receive );
 
-						size -= dataToWrite;
-						copy += (uint64_t)dataToWrite;
+						remainingSize -= maxDataToWrite;
+						copy += maxDataToWrite;
 
 						// Wait for receiver to consume.
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
@@ -146,7 +145,7 @@ int main(int argc, char *argv[]) {
 						}
 					}
 					std::cout << "Sending remainder." << std::endl;
-					communicationRegion->setSendData( copy, elementCount, size );
+					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
 					std::cout << "Remainder finished." << std::endl;
 				} break;
