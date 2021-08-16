@@ -9,6 +9,12 @@ DataProvider::DataProvider() :
 {
 }
 
+DataProvider::~DataProvider() {
+    if ( data ) {
+        free( data );
+    }
+}
+
 void DataProvider::generateDummyData( uint64_t count ) {
     if ( data ) {
         free( data );

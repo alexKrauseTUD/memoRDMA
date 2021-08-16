@@ -22,6 +22,8 @@ void RDMAHandler::create_and_setup_region( config_t* config, uint64_t* newRegion
 	newRegion->resources_create(*config, false);
 
 	// connect the QPs
+    communicationBuffer->clearCompleteBuffer();
+    
 	sendRegionInfo( config, communicationBuffer, newRegion, rdma_create_region );
     
     while( communicationBuffer->receivePtr()[0] != rdma_receive_region ) {

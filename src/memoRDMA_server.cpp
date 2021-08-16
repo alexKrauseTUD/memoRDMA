@@ -186,6 +186,7 @@ int main(int argc, char *argv[]) {
 					uint64_t* localData;
 					uint64_t* localWritePtr;
 					uint64_t size;
+					uint64_t elementCount;
 
 					size_t i = 0;
 					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
@@ -193,7 +194,6 @@ int main(int argc, char *argv[]) {
 						memcpy( &size, communicationRegion->receivePtr()+9, 8 );
 						if (!initDone) {
 							initDone = true;
-							uint64_t elementCount;
 							memcpy( &elementCount, communicationRegion->receivePtr()+1, 8 );
 							localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 							localWritePtr = localData;
@@ -208,19 +208,15 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					std::cout << "localData after while: " << localData << std::endl;
-					std::cout << "localData (with offset) after while: " << (uint64_t*) ((char*)localData + (i*size)) << std::endl;
-					std::cout << "localWritePtr after while: " << localWritePtr << std::endl;
 					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
-					std::cout << "\r[" << i++ << "] Writing " << size << " Byte (remainder)." << std::flush;
 					memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 					communicationRegion->clearCompleteBuffer();
 
-					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
-					for ( size_t i = 0; i < 10; ++i ) {
-						std::cout << localData[i] << " " << std::flush;
-					}
-					std::cout << std::endl;
+					DataProvider d;
+					d.generateDummyData( elementCount );
+					auto ret = memcmp( localData, d.data, elementCount * sizeof(uint64_t) );
+					std::cout << "Ret is: " << ret << std::endl;
+
 					free( localData );
 				} break;
 				default: {
@@ -342,7 +338,7 @@ int main(int argc, char *argv[]) {
 				r->setCommitCode( rdma_data_ready );
 			}
 		} else if ( op == "7" ) {
-			RDMARegion* requestRegion = selectRegion( false );
+			RDMARegion* requestRegion = selectRegion( true );
 			if ( requestRegion ) {
 				requestRegion->setSendData( "Please give data from Random source." );
 				requestRegion->setCommitCode( rdma_data_fetch );

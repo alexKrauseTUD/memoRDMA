@@ -4,7 +4,8 @@
 class DataProvider {
     public:
         DataProvider();
-
+        ~DataProvider();
+        
         void generateDummyData( uint64_t size );
         
         uint64_t currSize;
