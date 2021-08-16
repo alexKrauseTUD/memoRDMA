@@ -121,12 +121,11 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearReadCode();
 					/* provide data to remote */
 					DataProvider d;
-					uint64_t elementCount = 1024*1024*4;
+					uint64_t elementCount = 1000*1000*4;
 					uint64_t remainingSize = elementCount * sizeof(uint64_t);
 					uint64_t maxPaylodSize = communicationRegion->maxWriteSize() - 1 - sizeof(elementCount) - sizeof(remainingSize);
 					uint64_t maxDataToWrite = (maxPaylodSize/sizeof(uint64_t)) * sizeof(uint64_t);
 					std::cout << "Max Payload is: " << maxPaylodSize << " but we use " << maxDataToWrite << std::endl;
-
 					std::cout << "Generating " << remainingSize << " Byte of data and send them over." << std::endl;
 					d.generateDummyData( elementCount );
 					uint64_t* copy = d.data;
@@ -138,14 +137,14 @@ int main(int argc, char *argv[]) {
 						communicationRegion->clearReadCode();
 						std::cout << "Setting data to send with " << copy << " " << elementCount << " " << maxDataToWrite << std::endl;
 						std::cout << "Data Pointer is accessible at start: " << *copy << std::flush;
-						std::cout << " Data Pointer is accessible at end: " << *(copy+maxDataToWrite) << std::flush;
+						std::cout << " Data Pointer is accessible at end: " << *((uint64_t*) ((char*)copy+maxDataToWrite)) << std::flush;
 						
 						communicationRegion->setSendData( copy, elementCount, maxDataToWrite );
 						std::cout << " Commitinng..." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						remainingSize -= maxDataToWrite;
-						copy += maxDataToWrite;
+						copy = (uint64_t*) (((char*)copy) + maxDataToWrite);
 
 						// Wait for receiver to consume.
 						while ( communicationRegion->receivePtr()[0] != rdma_data_next ) {
@@ -197,7 +196,7 @@ int main(int argc, char *argv[]) {
 							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
-						localWritePtr += (uint64_t)size;
+						localWritePtr = (uint64_t*) ((char*)localWritePtr + size);
 						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 						communicationRegion->setCommitCode( rdma_data_next );
 
