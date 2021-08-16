@@ -305,10 +305,10 @@ void RDMARegion::setSendData( std::string s ) {
 }
 
 void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t currentSize ) {
-    writePtr()[0] = rdma_no_op; // Reset Commit code to 0
-    memcpy( writePtr()+1, &totalSize, sizeof(totalSize) ); // total size of complete data
-    memcpy( writePtr()+sizeof(totalSize), &currentSize, sizeof(currentSize) ); // size of current payload
-    memcpy( writePtr()+1+sizeof(totalSize)+sizeof(currentSize), data, currentSize ); // actual payload
+    memcpy( writePtr()+1, &totalSize, sizeof(totalSize) );
+    memcpy( writePtr()+9, &currentSize, sizeof(currentSize) );
+    memcpy( writePtr()+17, data, currentSize );
+    // post_send(&res, currentSize+sizeof(totalSize)+sizeof(currentSize)+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
     post_send(&res, currentSize+sizeof(totalSize)+sizeof(currentSize)+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
     poll_completion(&res);
 }
@@ -317,4 +317,5 @@ void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
     writePtr()[0] = opcode;
     post_send(&res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     poll_completion(&res);
+    // clearCompleteBuffer();
 }

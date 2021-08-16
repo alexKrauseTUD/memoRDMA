@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
 						std::cout << " Data Pointer is accessible at end: " << *((uint64_t*) ((char*)copy+maxDataToWrite)) << std::flush;
 						
 						communicationRegion->setSendData( copy, elementCount, maxDataToWrite );
-						std::cout << " Commitinng round [" << iteration << "]..." << std::endl;
+						std::cout << " Commitinng round [" << iteration++ << "]..." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						remainingSize -= maxDataToWrite;
@@ -201,7 +201,8 @@ int main(int argc, char *argv[]) {
 						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 						communicationRegion->setCommitCode( rdma_data_next );
 
-						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
+						while( communicationRegion->receivePtr()[0] == rdma_no_op ) {
+						// while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
