@@ -45,7 +45,7 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
         INFO("TCP connection was established\n");
     }
 
-    INFO("Searching for IB devices in host\n");
+    // INFO("Searching for IB devices in host\n");
 
     // \begin acquire a specific device
     // get device names in the system
@@ -63,8 +63,7 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     for (i = 0; i < num_devices; i++) {
         if (!config.dev_name) {
             config.dev_name = strdup(ibv_get_device_name(dev_list[i]));
-            INFO("Device not specified, using first one found: %s\n",
-                 config.dev_name);
+            // INFO("Device not specified, using first one found: %s\n", config.dev_name);
         }
 
         if (strcmp(ibv_get_device_name(dev_list[i]), config.dev_name) == 0) {

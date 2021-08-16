@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearCompleteBuffer();
 					/* provide data to remote */
 					DataProvider d;
-					uint64_t elementCount = 1000*1000;
+					uint64_t elementCount = 1000*1000*1000;
 					uint64_t remainingSize = elementCount * sizeof(uint64_t);
 					uint64_t maxPaylodSize = communicationRegion->maxWriteSize() - 1 - sizeof(elementCount) - sizeof(remainingSize);
 					uint64_t maxDataToWrite = (maxPaylodSize/sizeof(uint64_t)) * sizeof(uint64_t);
@@ -133,15 +133,16 @@ int main(int argc, char *argv[]) {
 					std::cout << "Starting to loop. " << std::endl;
 					size_t iteration = 1;
 					// Add 17 Byte to the size - 1 Byte commit code, 8 Byte elementCount, 8 byte maxDataToWrite.
+					auto s_ts = std::chrono::high_resolution_clock::now();
 					while ( remainingSize + 17 > communicationRegion->maxWriteSize() ) {  
-						std::cout << "Remaining size: " << remainingSize << std::endl;
+						// std::cout << "Remaining size: " << remainingSize << std::endl;
 						communicationRegion->clearCompleteBuffer();
-						std::cout << "Setting data to send with " << copy << " " << elementCount << " " << maxDataToWrite << std::endl;
-						std::cout << "Data Pointer is accessible at start: " << *copy << std::flush;
-						std::cout << " Data Pointer is accessible at end: " << *((uint64_t*) ((char*)copy+maxDataToWrite)) << std::flush;
+						// std::cout << "Setting data to send with " << copy << " " << elementCount << " " << maxDataToWrite << std::endl;
+						// std::cout << "Data Pointer is accessible at start: " << *copy << std::flush;
+						// std::cout << " Data Pointer is accessible at end: " << *((uint64_t*) ((char*)copy+maxDataToWrite)) << std::flush;
 						
 						communicationRegion->setSendData( copy, elementCount, maxDataToWrite );
-						std::cout << " Commitinng round [" << iteration++ << "]..." << std::endl;
+						// std::cout << " Commitinng round [" << iteration++ << "]..." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_receive );
 
 						remainingSize -= maxDataToWrite;
@@ -152,9 +153,13 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					std::cout << "Sending remainder of " << remainingSize << " Byte." << std::endl;
+					// std::cout << "Sending remainder of " << remainingSize << " Byte." << std::endl;
 					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
+					auto e_ts = std::chrono::high_resolution_clock::now();
+					auto transfertime_ms = std::chrono::duration_cast< std::chrono::milliseconds >( e_ts - s_ts ).count();
+					auto datasize = elementCount * sizeof(uint64_t);
+					std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << transfertime_ms << " ms -- " << BtoMB( datasize ) / (transfertime_ms / 1000) << " MB/s " << std::endl;
 					communicationRegion->clearCompleteBuffer();
 				} break;
 				case rdma_data_finished: {
@@ -196,7 +201,7 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
-						std::cout << "\r[" << i++ << "] Writing " << size << " Byte." << std::endl;
+						// std::cout << "\r[" << i++ << "] Writing " << size << " Byte." << std::endl;
 						memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 						localWritePtr = (uint64_t*) ((char*)localWritePtr + size);
 						communicationRegion->setCommitCode( rdma_data_next );
