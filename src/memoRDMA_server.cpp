@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearCompleteBuffer();
 				}; break;
 				case rdma_data_fetch: {
-					communicationRegion->clearReadCode();
+					communicationRegion->clearCompleteBuffer();
 					/* provide data to remote */
 					DataProvider d;
 					uint64_t elementCount = 1000*1000;
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 					// Add 17 Byte to the size - 1 Byte commit code, 8 Byte elementCount, 8 byte maxDataToWrite.
 					while ( remainingSize + 17 > communicationRegion->maxWriteSize() ) {  
 						std::cout << "Remaining size: " << remainingSize << std::endl;
-						communicationRegion->clearReadCode();
+						communicationRegion->clearCompleteBuffer();
 						std::cout << "Setting data to send with " << copy << " " << elementCount << " " << maxDataToWrite << std::endl;
 						std::cout << "Data Pointer is accessible at start: " << *copy << std::flush;
 						std::cout << " Data Pointer is accessible at end: " << *((uint64_t*) ((char*)copy+maxDataToWrite)) << std::flush;
@@ -205,7 +205,9 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					std::cout << std::endl;
+					std::cout << "localData after while: " << localData << std::endl;
+					std::cout << "localData (with offset) after while: " << (uint64_t*) ((char*)localData + (i*size)) << std::endl;
+					std::cout << "localWritePtr after while: " << localWritePtr << std::endl;
 					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
 					std::cout << "\r[" << i++ << "] Writing " << size << " Byte (remainder)." << std::flush;
 					memcpy( &localWritePtr, communicationRegion->receivePtr()+17, size );

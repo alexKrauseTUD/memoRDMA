@@ -315,8 +315,7 @@ void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t curre
 }
 
 void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
-    writePtr()[0] = opcode;
+    writePtr()[0] = (char)opcode;
     post_send(&res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
     poll_completion(&res);
-    // clearCompleteBuffer();
 }
