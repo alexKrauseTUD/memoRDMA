@@ -107,9 +107,7 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     res.mr = ibv_reg_mr(res.pd, res.buf, size, mr_flags);
     assert(res.mr != NULL);
 
-    INFO(
-        "MR was registered with addr=%p, lkey= 0x%x, rkey= 0x%x, flags= 0x%x\n",
-        res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
+    // INFO("MR was registered with addr=%p, lkey= 0x%x, rkey= 0x%x, flags= 0x%x\n",res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
 
     // \begin create the QP
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
@@ -125,7 +123,8 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     res.qp = ibv_create_qp(res.pd, &qp_init_attr);
     assert(res.qp != NULL);
 
-    INFO("QP was created, QP number= 0x%x\n", res.qp->qp_num);
+    // INFO("QP was created, QP number= 0x%x\n", res.qp->qp_num);
+    
     // \end create the QP
 
     // FIXME: hard code here
@@ -145,14 +144,15 @@ void RDMARegion::resources_sync_local( config_t* config, struct cm_con_data_t& t
 
     res.remote_props = remote_con_data;
 
-    if (config->gid_idx >= 0) {
-        uint8_t *p = remote_con_data.gid;
-        int i;
-        printf("Remote GID = ");
-        for (i = 0; i < 15; i++)
-            printf("%02x:", p[i]);
-        printf("%02x\n", p[15]);
-    }
+    /* Debug for GID */
+    // if (config->gid_idx >= 0) {
+    //     uint8_t *p = remote_con_data.gid;
+    //     int i;
+    //     printf("Remote GID = ");
+    //     for (i = 0; i < 15; i++)
+    //         printf("%02x:", p[i]);
+    //     printf("%02x\n", p[15]);
+    // }
 
     modify_qp_to_init(*config, res.qp);
     modify_qp_to_rtr(*config, res.qp, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid);
@@ -176,7 +176,7 @@ int RDMARegion::modify_qp_to_init(struct config_t& config, struct ibv_qp *qp) {
 
     CHECK(ibv_modify_qp(qp, &attr, flags));
 
-    INFO("Modify QP to INIT done!\n");
+    // INFO("Modify QP to INIT done!\n");
 
     // FIXME: ;)
     return 0;
@@ -216,7 +216,7 @@ int RDMARegion::modify_qp_to_rtr(struct config_t& config, struct ibv_qp *qp, uin
 
     CHECK(ibv_modify_qp(qp, &attr, flags));
 
-    INFO("Modify QP to RTR done!\n");
+    // INFO("Modify QP to RTR done!\n");
 
     // FIXME: ;)
     return 0;
@@ -241,7 +241,7 @@ int RDMARegion::modify_qp_to_rts(struct ibv_qp *qp) {
 
     CHECK(ibv_modify_qp(qp, &attr, flags));
 
-    INFO("Modify QP to RTS done!\n");
+    // INFO("Modify QP to RTS done!\n");
 
     // FIXME: ;)
     return 0;
@@ -274,10 +274,10 @@ char* RDMARegion::receivePtr() {
 void RDMARegion::print() const {
     std::ios_base::fmtflags f( std::cout.flags() );
     std::cout << std::hex;
-    std::cout << "\tRemote address = " << res.remote_props.addr << std::endl;
-    std::cout << "\tRemote rkey = " <<  res.remote_props.rkey << std::endl;
+    std::cout << "\t  Remote address = " << res.remote_props.addr << std::endl;
+    std::cout << "\t     Remote rkey = " <<  res.remote_props.rkey << std::endl;
     std::cout << "\tRemote QP number = " << res.remote_props.qp_num << std::endl;
-    std::cout << "\tRemote LID = " << res.remote_props.lid << std::endl;
+    std::cout << "\t      Remote LID = " << res.remote_props.lid << std::endl;
     std::cout.flags( f );
 }
 

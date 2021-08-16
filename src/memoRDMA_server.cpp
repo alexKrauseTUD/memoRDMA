@@ -12,6 +12,7 @@
 #include "RDMARegion.h"
 #include "RDMAHandler.h"
 #include "DataProvider.h"
+#include "RDMACommunicator.h"
 
 double BtoMB( uint32_t byte ) {
 	return static_cast<double>(byte) / 1024 / 1024;
@@ -121,7 +122,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearCompleteBuffer();
 					/* provide data to remote */
 					DataProvider d;
-					uint64_t elementCount = 1000*1000*1000;
+					uint64_t elementCount = 1000*1000;
 					uint64_t remainingSize = elementCount * sizeof(uint64_t);
 					uint64_t maxPaylodSize = communicationRegion->maxWriteSize() - 1 - sizeof(elementCount) - sizeof(remainingSize);
 					uint64_t maxDataToWrite = (maxPaylodSize/sizeof(uint64_t)) * sizeof(uint64_t);

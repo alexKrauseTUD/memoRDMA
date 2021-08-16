@@ -19,7 +19,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <sys/socket.h>
 
 #include <iostream>
 
