@@ -310,8 +310,7 @@ void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t curre
     memcpy( writePtr()+1, &totalSize, sizeof(totalSize) );
     memcpy( writePtr()+9, &currentSize, sizeof(currentSize) );
     memcpy( writePtr()+17, data, currentSize );
-    // post_send(&res, currentSize+sizeof(totalSize)+sizeof(currentSize)+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
-    post_send(&res, currentSize+sizeof(totalSize)+sizeof(currentSize)+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
+    post_send(&res, currentSize+17, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
     poll_completion(&res);
 }
 
