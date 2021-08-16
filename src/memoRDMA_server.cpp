@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->clearReadCode();
 					/* provide data to remote */
 					DataProvider d;
-					uint64_t elementCount = 1000*1000*4;
+					uint64_t elementCount = 1000*1000;
 					uint64_t remainingSize = elementCount * sizeof(uint64_t);
 					uint64_t maxPaylodSize = communicationRegion->maxWriteSize() - 1 - sizeof(elementCount) - sizeof(remainingSize);
 					uint64_t maxDataToWrite = (maxPaylodSize/sizeof(uint64_t)) * sizeof(uint64_t);

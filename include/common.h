@@ -13,6 +13,6 @@ enum rdma_handler_communication {
     rdma_data_ready     = 8
 };
 
-#define BUFF_SIZE 1024*1024*10
+#define BUFF_SIZE 1024*1024*4
 
 #endif // COMMON_H
