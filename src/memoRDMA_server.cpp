@@ -156,7 +156,9 @@ int main(int argc, char *argv[]) {
 					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
 					std::cout << "Remainder finished." << std::endl;
-					std::cout << "[Sanity] last element is: " << (uint64_t*) (communicationRegion->writePtr() + 17 + remainingSize ) << std::endl;
+					std::cout << "[Sanity] first element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 ) << std::endl;
+					std::cout << "[Sanity] second element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 + 8 ) << std::endl;
+					std::cout << "[Sanity] last element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 + remainingSize-8 ) << std::endl;
 				} break;
 				case rdma_data_finished: {
 					uint64_t* localData;
@@ -211,7 +213,7 @@ int main(int argc, char *argv[]) {
 					std::cout << "localWritePtr after while: " << localWritePtr << std::endl;
 					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
 					std::cout << "\r[" << i++ << "] Writing " << size << " Byte (remainder)." << std::flush;
-					memcpy( &localWritePtr, communicationRegion->receivePtr()+17, size );
+					memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 					communicationRegion->clearCompleteBuffer();
 
 					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
