@@ -156,6 +156,7 @@ int main(int argc, char *argv[]) {
 					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
 					std::cout << "Remainder finished." << std::endl;
+					std::cout << "[Sanity] last element is: " << (uint64_t*) (communicationRegion->writePtr() + 17 + remainingSize ) << std::endl;
 				} break;
 				case rdma_data_finished: {
 					uint64_t* localData;
