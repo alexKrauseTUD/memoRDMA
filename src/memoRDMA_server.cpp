@@ -198,11 +198,10 @@ int main(int argc, char *argv[]) {
 						}
 						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
 						localWritePtr = (uint64_t*) ((char*)localWritePtr + size);
-						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
+						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_next );
 
-						while( communicationRegion->receivePtr()[0] == rdma_no_op ) {
-						// while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
+						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
