@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
 					size_t i = 0;
 					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
 						communicationRegion->clearReadCode();
-						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
+						memcpy( &size, communicationRegion->receivePtr()+9, 8 );
 						if (!initDone) {
 							initDone = true;
 							uint64_t elementCount;
@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
-						memcpy( localWritePtr, communicationRegion->receivePtr()+9, size );
+						memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 						localWritePtr = (uint64_t*) ((char*)localWritePtr + size);
 						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_next );
@@ -206,8 +206,8 @@ int main(int argc, char *argv[]) {
 						}
 					}
 					std::cout << std::endl;
-					memcpy( &size, communicationRegion->receivePtr()+5, 4 );
-					memcpy( &localWritePtr, communicationRegion->receivePtr()+9, size );
+					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
+					memcpy( &localWritePtr, communicationRegion->receivePtr()+17, size );
 					communicationRegion->clearCompleteBuffer();
 					std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 
