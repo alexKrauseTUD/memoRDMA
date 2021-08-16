@@ -2,6 +2,7 @@
 #define COMMON_H
 
 enum rdma_handler_communication {
+    rdma_no_op          = 0,
     rdma_create_region  = 1,
     rdma_receive_region = 2,
     rdma_delete_region  = 3,
