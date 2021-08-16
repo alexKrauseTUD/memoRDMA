@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
 							continue; // Busy waiting to ensure fastest possible transfer?
 						}
 					}
-					std::cout << "Sending remainder." << std::endl;
+					std::cout << "Sending remainder of " << remainingSize << " Byte." << std::endl;
 					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
 					std::cout << "Remainder finished." << std::endl;
@@ -196,9 +196,9 @@ int main(int argc, char *argv[]) {
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
 						}
+						std::cout << "\r[" << i++ << "] Writing " << size << " Byte." << std::endl;
 						memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 						localWritePtr = (uint64_t*) ((char*)localWritePtr + size);
-						std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::endl;
 						communicationRegion->setCommitCode( rdma_data_next );
 
 						while( communicationRegion->receivePtr()[0] != rdma_data_finished && communicationRegion->receivePtr()[0] != rdma_data_receive ) {
@@ -207,9 +207,9 @@ int main(int argc, char *argv[]) {
 					}
 					std::cout << std::endl;
 					memcpy( &size, communicationRegion->receivePtr()+9, 8 );
+					std::cout << "\r[" << i++ << "] Writing " << size << " Byte (remainder)." << std::flush;
 					memcpy( &localWritePtr, communicationRegion->receivePtr()+17, size );
 					communicationRegion->clearCompleteBuffer();
-					std::cout << "\r[" << i++ << "] Written " << size << " Byte." << std::flush;
 
 					std::cout << "Finished receiving data. Here's an extract:" << std::endl;
 					for ( size_t i = 0; i < 10; ++i ) {
