@@ -305,7 +305,8 @@ void RDMARegion::setSendData( std::string s ) {
 }
 
 void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t currentSize ) {
-    writePtr()[0] = rdma_no_op;
+    clearCompleteBuffer();
+    writePtr()[0] = (char)rdma_no_op;
     memcpy( writePtr()+1, &totalSize, sizeof(totalSize) );
     memcpy( writePtr()+9, &currentSize, sizeof(currentSize) );
     memcpy( writePtr()+17, data, currentSize );

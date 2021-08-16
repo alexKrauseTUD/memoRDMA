@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
 					bool initDone = false;
 					uint64_t* localData;
 					uint64_t* localWritePtr;
-					uint32_t size;
+					uint64_t size;
 
 					size_t i = 0;
 					while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
@@ -190,8 +190,8 @@ int main(int argc, char *argv[]) {
 						memcpy( &size, communicationRegion->receivePtr()+5, 4 );
 						if (!initDone) {
 							initDone = true;
-							uint32_t elementCount;
-							memcpy( &elementCount, communicationRegion->receivePtr()+1, 4 );
+							uint64_t elementCount;
+							memcpy( &elementCount, communicationRegion->receivePtr()+1, 8 );
 							localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 							localWritePtr = localData;
 							std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
