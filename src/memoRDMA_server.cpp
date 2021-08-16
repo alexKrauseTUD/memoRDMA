@@ -155,10 +155,7 @@ int main(int argc, char *argv[]) {
 					std::cout << "Sending remainder of " << remainingSize << " Byte." << std::endl;
 					communicationRegion->setSendData( copy, elementCount, remainingSize );
 					communicationRegion->setCommitCode( rdma_data_finished );
-					std::cout << "Remainder finished." << std::endl;
-					std::cout << "[Sanity] first element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 ) << std::endl;
-					std::cout << "[Sanity] second element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 + 8 ) << std::endl;
-					std::cout << "[Sanity] last element is: " << *(uint64_t*) (communicationRegion->writePtr() + 17 + remainingSize-8 ) << std::endl;
+					communicationRegion->clearCompleteBuffer();
 				} break;
 				case rdma_data_finished: {
 					uint64_t* localData;
