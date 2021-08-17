@@ -1,4 +1,5 @@
 #include "RDMAHandler.h"
+#include "RDMACommunicator.h"
 #include <iostream>
 #include <thread>
 
@@ -10,7 +11,7 @@ void RDMAHandler::setupCommunicationBuffer(config_t& config) {
 	region->resources_create(config);
 
 	// connect the QPs
-	connect_qp_tcp(config, *region);
+	connectQpTCP(config, *region);
     
     std::cout << "[RDMAHandler] Default region is: " << region << std::endl;
     communicationBuffer = region;
@@ -65,12 +66,12 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* communicationReg
     // INFO("\n Local LID      = 0x%x\n", newRegion->res.port_attr.lid);
 
     memcpy( communicationRegion->writePtr()+1, &local_con_data, sizeof( cm_con_data_t ) );
-    post_send(&communicationRegion->res, sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    poll_completion(&communicationRegion->res);
+    communicationRegion->post_send( sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    communicationRegion->poll_completion();
 
     communicationRegion->writePtr()[0] = opcode;
-    post_send(&communicationRegion->res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    poll_completion(&communicationRegion->res);
+    communicationRegion->post_send( sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    communicationRegion->poll_completion();
     // std::cout << "Sent data to remote machine:" << std::endl;
     // INFO("My address = 0x%" PRIx64 "\n",local_con_data.addr);
     // INFO("My rkey = 0x%x\n",            local_con_data.rkey);
@@ -131,4 +132,105 @@ std::vector< RDMARegion* > RDMAHandler::getAllRegions() const {
         rs.emplace_back( it->second );
     }
      return rs;
+}
+
+RDMARegion* RDMAHandler::selectRegion( bool withDefault ) {
+    printRegions();
+    if ( withDefault ) {
+        std::cout << "Which region (\"d\" for default buffer)?" << std::endl;
+    } else {
+        std::cout << "Which region?" << std::endl;
+    }
+    std::string content;
+    std::getline(std::cin, content);
+    uint64_t rid;
+    if (content != "d") {
+        try {
+            char* pEnd;
+            rid = strtoull(content.c_str(), &pEnd, 10);
+        } catch (...) {
+            std::cout << "[Error] Couldn't convert number." << std::endl;
+            return nullptr;
+        }
+        return getRegion( rid );
+    } else {
+        if ( !withDefault ) {
+            return nullptr;
+        }
+        return communicationBuffer;
+    }
+};
+
+// Connect the QP, then transition the server side to RTR, sender side to RTS.
+void RDMAHandler::connectQpTCP( struct config_t& config, RDMARegion& region ) {
+    struct cm_con_data_t local_con_data;
+    struct cm_con_data_t remote_con_data;
+    struct cm_con_data_t tmp_con_data;
+    char temp_char;
+    union ibv_gid my_gid;
+
+    memset(&my_gid, 0, sizeof(my_gid));
+
+    if (config.gid_idx >= 0) {
+        CHECK(ibv_query_gid(region.res.ib_ctx, config.ib_port, config.gid_idx,
+                            &my_gid));
+    }
+
+    // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
+    // etc. exchange using TCP sockets info required to connect QPs
+    local_con_data.addr = htonll((uintptr_t)region.res.buf);
+    local_con_data.rkey = htonl(region.res.mr->rkey);
+    local_con_data.qp_num = htonl(region.res.qp->qp_num);
+    local_con_data.lid = htons(region.res.port_attr.lid);
+    memcpy(local_con_data.gid, &my_gid, 16);
+
+    INFO("\n Local LID      = 0x%x\n", region.res.port_attr.lid);
+
+    sock_sync_data(region.res.sock, sizeof(struct cm_con_data_t),
+                   (char *)&local_con_data, (char *)&tmp_con_data);
+
+    remote_con_data.addr = ntohll(tmp_con_data.addr);
+    remote_con_data.rkey = ntohl(tmp_con_data.rkey);
+    remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
+    remote_con_data.lid = ntohs(tmp_con_data.lid);
+    memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
+
+    // save the remote side attributes, we will need it for the post SR
+    region.res.remote_props = remote_con_data;
+    // \end exchange required info
+
+    INFO("Remote address = 0x%" PRIx64 "\n", remote_con_data.addr);
+    INFO("Remote rkey = 0x%x\n", remote_con_data.rkey);
+    INFO("Remote QP number = 0x%x\n", remote_con_data.qp_num);
+    INFO("Remote LID = 0x%x\n", remote_con_data.lid);
+
+    if (config.gid_idx >= 0) {
+        uint8_t *p = remote_con_data.gid;
+        int i;
+        printf("Remote GID = ");
+        for (i = 0; i < 15; i++)
+            printf("%02x:", p[i]);
+        printf("%02x\n", p[15]);
+    }
+
+    // modify the QP to init
+    region.modify_qp_to_init(config, region.res.qp);
+
+    // let the client post RR to be prepared for incoming messages
+    if (config.server_name) {
+        region.post_receive();
+    }
+    
+    // modify the QP to RTR
+    region.modify_qp_to_rtr(config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,
+                     remote_con_data.gid);
+
+    // modify QP state to RTS
+    region.modify_qp_to_rts(region.res.qp);
+
+    // sync to make sure that both sides are in states that they can connect to
+    // prevent packet lose
+	char Q = 'Q';
+    sock_sync_data(region.res.sock, 1, &Q, &temp_char);
+    return;
 }

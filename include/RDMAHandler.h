@@ -33,12 +33,13 @@ class RDMAHandler {
         void sendRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode );
         void receiveRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion );
         
+        void connectQpTCP( struct config_t& config, RDMARegion& region );
         void create_and_setup_region( config_t* config, uint64_t* newRegionId = nullptr, bool* isReady = nullptr );
-        
-        void connect_qp_rdma( config_t* config, RDMARegion& region );
+
         uint64_t registerRegion( RDMARegion* region );
         void removeRegion( RDMARegion* region );
         
+        RDMARegion* selectRegion( bool withDefault );
 
         void printRegions() const;
 

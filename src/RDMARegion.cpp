@@ -281,6 +281,110 @@ void RDMARegion::print() const {
     std::cout.flags( f );
 }
 
+
+// Poll the CQ for a single event. This function will continue to poll the queue
+// until MAX_POLL_TIMEOUT ms have passed.
+int RDMARegion::poll_completion() {
+    struct ibv_wc wc;
+    unsigned long start_time_ms;
+    unsigned long curr_time_ms;
+    struct timeval curr_time;
+    int poll_result;
+
+    // poll the completion for a while before giving up of doing it
+    gettimeofday(&curr_time, NULL);
+    start_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
+    do {
+        poll_result = ibv_poll_cq(res.cq, 1, &wc);
+        gettimeofday(&curr_time, NULL);
+        curr_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
+    } while ((poll_result == 0) &&
+             ((curr_time_ms - start_time_ms) < MAX_POLL_CQ_TIMEOUT));
+
+    if (poll_result < 0) {
+        // poll CQ failed
+        ERROR("poll CQ failed\n");
+        goto die;
+    } else if (poll_result == 0) {
+        ERROR("Completion wasn't found in the CQ after timeout\n");
+        goto die;
+    } else {
+        // CQE found
+        // INFO("Completion was found in CQ with status 0x%x\n", wc.status);
+    }
+
+    if (wc.status != IBV_WC_SUCCESS) {
+        ERROR("Got bad completion with status: 0x%x, vendor syndrome: 0x%x\n",
+              wc.status, wc.vendor_err);
+        goto die;
+    }
+
+    // FIXME: ;)
+    return 0;
+die:
+    exit(EXIT_FAILURE);
+}
+
+// This function will create and post a send work request.
+int RDMARegion::post_send( int len, ibv_wr_opcode opcode, size_t offset ) {
+    struct ibv_send_wr sr;
+    struct ibv_sge sge;
+    struct ibv_send_wr *bad_wr = NULL;
+
+    // prepare the scatter / gather entry
+    memset(&sge, 0, sizeof(sge));
+
+    sge.addr = (uintptr_t)res.buf;
+    sge.length = len;
+    sge.lkey = res.mr->lkey;
+
+    // prepare the send work request
+    memset(&sr, 0, sizeof(sr));
+
+    sr.next = NULL;
+    sr.wr_id = 0;
+    sr.sg_list = &sge;
+
+    sr.num_sge = 1;
+    sr.opcode = opcode;
+    sr.send_flags = IBV_SEND_SIGNALED;
+
+    if (opcode != IBV_WR_SEND) {
+        sr.wr.rdma.remote_addr = res.remote_props.addr + offset;
+        sr.wr.rdma.rkey = res.remote_props.rkey;
+    }
+
+    CHECK(ibv_post_send(res.qp, &sr, &bad_wr));
+
+    return 0;
+}
+
+int RDMARegion::post_receive() {
+    struct ibv_recv_wr rr;
+    struct ibv_sge sge;
+    struct ibv_recv_wr *bad_wr;
+
+    // prepare the scatter / gather entry
+    memset(&sge, 0, sizeof(sge));
+    sge.addr = (uintptr_t)res.buf;
+    sge.length = BUFF_SIZE;
+    sge.lkey = res.mr->lkey;
+
+    // prepare the receive work request
+    memset(&rr, 0, sizeof(rr));
+
+    rr.next = NULL;
+    rr.wr_id = 0;
+    rr.sg_list = &sge;
+    rr.num_sge = 1;
+
+    // post the receive request to the RQ
+    CHECK(ibv_post_recv(res.qp, &rr, &bad_wr));
+    INFO("Receive request was posted\n");
+
+    return 0;
+}
+
 void RDMARegion::clearReadCode() {
     memset( receivePtr(), 0, 1 );
 }
@@ -299,8 +403,8 @@ void RDMARegion::clearReadBuffer() {
 
 void RDMARegion::setSendData( std::string s ) {
     strcpy( writePtr()+1, s.c_str() );
-    post_send(&res, s.size()+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
-    poll_completion(&res);
+    post_send(s.size()+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+    poll_completion();
 }
 
 void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t currentSize ) {
@@ -309,12 +413,13 @@ void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t curre
     memcpy( writePtr()+1, &totalSize, sizeof(totalSize) );
     memcpy( writePtr()+9, &currentSize, sizeof(currentSize) );
     memcpy( writePtr()+17, data, currentSize );
-    post_send(&res, currentSize+17, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
-    poll_completion(&res);
+    post_send(currentSize+17, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
+    poll_completion();
 }
 
 void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
     writePtr()[0] = (char)opcode;
-    post_send(&res, sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
-    poll_completion(&res);
+    post_send(sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    poll_completion();
 }
+

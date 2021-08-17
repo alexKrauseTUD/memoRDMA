@@ -37,11 +37,11 @@ class RDMARegion {
         RDMARegion();
         ~RDMARegion();
 
-        int resources_create(struct config_t& config, bool initTCP = true );
+        int resources_create( struct config_t& config, bool initTCP = true );
         void resources_sync_local( config_t* config, struct cm_con_data_t& tmp_con_data );
-        int modify_qp_to_init(struct config_t& config, struct ibv_qp *qp);
-        int modify_qp_to_rtr(struct config_t& config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
-        int modify_qp_to_rts(struct ibv_qp *qp);
+        int modify_qp_to_init( struct config_t& config, struct ibv_qp *qp );
+        int modify_qp_to_rtr( struct config_t& config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid );
+        int modify_qp_to_rts( struct ibv_qp *qp );
 
         void setSendData( std::string s );
         void setSendData( uint64_t* data, uint64_t totalSize, uint64_t currentSize );
@@ -59,6 +59,11 @@ class RDMARegion {
         void clearCompleteBuffer();
         void clearWriteBuffer();
         void clearReadBuffer();
+
+        /* RDMA Communication */
+        int poll_completion();
+        int post_send( int len, ibv_wr_opcode opcode, size_t offset = 0 );
+        int post_receive();
 
         struct resources res;
     
