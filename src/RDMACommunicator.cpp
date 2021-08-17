@@ -9,10 +9,6 @@ RDMACommunicator::RDMACommunicator() :
     bufferSize( 1024*1024*2 ),
     globalAbort( false )
 {
-	RDMAHandler::getInstance().setupCommunicationBuffer( config );
-	auto region = RDMAHandler::getInstance().communicationBuffer;
-	region->clearCompleteBuffer();
-
 	check_receive = [this]( RDMARegion* communicationRegion, config_t* config, bool* abort ) -> void {
 		using namespace std::chrono_literals;
 		std::ios_base::fmtflags f( std::cout.flags() );
@@ -165,7 +161,12 @@ RDMACommunicator::RDMACommunicator() :
 			std::this_thread::sleep_for( 50ms );
 		}
 	};
+}
 
+void RDMACommunicator::init( config_t& config ) {
+	RDMAHandler::getInstance().setupCommunicationBuffer( config );
+	auto region = RDMAHandler::getInstance().communicationBuffer;
+	region->clearCompleteBuffer();
     readWorker = new std::thread( check_receive, region, &config, &globalAbort );
 	creationWorker = new std::thread( check_regions, &globalAbort );
 }

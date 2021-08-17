@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	print_config(config);
-	RDMACommunicator::getInstance();
+	RDMACommunicator::getInstance().init( config );
 
 	std::string content;
 	std::string op;

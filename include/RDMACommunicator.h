@@ -23,6 +23,8 @@ class RDMACommunicator {
         RDMACommunicator(RDMACommunicator const&)  = delete;
         void operator=(RDMACommunicator const&)  = delete;
 
+        void init( config_t& config );
+
         void setupNewRegion();
         void setBufferSize();
 
