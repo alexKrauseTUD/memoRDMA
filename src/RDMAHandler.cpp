@@ -215,11 +215,6 @@ void RDMAHandler::connectQpTCP( struct config_t& config, RDMARegion& region ) {
 
     // modify the QP to init
     region.modify_qp_to_init(config, region.res.qp);
-
-    // let the client post RR to be prepared for incoming messages
-    if (config.server_name) {
-        region.post_receive();
-    }
     
     // modify the QP to RTR
     region.modify_qp_to_rtr(config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,

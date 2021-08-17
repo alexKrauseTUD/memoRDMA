@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
 		std::cout << "[3] Create new region" << std::endl;
 		std::cout << "[4] Print Regions ";
 		std::cout << "[5] Delete Region ";
-		std::cout << "[6] Send dummy to all regions." << std::endl;
+		std::cout << "[6] Send dummy to all regions." << std	::endl;
 		std::cout << "[7] Fetch data from a fixed source. ";
 		std::cout << "[8] Exit" << std::endl;
   		std::cin >> op;
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "3" ) { /* Create new Region */
-			RDMACommunicator::getInstance().setupNewRegion();
+			RDMACommunicator::getInstance().setupNewRegion( config );
 		} else if ( op == "4" ) { /* Print Regions */
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) { /* Delete */

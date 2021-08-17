@@ -25,7 +25,7 @@ class RDMACommunicator {
 
         void init( config_t& config );
 
-        void setupNewRegion();
+        void setupNewRegion( config_t& config );
         void setBufferSize();
 
         void stop();
@@ -34,6 +34,11 @@ class RDMACommunicator {
         /* Singleton-required */
         RDMACommunicator(); 
 
+        void createRdmaRegion( config_t* config, RDMARegion* communicationRegion );
+        void deleteRdmaRegion( RDMARegion* communicationRegion );
+        void readCommittedData( RDMARegion* communicationRegion );
+        void sendDataToRemote( RDMARegion* communicationRegion );
+        void receiveDataFromRemote( RDMARegion* communicationRegion, bool soloPackage );
 
         uint64_t bufferSize;
         std::map< uint32_t, std::tuple< bool*, uint64_t*, std::thread* > > pool;

@@ -23,6 +23,8 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     int cq_size = 0;
     int num_devices;
 
+    print_config( config );
+
     if ( initTCP ) {
         if (config.server_name) {
             // @client
