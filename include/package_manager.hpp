@@ -21,7 +21,12 @@ class package_t {
          payload_size_t total_data_size; //this encodes the to-be-expected size of the total data received (in multiple packages).
          payload_size_t current_payload_size; //this encodes the size of the current payload in bytes.
 
-         header_t(
+         header_t():
+            total_data_size{      0 },
+            current_payload_size{ 0 }
+         { }
+
+         explicit header_t(
             payload_size_t _total_data_size,
             payload_size_t _payload_size
          ):
@@ -30,7 +35,7 @@ class package_t {
          { }
       };
    
-      [[nodiscard]] auto get_header() const {
+      [[nodiscard]] auto& get_header() const {
          return header;
       }
 
@@ -44,9 +49,10 @@ class package_t {
             ". Carrying " + std::to_string(header.current_payload_size) + " bytes.";
       }
       
+   
    private:
-      header_t header;
       payload_t* payload;
+      header_t header;
 
    public:
       package_t() = delete;
@@ -58,6 +64,22 @@ class package_t {
          header{  total_size, current_size },
          payload{ _payload } 
       {
+      }
+
+      void setCurrentPackageSize( const std::size_t bytes ) {
+         header.current_payload_size = bytes;
+      }
+
+      void advancePayloadPtr( const std::size_t bytes ) {
+         payload = (void*) ((char*)payload + bytes);
+      }
+
+      static std::size_t metaDataSize() {
+         return sizeof( header_t );
+      }
+
+      std::size_t packageSize() const {
+         return metaDataSize() + header.current_payload_size;
       }
 
       virtual ~package_t() = default;

@@ -8,6 +8,7 @@
 #include <string>
 #include "common.h"
 #include "util.h"
+#include "package_manager.hpp"
 
 // structure to exchange data which is needed to connect the QPs
 struct cm_con_data_t {
@@ -47,8 +48,13 @@ class RDMARegion {
         void setSendData( uint64_t* data, uint64_t totalSize, uint64_t currentSize );
         void setCommitCode( rdma_handler_communication opcode );
 
+        void setPackageHeader( package_t* p );
+        void sendPackage( package_t* p, rdma_handler_communication opcode );
+
         char* writePtr();
         char* receivePtr();
+        char currentReadCode();
+        
         uint64_t inline maxWriteSize() const {
             return BUFF_SIZE / 2;
         };
@@ -56,6 +62,7 @@ class RDMARegion {
         void print() const;
 
         void clearReadCode();
+        void clearCommitCode();
         void clearCompleteBuffer();
         void clearWriteBuffer();
         void clearReadBuffer();

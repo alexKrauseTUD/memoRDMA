@@ -23,8 +23,6 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     int cq_size = 0;
     int num_devices;
 
-    print_config( config );
-
     if ( initTCP ) {
         if (config.server_name) {
             // @client
@@ -273,6 +271,10 @@ char* RDMARegion::receivePtr() {
     return res.buf + maxWriteSize();
 }
 
+char RDMARegion::currentReadCode() {
+    return receivePtr()[0];
+}
+
 void RDMARegion::print() const {
     std::ios_base::fmtflags f( std::cout.flags() );
     std::cout << std::hex;
@@ -391,16 +393,20 @@ void RDMARegion::clearReadCode() {
     memset( receivePtr(), 0, 1 );
 }
 
+void RDMARegion::clearCommitCode() {
+    memset( writePtr(), 0, 1 );
+}
+
 void RDMARegion::clearCompleteBuffer() {
-    memset( writePtr(), 0, BUFF_SIZE );
+    memset( writePtr(), 0, 2*maxWriteSize() );
 }
 
 void RDMARegion::clearWriteBuffer() {
-    memset( writePtr(), 0, maxWriteSize()/2 );
+    memset( writePtr(), 0, maxWriteSize() );
 }
 
 void RDMARegion::clearReadBuffer() {
-    memset( receivePtr(), 0, maxWriteSize()/2 );
+    memset( receivePtr(), 0, maxWriteSize() );
 }
 
 void RDMARegion::setSendData( std::string s ) {
@@ -425,3 +431,18 @@ void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
     poll_completion();
 }
 
+void RDMARegion::setPackageHeader( package_t* p ) {
+    std::cout << "Setting package header: " << p->get_header().total_data_size << " " << p->get_header().current_payload_size << "sizeof header: " << sizeof( package_t::header_t ) << std::endl; 
+    memcpy( writePtr()+1, &p->get_header(), sizeof( package_t::header_t ) );
+}
+
+void RDMARegion::sendPackage( package_t* p , rdma_handler_communication opcode ) {
+    clearCommitCode();
+    memcpy( writePtr()+1+sizeof(package_t::header_t), p->get_payload(), p->get_header().current_payload_size );
+    post_send( 1+p->packageSize(), IBV_WR_RDMA_WRITE, maxWriteSize() ); // maxWriteSize() == offset for receiving read pointer.
+    poll_completion();
+
+    *writePtr() = (char)opcode;
+    post_send(sizeof(char), IBV_WR_RDMA_WRITE, maxWriteSize() ); // maxWriteSize() == offset for receiving read pointer.
+    poll_completion(); 
+}
