@@ -75,6 +75,7 @@ void RDMACommunicator::init( config_t& config ) {
 }
 
 RDMACommunicator::~RDMACommunicator() {
+	stop();
 	std::cout << "Joining general workers..." << std::endl;
 	readWorker->join();
 	creationWorker->join();
@@ -177,7 +178,6 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 	uint64_t elementCount;
 
 	memcpy( &elementCount, communicationRegion->receivePtr()+1, 8 );
-
 	if ( !soloPackage ) {
 		while ( communicationRegion->receivePtr()[0] != rdma_data_finished ) {
 			communicationRegion->clearReadCode();
@@ -196,14 +196,15 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 				continue; // Busy waiting to ensure fastest possible transfer?
 			}
 		}
+		memcpy( &size, communicationRegion->receivePtr()+9, 8 );
+		memcpy( localWritePtr, communicationRegion->receivePtr()+17, size );
 	} else {
 		localData = (uint64_t*) malloc( elementCount * sizeof( uint64_t ) );
 		std::cout << "Created memory region for " << (elementCount*sizeof(uint64_t)) << " bytes (" << elementCount << " uint64_t elements)." << std::endl;
+		memcpy( &size, communicationRegion->receivePtr()+9, 8 );
+		memcpy( localData, communicationRegion->receivePtr()+17, size );
+		communicationRegion->clearCompleteBuffer();
 	}
-
-	memcpy( &size, communicationRegion->receivePtr()+9, 8 );
-	memcpy( localData, communicationRegion->receivePtr()+17, size );
-	communicationRegion->clearCompleteBuffer();
 
 	std::cout << "[Sanity] memcmp to check for sequential data correctness. Ret should be 0." << std::endl;
 	DataProvider d;
