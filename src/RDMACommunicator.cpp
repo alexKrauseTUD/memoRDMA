@@ -248,13 +248,13 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 	if ( !soloPackage ) {
 		while ( communicationRegion->currentReadCode() != rdma_data_finished ) {
 			communicationRegion->clearReadCode();
+			memcpy( &package_head, communicationRegion->receivePtr()+1, sizeof(package_t::header_t) );
 			if (!initDone) {
 				initDone = true;
 				localData = (uint64_t*) malloc( package_head.total_data_size );
 				localWritePtr = localData;
 				std::cout << "Created memory region for " << package_head.total_data_size << " bytes (" << (package_head.total_data_size / sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 			}
-			memcpy( &package_head, communicationRegion->receivePtr()+1, sizeof(package_t::header_t) );
 			memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head.current_payload_size ); // +1 for commit code
 			localWritePtr = (uint64_t*) ((char*)localWritePtr + package_head.current_payload_size);
 			communicationRegion->setCommitCode( rdma_data_next );
