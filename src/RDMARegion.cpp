@@ -411,7 +411,7 @@ void RDMARegion::clearReadBuffer() {
 
 void RDMARegion::setSendData( std::string s ) {
     strcpy( writePtr()+1, s.c_str() );
-    post_send(s.size()+1, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ;
+    post_send(s.size()+1, IBV_WR_RDMA_WRITE, maxWriteSize() ) ;
     poll_completion();
 }
 
@@ -421,18 +421,18 @@ void RDMARegion::setSendData( uint64_t* data, uint64_t totalSize, uint64_t curre
     memcpy( writePtr()+1, &totalSize, sizeof(totalSize) );
     memcpy( writePtr()+9, &currentSize, sizeof(currentSize) );
     memcpy( writePtr()+17, data, currentSize );
-    post_send(currentSize+17, IBV_WR_RDMA_WRITE, BUFF_SIZE/2) ; // +1 for the "empty" commit code byte
+    post_send(currentSize+17, IBV_WR_RDMA_WRITE, maxWriteSize() ) ; // +1 for the "empty" commit code byte
     poll_completion();
 }
 
 void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
     writePtr()[0] = (char)opcode;
-    post_send(sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    post_send(sizeof(char), IBV_WR_RDMA_WRITE, maxWriteSize() );
     poll_completion();
 }
 
 void RDMARegion::setPackageHeader( package_t* p ) {
-    std::cout << "Setting package header: " << p->get_header().total_data_size << " " << p->get_header().current_payload_size << "sizeof header: " << sizeof( package_t::header_t ) << std::endl; 
+    std::cout << "Setting package header: " << p->get_header().total_data_size << " " << p->get_header().current_payload_size << " sizeof header: " << sizeof( package_t::header_t ) << std::endl; 
     memcpy( writePtr()+1, &p->get_header(), sizeof( package_t::header_t ) );
 }
 

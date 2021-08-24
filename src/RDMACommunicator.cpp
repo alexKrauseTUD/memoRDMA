@@ -102,7 +102,7 @@ void RDMACommunicator::stop() {
 	globalAbort = true;
 }
 
-void RDMACommunicator::setupNewRegion( config_t& config ) {
+void RDMACommunicator::setupNewRegion( config_t& config, std::size_t bytes ) {
 	bool* b = new bool();
 	*b = false;
 	uint64_t* tid = new uint64_t();
@@ -135,7 +135,7 @@ void RDMACommunicator::sendDataToRemote( RDMARegion* communicationRegion ) {
 	communicationRegion->clearCompleteBuffer();
 	/* provide data to remote */
 	DataProvider d;
-	uint64_t elementCount = 1000*1000;
+	uint64_t elementCount = 1000*1000*1000;
 	uint64_t remainingSize = elementCount * sizeof(uint64_t);
 	uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
 	uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
@@ -183,6 +183,8 @@ void RDMACommunicator::sendDataToRemote( RDMARegion* communicationRegion ) {
 
 		// Wait for receiver to consume.
 		while ( communicationRegion->currentReadCode() != rdma_data_next ) {
+			using namespace std::chrono_literals;
+			std::this_thread::sleep_for( 100ns );
 			continue; // Busy waiting to ensure fastest possible transfer?
 		}
 	}
@@ -244,19 +246,19 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 	uint64_t* localData;
 	uint64_t* localWritePtr;
 
-	package_t::header_t package_head;
+	package_t::header_t* package_head = (package_t::header_t*)(communicationRegion->receivePtr()+1);
 	if ( !soloPackage ) {
 		while ( communicationRegion->currentReadCode() != rdma_data_finished ) {
 			communicationRegion->clearReadCode();
-			memcpy( &package_head, communicationRegion->receivePtr()+1, sizeof(package_t::header_t) );
+			// memcpy( &package_head, communicationRegion->receivePtr()+1, sizeof(package_t::header_t) );
 			if (!initDone) {
 				initDone = true;
-				localData = (uint64_t*) malloc( package_head.total_data_size );
+				localData = (uint64_t*) malloc( package_head->total_data_size );
 				localWritePtr = localData;
-				std::cout << "Created memory region for " << package_head.total_data_size << " bytes (" << (package_head.total_data_size / sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+				std::cout << "Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size / sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 			}
-			memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head.current_payload_size ); // +1 for commit code
-			localWritePtr = (uint64_t*) ((char*)localWritePtr + package_head.current_payload_size);
+			memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size ); // +1 for commit code
+			localWritePtr = (uint64_t*) ((char*)localWritePtr + package_head->current_payload_size);
 			communicationRegion->setCommitCode( rdma_data_next );
 
 			while( communicationRegion->currentReadCode() != rdma_data_finished && communicationRegion->currentReadCode() != rdma_data_receive ) {
@@ -264,19 +266,19 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 			}
 		}
 		
-		memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head.current_payload_size );
+		memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size );
 	} else {
 		memcpy( &package_head, communicationRegion->receivePtr()+1, sizeof(package_t::header_t) );
-		localData = (uint64_t*) malloc( package_head.total_data_size );
-		std::cout << "Created memory region for " << package_head.total_data_size << " bytes (" << (package_head.total_data_size/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
-		memcpy( localData, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head.current_payload_size );
+		localData = (uint64_t*) malloc( package_head->total_data_size );
+		std::cout << "Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+		memcpy( localData, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size );
 		communicationRegion->clearCompleteBuffer();
 	}
 
 	std::cout << "[Sanity] memcmp to check for sequential data correctness. Ret should be 0." << std::endl;
 	DataProvider d;
-	d.generateDummyData( package_head.total_data_size/sizeof(uint64_t) );
-	auto ret = memcmp( localData, d.data, package_head.total_data_size );
+	d.generateDummyData( package_head->total_data_size/sizeof(uint64_t) );
+	auto ret = memcmp( localData, d.data, package_head->total_data_size );
 	std::cout << "Ret is: " << ret << std::endl;
 
 	communicationRegion->clearCompleteBuffer();

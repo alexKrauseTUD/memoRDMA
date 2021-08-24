@@ -114,7 +114,22 @@ int main(int argc, char *argv[]) {
 				std::cout << "[Error] Invalid Region ID. Nothing done." << std::endl;
 			}
 		} else if ( op == "3" ) { /* Create new Region */
-			RDMACommunicator::getInstance().setupNewRegion( config );
+			std::cout << "Buffer size in byte?: " << std::flush;
+			std::string sz;
+			std::size_t bytes;
+			bool success = false;
+			while ( !success ) {
+				std::getline(std::cin, sz);
+				try {
+					bytes = stol( sz );
+					success = true;
+					std::cout << "Creating buffer with " << bytes << " bytes size." << std::endl;
+				} catch( ... ) {
+					std::cout << "Invalid byte value, conversion failed." << std::endl;
+					continue;
+				}
+			}
+			RDMACommunicator::getInstance().setupNewRegion( config, bytes );
 		} else if ( op == "4" ) { /* Print Regions */
 			RDMAHandler::getInstance().printRegions();
 		} else if ( op == "5" ) { /* Delete */

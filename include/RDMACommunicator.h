@@ -25,7 +25,7 @@ class RDMACommunicator {
 
         void init( config_t& config );
 
-        void setupNewRegion( config_t& config );
+        void setupNewRegion( config_t& config, std::size_t bytes );
         void setBufferSize();
 
         void stop();
