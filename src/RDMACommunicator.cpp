@@ -237,44 +237,44 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 
 	std::ios_base::fmtflags f( std::cout.flags() );
 	for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
-		uint64_t remainingSize = elementCount * sizeof(uint64_t);
-		uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
-		uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
-		std::cout << "Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
-		std::cout << "Generating " << remainingSize << " Byte of data and send them over." << std::endl;
-		uint64_t* copy = d.data;
+		for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
+			uint64_t remainingSize = elementCount * sizeof(uint64_t);
+			uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
+			uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
+			std::cout << "Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+			std::cout << "Generating " << remainingSize << " Byte of data and send them over." << std::endl;
+			uint64_t* copy = d.data;
 
-		package_t package( remainingSize, maxDataToWrite, copy );
+			package_t package( remainingSize, maxDataToWrite, copy );
+			auto s_ts = std::chrono::high_resolution_clock::now();
+			communicationRegion->setPackageHeader( &package );
+			while ( remainingSize + package.metaDataSize() > communicationRegion->maxWriteSize() ) {  
+				communicationRegion->clearReadCode();
+				communicationRegion->sendPackage( &package, rdma_no_op );
 
-		std::cout << "Starting to loop. " << std::endl;
-		auto s_ts = std::chrono::high_resolution_clock::now();
-		communicationRegion->setPackageHeader( &package );
-		while ( remainingSize + package.metaDataSize() > communicationRegion->maxWriteSize() ) {  
-			communicationRegion->clearReadCode();
+				remainingSize -= maxDataToWrite;
+				package.advancePayloadPtr( maxDataToWrite );
+				// No waiting, just plain copying and see how fast we can go.
+			}
+			package.setCurrentPackageSize( remainingSize );
+			communicationRegion->setPackageHeader( &package );
 			communicationRegion->sendPackage( &package, rdma_no_op );
+			auto e_ts = std::chrono::high_resolution_clock::now();
+			auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
+			auto datasize = elementCount * sizeof(uint64_t);
+			
+			typedef std::chrono::duration<double> d_sec;
+			d_sec secs = e_ts - s_ts;
 
-			remainingSize -= maxDataToWrite;
-			package.advancePayloadPtr( maxDataToWrite );
-			// No waiting, just plain copying and see how fast we can go.
+			std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s -- " << BtoMB( datasize ) / (secs.count()) << " MB/s " << std::endl;
+
+			auto readable_size = GetBytesReadable( datasize );
+
+			std::cout.setf(std::ios::fixed, std::ios::floatfield);
+			std::cout.setf(std::ios::showpoint);
+			out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
+			std::cout.flags( f );
 		}
-		package.setCurrentPackageSize( remainingSize );
-		communicationRegion->setPackageHeader( &package );
-		communicationRegion->sendPackage( &package, rdma_no_op );
-		auto e_ts = std::chrono::high_resolution_clock::now();
-		auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
-		auto datasize = elementCount * sizeof(uint64_t);
-		
-		typedef std::chrono::duration<double> d_sec;
-		d_sec secs = e_ts - s_ts;
-
-		std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s -- " << BtoMB( datasize ) / (secs.count()) << " MB/s " << std::endl;
-
-		auto readable_size = GetBytesReadable( datasize );
-
-		std::cout.setf(std::ios::fixed, std::ios::floatfield);
-		std::cout.setf(std::ios::showpoint);
-		out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
-		std::cout.flags( f );
 	}
 	std::cout << "[ThroughputTest] Finished." << std::endl;
 	out.close();
