@@ -30,11 +30,12 @@ class RDMAHandler {
 
         /* Functions */
         void setupCommunicationBuffer( config_t& config );
-        void sendRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode );
+        void sendRegionInfo( config_t* config, std::size_t bufferSize, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode );
         void receiveRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion );
+        std::size_t receiveRegionSize( RDMARegion* communicationRegion ) const;
         
         void connectQpTCP( struct config_t& config, RDMARegion& region );
-        void create_and_setup_region( config_t* config, uint64_t* newRegionId = nullptr, bool* isReady = nullptr );
+        void create_and_setup_region( config_t* config, std::size_t bufferSize, uint64_t* newRegionId = nullptr, bool* isReady = nullptr );
 
         uint64_t registerRegion( RDMARegion* region );
         void removeRegion( RDMARegion* region );
@@ -44,7 +45,7 @@ class RDMAHandler {
         void printRegions() const;
 
         std::vector< RDMARegion* > getAllRegions() const;
-        RDMARegion* getRegion( uint32_t id ) const;
+        RDMARegion* getRegion( uint64_t id ) const;
 
         RDMARegion* communicationBuffer;
 };

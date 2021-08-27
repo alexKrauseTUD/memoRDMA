@@ -1,8 +1,20 @@
 #include <util.h>
 #include <RDMARegion.h>
 
-RDMARegion::RDMARegion() {
+RDMARegion::RDMARegion() :
+    bufferSize{ 1024 * 1024 * 2 } // Default Buffer 2 MiB
+{
+    std::cout << "[RDMARegion] Creating new region with DEFAULT buffer size: " << bufferSize << std::endl;
+}
 
+RDMARegion::RDMARegion( std::size_t _bufferSize ) :
+    bufferSize{ _bufferSize }
+{
+    if ( bufferSize % 2 != 0 ) {
+        std::cout << "[RDMARegion] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
+        ++bufferSize;
+    }
+    std::cout << "[RDMARegion] Creating new region with buffer size: " << bufferSize << std::endl;
 }
 
 RDMARegion::~RDMARegion() {
@@ -17,7 +29,7 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     struct ibv_qp_init_attr qp_init_attr;
     struct ibv_device *ib_dev = NULL;
 
-    size_t size;
+    std::size_t sz = bufferSize;
     int i;
     int mr_flags = 0;
     int cq_size = 0;
@@ -96,15 +108,15 @@ int RDMARegion::resources_create(struct config_t& config, bool initTCP ) {
     assert(res.cq != NULL);
 
     // a buffer to hold the data
-    size = BUFF_SIZE;
-    res.buf = (char*) calloc( 1, size );
+    std::cout << "[RDMARegion] Allocating: " << sz << " bytes for RDMA buffer" << std::endl;
+    res.buf = (char*) calloc( 1, sz );
     assert(res.buf != NULL);
 
     // register the memory buffer
     mr_flags =  IBV_ACCESS_LOCAL_WRITE |
                 IBV_ACCESS_REMOTE_READ |
                 IBV_ACCESS_REMOTE_WRITE;
-    res.mr = ibv_reg_mr(res.pd, res.buf, size, mr_flags);
+    res.mr = ibv_reg_mr(res.pd, res.buf, sz, mr_flags);
     assert(res.mr != NULL);
 
     // INFO("MR was registered with addr=%p, lkey= 0x%x, rkey= 0x%x, flags= 0x%x\n",res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
@@ -263,6 +275,10 @@ int RDMARegion::resources_destroy() {
     return 0;
 }
 
+std::size_t RDMARegion::maxWriteSize() const {
+    return bufferSize / 2;
+}
+
 char* RDMARegion::writePtr() {
     return res.buf;
 }
@@ -277,9 +293,12 @@ char RDMARegion::currentReadCode() {
 
 void RDMARegion::print() const {
     std::ios_base::fmtflags f( std::cout.flags() );
+    std::cout << "\t     buffer size = " << bufferSize << std::endl;
     std::cout << std::hex;
+    std::cout << "\t   local address = " << (uint64_t*)res.buf << std::endl;
     std::cout << "\t  Remote address = " << res.remote_props.addr << std::endl;
-    std::cout << "\t     Remote rkey = " <<  res.remote_props.rkey << std::endl;
+    std::cout << "\t      local rkey = " << res.mr->rkey << std::endl;
+    std::cout << "\t     Remote rkey = " << res.remote_props.rkey << std::endl;
     std::cout << "\tRemote QP number = " << res.remote_props.qp_num << std::endl;
     std::cout << "\t      Remote LID = " << res.remote_props.lid << std::endl;
     std::cout.flags( f );
@@ -371,7 +390,7 @@ int RDMARegion::post_receive() {
     // prepare the scatter / gather entry
     memset(&sge, 0, sizeof(sge));
     sge.addr = (uintptr_t)res.buf;
-    sge.length = BUFF_SIZE;
+    sge.length = bufferSize;
     sge.lkey = res.mr->lkey;
 
     // prepare the receive work request
@@ -432,7 +451,7 @@ void RDMARegion::setCommitCode( rdma_handler_communication opcode ) {
 }
 
 void RDMARegion::setPackageHeader( package_t* p ) {
-    std::cout << "Setting package header: " << p->get_header().total_data_size << " " << p->get_header().current_payload_size << " sizeof header: " << sizeof( package_t::header_t ) << std::endl; 
+    // std::cout << "Setting package header: " << p->get_header().total_data_size << " " << p->get_header().current_payload_size << " sizeof header: " << sizeof( package_t::header_t ) << std::endl; 
     memcpy( writePtr()+1, &p->get_header(), sizeof( package_t::header_t ) );
 }
 

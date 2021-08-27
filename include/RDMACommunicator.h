@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <thread>
+#include <mutex>
 #include <vector>
 
 #include "common.h"
@@ -25,8 +26,9 @@ class RDMACommunicator {
 
         void init( config_t& config );
 
+        bool pendingRegionCreation();
         void setupNewRegion( config_t& config, std::size_t bytes );
-        void setBufferSize();
+        std::size_t lastRegionId() const;
 
         void stop();
 
@@ -39,8 +41,8 @@ class RDMACommunicator {
         void readCommittedData( RDMARegion* communicationRegion );
         void sendDataToRemote( RDMARegion* communicationRegion );
         void receiveDataFromRemote( RDMARegion* communicationRegion, bool soloPackage );
+        void throughputTest( RDMARegion* communicationRegion );
 
-        uint64_t bufferSize;
         std::map< uint32_t, std::tuple< bool*, uint64_t*, std::thread* > > pool;
 	    std::vector< std::thread* > regionThreads;
 	    std::atomic< size_t > global_id = {0};
@@ -49,6 +51,8 @@ class RDMACommunicator {
 
         std::thread* readWorker;
         std::thread* creationWorker;
+        std::mutex poolMutex;
+
         config_t config;
         bool globalAbort;
 };

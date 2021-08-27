@@ -17,17 +17,17 @@ void RDMAHandler::setupCommunicationBuffer(config_t& config) {
     communicationBuffer = region;
 }
 
-void RDMAHandler::create_and_setup_region( config_t* config, uint64_t* newRegionId, bool* isReady ) {
+void RDMAHandler::create_and_setup_region( config_t* config, std::size_t bufferSize, uint64_t* newRegionId, bool* isReady ) {
     std::cout << "[RDMAHandler] Handler creating a new ressource" << std::endl;
  	
-    RDMARegion* newRegion = new RDMARegion();
+    RDMARegion* newRegion = new RDMARegion( bufferSize );
     // create resources before using them
 	newRegion->resources_create(*config, false);
 
 	// connect the QPs
     communicationBuffer->clearCompleteBuffer();
 
-	sendRegionInfo( config, communicationBuffer, newRegion, rdma_create_region );
+	sendRegionInfo( config, bufferSize, communicationBuffer, newRegion, rdma_create_region );
     
     while( communicationBuffer->receivePtr()[0] != rdma_receive_region ) {
         using namespace std::chrono_literals;
@@ -48,7 +48,7 @@ void RDMAHandler::create_and_setup_region( config_t* config, uint64_t* newRegion
     }
 }
 
-void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode ) {
+void RDMAHandler::sendRegionInfo( config_t* config, std::size_t bufferSize, RDMARegion* communicationRegion, RDMARegion* newRegion, rdma_handler_communication opcode ) {
     struct cm_con_data_t local_con_data;
     union ibv_gid my_gid;
 
@@ -66,17 +66,24 @@ void RDMAHandler::sendRegionInfo( config_t* config, RDMARegion* communicationReg
     // INFO("\n Local LID      = 0x%x\n", newRegion->res.port_attr.lid);
 
     memcpy( communicationRegion->writePtr()+1, &local_con_data, sizeof( cm_con_data_t ) );
-    communicationRegion->post_send( sizeof( local_con_data ), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    memcpy( communicationRegion->writePtr()+1+sizeof( cm_con_data_t ), &bufferSize, sizeof( std::size_t ) );
+    communicationRegion->post_send( 1+sizeof( local_con_data )+sizeof(std::size_t), IBV_WR_RDMA_WRITE, communicationRegion->maxWriteSize() );
     communicationRegion->poll_completion();
 
     communicationRegion->writePtr()[0] = opcode;
-    communicationRegion->post_send( sizeof(char), IBV_WR_RDMA_WRITE, BUFF_SIZE/2 );
+    communicationRegion->post_send( sizeof(char), IBV_WR_RDMA_WRITE, communicationRegion->maxWriteSize() );
     communicationRegion->poll_completion();
     // std::cout << "Sent data to remote machine:" << std::endl;
     // INFO("My address = 0x%" PRIx64 "\n",local_con_data.addr);
     // INFO("My rkey = 0x%x\n",            local_con_data.rkey);
     // INFO("My QP number = 0x%x\n",       local_con_data.qp_num);
     // INFO("My LID = 0x%x\n",             local_con_data.lid);
+}
+
+std::size_t RDMAHandler::receiveRegionSize( RDMARegion* communicationRegion ) const {
+    std::size_t sz;
+    memcpy( &sz, communicationRegion->receivePtr()+1+sizeof( cm_con_data_t ), sizeof(std::size_t) );
+    return sz;
 }
 
 void RDMAHandler::receiveRegionInfo( config_t* config, RDMARegion* communicationRegion, RDMARegion* newRegion) {
@@ -117,7 +124,7 @@ void RDMAHandler::printRegions() const {
     }
 }
 
-RDMARegion* RDMAHandler::getRegion( uint32_t id ) const {
+RDMARegion* RDMAHandler::getRegion( uint64_t id ) const {
     auto it = regions.find( id );
     if ( it != regions.end() ) {
         return it->second;

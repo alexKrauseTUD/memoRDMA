@@ -85,12 +85,13 @@ int main(int argc, char *argv[]) {
 	while ( !abort ) {
 		std::cout << "Choose an opcode:\n[1] Direct write ";
 		std::cout << "[2] Commit ";
-		std::cout << "[3] Create new region" << std::endl;
-		std::cout << "[4] Print Regions ";
-		std::cout << "[5] Delete Region ";
+		std::cout << "[3] Create new region." << std::endl;
+		std::cout << "[4] Print Regions. ";
+		std::cout << "[5] Delete Region. ";
 		std::cout << "[6] Send dummy to all regions." << std	::endl;
 		std::cout << "[7] Fetch data from a fixed source. ";
-		std::cout << "[8] Exit" << std::endl;
+		std::cout << "[8] Single-sided throughput test.";
+		std::cout << "[9] Exit" << std::endl;
   		std::cin >> op;
 		std::cout << "Chosen:" << op << std::endl;
 		std::getline(std::cin, content);
@@ -154,13 +155,35 @@ int main(int argc, char *argv[]) {
 				requestRegion->setSendData( "Please give data from Random source." );
 				requestRegion->setCommitCode( rdma_data_fetch );
 			}
-		} else if ( op == "8" ) { /* End me */
+		} else if ( op == "8" ) { /* Single-sided TPut test */
+			for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
+				RDMACommunicator::getInstance().setupNewRegion( config, bytes );
+				while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
+					using namespace std::chrono_literals;
+					std::this_thread::sleep_for( 10ms );
+				}
+				std::size_t regionId = RDMACommunicator::getInstance().lastRegionId() - 1;
+				std::cout << "[main] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
+				auto currentRegion = RDMAHandler::getInstance().getRegion( regionId );
+				std::cout << std::endl << "Single-sided throughput test." << std::endl;
+				currentRegion->receivePtr()[0] = rdma_tput_test;	
+				currentRegion->busy = true;
+
+				while ( currentRegion->busy ) {
+					using namespace std::chrono_literals;
+					std::this_thread::sleep_for( 10ms );
+				}
+
+				currentRegion->setCommitCode( rdma_delete_region );
+				currentRegion->receivePtr()[0] = rdma_delete_region;
+			}
+			std::cout << std::endl << "[memoRDMA server] Test-suite finished. You can now shut down the remote process." << std::endl;
+			abort = true;
+		} else if ( op == "9" ) { /* End me */
 			RDMACommunicator::getInstance().stop();
 			abort = true;
 		}
 	}
-
-	
 
 	return 0;
 }

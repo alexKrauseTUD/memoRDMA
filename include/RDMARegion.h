@@ -35,7 +35,8 @@ struct resources {
 
 class RDMARegion {
     public:
-        RDMARegion();
+        explicit RDMARegion();
+        explicit RDMARegion( std::size_t _bufferSize );
         ~RDMARegion();
 
         int resources_create( struct config_t& config, bool initTCP = true );
@@ -55,9 +56,7 @@ class RDMARegion {
         char* receivePtr();
         char currentReadCode();
         
-        uint64_t inline maxWriteSize() const {
-            return BUFF_SIZE / 2;
-        };
+        std::size_t maxWriteSize() const;
 
         void print() const;
 
@@ -73,7 +72,9 @@ class RDMARegion {
         int post_receive();
 
         struct resources res;
-    
+        std::size_t bufferSize;
+        bool busy;
+        
     private:
         int resources_destroy();
 };
