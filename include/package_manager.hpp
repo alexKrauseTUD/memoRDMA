@@ -51,8 +51,8 @@ class package_t {
       
    
    private:
-      payload_t* payload;
       header_t header;
+      payload_t* payload;
 
    public:
       package_t() = delete;
