@@ -12,7 +12,9 @@ enum rdma_handler_communication {
     rdma_data_next      = 6,
     rdma_data_finished  = 7,
     rdma_data_ready     = 8,
-    rdma_tput_test      = 9
+    rdma_tput_test      = 9,
+    rdma_consume_test  =  10,
+    rdma_next_test     =  11
 };
 
 // #define BUFF_SIZE 1024*1024*2

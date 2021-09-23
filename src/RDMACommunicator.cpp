@@ -15,7 +15,7 @@ RDMACommunicator::RDMACommunicator() :
 		std::ios_base::fmtflags f( std::cout.flags() );
 		std::cout << "Starting monitoring thread for region " << communicationRegion << std::endl;
 		while( !*abort ) {
-			std::this_thread::sleep_for( 100ms );
+			std::this_thread::sleep_for( 10ms );
 			switch( communicationRegion->receivePtr()[0] ) {
 				case rdma_create_region: {
 					createRdmaRegion( config, communicationRegion );
@@ -38,6 +38,9 @@ RDMACommunicator::RDMACommunicator() :
 				} break;
 				case rdma_tput_test: {
 					throughputTest( communicationRegion );
+				} break;
+				case rdma_consume_test: {
+					consumingTest( communicationRegion );
 				} break;
 				default: {
 					continue;
@@ -222,8 +225,8 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 	d.generateDummyData( package_head->total_data_size/sizeof(uint64_t) );
 	auto ret = memcmp( localData, d.data, package_head->total_data_size );
 	std::cout << "Ret is: " << ret << std::endl;
-
 	communicationRegion->clearCompleteBuffer();
+	communicationRegion->setCommitCode( rdma_next_test );
 }
 
 void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
@@ -233,7 +236,10 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 	DataProvider d;
 	d.generateDummyData( maxDataElements >> 1 );
 	std::ofstream out;
-	out.open("tput_log.log", std::ios_base::app);
+	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+	std::stringstream logName;
+	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "tput_log.log";
+	out.open( logName.str(), std::ios_base::app );
 
 	std::ios_base::fmtflags f( std::cout.flags() );
 	for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
@@ -274,6 +280,76 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 			std::cout.setf(std::ios::showpoint);
 			out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
 			std::cout.flags( f );
+		}
+	}
+	std::cout << "[ThroughputTest] Finished." << std::endl;
+	out.close();
+	communicationRegion->busy = false;
+}
+
+void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
+	communicationRegion->clearCompleteBuffer();
+	/* provide data to remote */
+	std::size_t maxDataElements = 1ull << 32;
+	DataProvider d;
+	d.generateDummyData( maxDataElements >> 1 );
+	std::ofstream out;
+	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+	std::stringstream logName;
+	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "consume_log.log";
+	out.open( logName.str(), std::ios_base::app );
+
+	std::ios_base::fmtflags f( std::cout.flags() );
+	for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
+		for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
+			uint64_t remainingSize = elementCount * sizeof(uint64_t);
+			uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
+			uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
+			std::cout << "[ConsumeTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+			std::cout << "[ConsumeTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
+			uint64_t* copy = d.data;
+
+			package_t package( remainingSize, maxDataToWrite, copy );
+			auto s_ts = std::chrono::high_resolution_clock::now();
+			communicationRegion->setPackageHeader( &package );
+			while ( remainingSize + package.metaDataSize() > communicationRegion->maxWriteSize() ) {  
+				communicationRegion->clearReadCode();
+				communicationRegion->sendPackage( &package, rdma_data_receive );
+
+				remainingSize -= maxDataToWrite;
+				package.advancePayloadPtr( maxDataToWrite );
+				// Wait for receiver to consume.
+				while ( communicationRegion->currentReadCode() != rdma_data_next ) {
+					// using namespace std::chrono_literals;
+					// std::this_thread::sleep_for( 100ns );
+					continue; // Busy waiting to ensure fastest possible transfer?
+				}
+			}
+			package.setCurrentPackageSize( remainingSize );
+			communicationRegion->setPackageHeader( &package );
+			communicationRegion->sendPackage( &package, rdma_data_finished );
+			auto e_ts = std::chrono::high_resolution_clock::now();
+			auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
+			auto datasize = elementCount * sizeof(uint64_t);
+			
+			typedef std::chrono::duration<double> d_sec;
+			d_sec secs = e_ts - s_ts;
+
+			std::cout << "[ConsumeTest] Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s -- " << BtoMB( datasize ) / (secs.count()) << " MB/s " << std::endl;
+
+			auto readable_size = GetBytesReadable( datasize );
+
+			std::cout.setf(std::ios::fixed, std::ios::floatfield);
+			std::cout.setf(std::ios::showpoint);
+			out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
+			std::cout.flags( f );
+			std::cout << "[ConsumeTest] Waiting for remote sanity check to finish." << std::endl;
+			while ( communicationRegion->currentReadCode() != rdma_next_test ) {
+				using namespace std::chrono_literals;
+				std::this_thread::sleep_for( 100ns );
+				continue; // Busy waiting to ensure fastest possible transfer?
+			}
+			communicationRegion->clearCompleteBuffer();
 		}
 	}
 	std::cout << "[ThroughputTest] Finished." << std::endl;

@@ -42,7 +42,8 @@ class RDMACommunicator {
         void sendDataToRemote( RDMARegion* communicationRegion );
         void receiveDataFromRemote( RDMARegion* communicationRegion, bool soloPackage );
         void throughputTest( RDMARegion* communicationRegion );
-
+        void consumingTest( RDMARegion* communicationRegion );
+        
         std::map< uint32_t, std::tuple< bool*, uint64_t*, std::thread* > > pool;
 	    std::vector< std::thread* > regionThreads;
 	    std::atomic< size_t > global_id = {0};
