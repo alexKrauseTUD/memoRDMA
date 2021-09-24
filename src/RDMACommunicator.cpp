@@ -226,6 +226,7 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 	auto ret = memcmp( localData, d.data, package_head->total_data_size );
 	std::cout << "Ret is: " << ret << std::endl;
 	communicationRegion->clearCompleteBuffer();
+	delete localData;
 	communicationRegion->setCommitCode( rdma_next_test );
 }
 
@@ -346,7 +347,7 @@ void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
 			std::cout << "[ConsumeTest] Waiting for remote sanity check to finish." << std::endl;
 			while ( communicationRegion->currentReadCode() != rdma_next_test ) {
 				using namespace std::chrono_literals;
-				std::this_thread::sleep_for( 100ns );
+				std::this_thread::sleep_for( 10ms );
 				continue; // Busy waiting to ensure fastest possible transfer?
 			}
 			communicationRegion->clearCompleteBuffer();
