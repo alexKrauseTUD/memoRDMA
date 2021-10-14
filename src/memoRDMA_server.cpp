@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
 
 					for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
 						std::cout << "[memoRDMA server] Processing " << elementCount << " elements..." << std::endl;
-						for ( std::size_t iteration = 0; iteration < 1; ++iteration ) {
+						for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
 							// Copy data provider pointer and current element count to all regions
 							for ( auto r : regions ) {
 								r->clearCompleteBuffer();
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
 
 					for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
 						std::cout << "[memoRDMA server] Processing " << elementCount << " elements..." << std::endl;
-						for ( std::size_t iteration = 0; iteration < 1; ++iteration ) {
+						for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
 							// Copy data provider pointer and current element count to all regions
 							for ( auto r : regions ) {
 								r->clearCompleteBuffer();
