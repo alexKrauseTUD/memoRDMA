@@ -100,7 +100,8 @@ int main(int argc, char *argv[]) {
 			std::cout << "[8] Single-sided throughput test.";
 			std::cout << "[9] Double-sided throughput test" << std::endl;
 			std::cout << "[10] Multi-threaded single-sided throughput test" << std::endl;
-			std::cout << "[11] Exit" << std::endl;
+			std::cout << "[11] Multi-threaded double-sided throughput test" << std::endl;
+			std::cout << "[12] Exit" << std::endl;
 			std::cin >> op;
 			std::cout << "Chosen:" << op << std::endl;
 			std::getline(std::cin, content);
@@ -297,7 +298,90 @@ int main(int argc, char *argv[]) {
 				std::cout << std::endl << "[memoRDMA server] Test-suite finished. You can now shut down the remote process, if it is still running." << std::endl;			
 				RDMAHandler::getInstance().communicationBuffer->setCommitCode( rdma_shutdown );
 				abort = true;
-			} else if ( op == "11" ) { /* End me */
+			}else if ( op == "11" ) { /* Multi-threaded double-sided throughput test */
+				std::size_t maxDataElements = 1ull << 32;
+				DataProvider* d = new DataProvider();
+				std::cout << "[memoRDMA server] Generating dummy data for MT Consume tests..." << std::endl;
+				d->generateDummyData( maxDataElements >> 1 );
+				std::ofstream out;
+				auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+				std::stringstream logName;
+				logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_consume_log.log";
+				out.open( logName.str(), std::ios_base::app );
+
+				for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
+					std::vector< RDMARegion* > regions{};
+
+					const std::size_t regionCount = 16;
+					for ( std::size_t rCnt = 0; rCnt < regionCount; ++rCnt ) {
+						RDMACommunicator::getInstance().setupNewRegion( config, bytes );
+						while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
+							using namespace std::chrono_literals;
+							std::this_thread::sleep_for( 10ms );
+						}
+						std::size_t regionId = RDMACommunicator::getInstance().lastRegionId() - 1;
+						std::cout << "[memoRDMA server] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
+						
+						regions.emplace_back( RDMAHandler::getInstance().getRegion( regionId ) );
+					}
+					
+					std::cout << std::endl << "Double-sided Consume test." << std::endl;
+
+					for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
+						std::cout << "[memoRDMA server] Processing " << elementCount << " elements..." << std::endl;
+						for ( std::size_t iteration = 0; iteration < 1; ++iteration ) {
+							// Copy data provider pointer and current element count to all regions
+							for ( auto r : regions ) {
+								r->clearCompleteBuffer();
+								r->busy = true;
+								memcpy( r->receivePtr()+1, (char*)&elementCount, sizeof(std::size_t) );
+								memcpy( r->receivePtr()+9, (char*)&d, sizeof(DataProvider*) );
+								std::size_t stuff;
+								memcpy( &stuff, r->receivePtr()+9, sizeof(DataProvider*) );
+							}
+							
+							// Tell all regions to start
+							for ( auto r : regions ) {
+								r->receivePtr()[0] = rdma_mt_tput_test;
+							}
+							
+							auto s_ts = std::chrono::high_resolution_clock::now();
+							bool anyBusy = true;
+							while ( anyBusy ) {
+								using namespace std::chrono_literals;
+								std::this_thread::sleep_for( 1ms );
+								anyBusy = false;
+								for ( auto r : regions ) {
+									anyBusy |= r->busy;
+								}
+							}
+							auto e_ts = std::chrono::high_resolution_clock::now();
+
+							typedef std::chrono::duration<double> d_sec;
+							d_sec secs = e_ts - s_ts;
+							
+							auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
+							auto datasize = elementCount * sizeof(uint64_t);
+							std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s times " << regionCount << " regions -- " << BtoMB( datasize * regionCount ) / (secs.count()) << " MB/s " << std::endl;
+
+							auto readable_size = GetBytesReadable( datasize );
+							std::cout.setf(std::ios::fixed, std::ios::floatfield);
+							std::cout.setf(std::ios::showpoint);
+							out << regionCount << "\t" << bytes << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
+						}
+					}
+					
+					for ( auto r : regions ) {
+						r->setCommitCode( rdma_delete_region );
+						r->receivePtr()[0] = rdma_delete_region;
+					}
+				}
+				out.close();
+
+				std::cout << std::endl << "[memoRDMA server] Test-suite finished. You can now shut down the remote process, if it is still running." << std::endl;			
+				RDMAHandler::getInstance().communicationBuffer->setCommitCode( rdma_shutdown );
+				abort = true;
+			} else if ( op == "12" ) { /* End me */
 				RDMAHandler::getInstance().communicationBuffer->setCommitCode( rdma_shutdown );
 				RDMACommunicator::getInstance().stop();
 				abort = true;

@@ -237,11 +237,11 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 		communicationRegion->clearCompleteBuffer();
 	}
 
-	std::cout << "[Sanity] memcmp to check for sequential data correctness. Ret should be 0." << std::endl;
-	DataProvider d;
-	d.generateDummyData( package_head->total_data_size/sizeof(uint64_t) );
-	auto ret = memcmp( localData, d.data, package_head->total_data_size );
-	std::cout << "Ret is: " << ret << std::endl;
+	// std::cout << "[Sanity] memcmp to check for sequential data correctness. Ret should be 0." << std::endl;
+	// DataProvider d;
+	// d.generateDummyData( package_head->total_data_size/sizeof(uint64_t) );
+	// auto ret = memcmp( localData, d.data, package_head->total_data_size );
+	// std::cout << "Ret is: " << ret << std::endl;
 	communicationRegion->clearCompleteBuffer();
 	delete localData;
 	communicationRegion->setCommitCode( rdma_next_test );
@@ -404,6 +404,47 @@ void RDMACommunicator::mt_throughputTest( RDMARegion* communicationRegion ) {
 	communicationRegion->setPackageHeader( &package );
 	communicationRegion->sendPackage( &package, rdma_no_op );
 
+	communicationRegion->busy = false;
+}
+
+void RDMACommunicator::mt_consumingTest( RDMARegion* communicationRegion ) {
+	DataProvider* d;
+	std::size_t elementCount;
+	memcpy( (char*)&elementCount, communicationRegion->receivePtr()+1, sizeof(std::size_t) );
+	memcpy( (char*)&d, communicationRegion->receivePtr()+9, sizeof(DataProvider*) );
+
+	communicationRegion->clearCompleteBuffer();
+
+	/* provide data to remote */
+	uint64_t remainingSize = elementCount * sizeof(uint64_t);
+	uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
+	uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
+	uint64_t* copy = d->data;
+
+	package_t package( remainingSize, maxDataToWrite, copy );
+
+	communicationRegion->setPackageHeader( &package );
+	while ( remainingSize + package.metaDataSize() > communicationRegion->maxWriteSize() ) {  
+		communicationRegion->clearReadCode();
+		communicationRegion->sendPackage( &package, rdma_data_receive );
+
+		remainingSize -= maxDataToWrite;
+		package.advancePayloadPtr( maxDataToWrite );
+		// Wait for receiver to consume.
+		while ( communicationRegion->currentReadCode() != rdma_data_next ) {
+			continue; // Busy waiting to ensure fastest possible transfer?
+		}
+	}
+	package.setCurrentPackageSize( remainingSize );
+	communicationRegion->setPackageHeader( &package );
+	communicationRegion->sendPackage( &package, rdma_data_finished );
+	
+	while ( communicationRegion->currentReadCode() != rdma_next_test ) {
+		using namespace std::chrono_literals;
+		std::this_thread::sleep_for( 10ms );
+		continue; // Busy waiting to ensure fastest possible transfer?
+	}
+	communicationRegion->clearCompleteBuffer();
 	communicationRegion->busy = false;
 }
 
