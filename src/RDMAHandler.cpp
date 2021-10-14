@@ -100,11 +100,13 @@ void RDMAHandler::receiveRegionInfo( config_t* config, RDMARegion* communication
 }
 
 uint64_t RDMAHandler::registerRegion( RDMARegion* region ) {
+    const std::lock_guard< std::mutex > lock( regionMutex );
     regions.insert( {current_id, region} );   
     return current_id++;
 }
 
 void RDMAHandler::removeRegion( RDMARegion* region ) {
+    const std::lock_guard< std::mutex > lock( regionMutex );
     for ( auto it = regions.begin(); it != regions.end(); ) {
         if ( it->second == region ) {
             std::cout << "[RDMAHandler] Removing Region [" << it->first << "] " << it->second << std::endl;

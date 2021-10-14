@@ -42,12 +42,24 @@ RDMACommunicator::RDMACommunicator() :
 				case rdma_consume_test: {
 					consumingTest( communicationRegion );
 				} break;
+				case rdma_mt_tput_test: {
+					mt_throughputTest( communicationRegion );
+				} break;
+				case rdma_shutdown: {
+					if ( config->client_mode ) {
+						std::cout << "[CommRegion] Received RDMA_SHUTDOWN" << std::endl;
+						RDMACommunicator::getInstance().stop();
+					} else {
+						communicationRegion->clearCompleteBuffer();
+					}
+				}; break;
 				default: {
 					continue;
 				}; break;
 			}
 			std::cout.flags( f );
 		}
+		std::cout << "[check_receive] Ending through global abort." << std::endl;
 	};
 
     check_regions = [this]( bool* abort ) -> void {
@@ -71,6 +83,7 @@ RDMACommunicator::RDMACommunicator() :
 			}
 			std::this_thread::sleep_for( 50ms );
 		}
+		std::cout << "[check_regions] Ending through global abort." << std::endl;
 	};
 }
 
@@ -111,6 +124,10 @@ RDMACommunicator::~RDMACommunicator() {
 
 void RDMACommunicator::stop() {
 	globalAbort = true;
+}
+
+bool RDMACommunicator::abortSignaled() const {
+	return globalAbort;
 }
 
 void RDMACommunicator::setupNewRegion( config_t& config, std::size_t bytes ) {
@@ -355,6 +372,38 @@ void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
 	}
 	std::cout << "[ThroughputTest] Finished." << std::endl;
 	out.close();
+	communicationRegion->busy = false;
+}
+
+void RDMACommunicator::mt_throughputTest( RDMARegion* communicationRegion ) {
+	DataProvider* d;
+	std::size_t elementCount;
+	memcpy( (char*)&elementCount, communicationRegion->receivePtr()+1, sizeof(std::size_t) );
+	memcpy( (char*)&d, communicationRegion->receivePtr()+9, sizeof(DataProvider*) );
+
+	communicationRegion->clearCompleteBuffer();
+
+	/* provide data to remote */
+	uint64_t remainingSize = elementCount * sizeof(uint64_t);
+	uint64_t maxPayloadSize = communicationRegion->maxWriteSize() - 1 - package_t::metaDataSize();
+	uint64_t maxDataToWrite = (maxPayloadSize/sizeof(uint64_t)) * sizeof(uint64_t);
+	uint64_t* copy = d->data;
+
+	package_t package( remainingSize, maxDataToWrite, copy );
+
+	communicationRegion->setPackageHeader( &package );
+	while ( remainingSize + package.metaDataSize() > communicationRegion->maxWriteSize() ) {  
+		communicationRegion->clearReadCode();
+		communicationRegion->sendPackage( &package, rdma_no_op );
+
+		remainingSize -= maxDataToWrite;
+		package.advancePayloadPtr( maxDataToWrite );
+		// No waiting, just plain copying and see how fast we can go.
+	}
+	package.setCurrentPackageSize( remainingSize );
+	communicationRegion->setPackageHeader( &package );
+	communicationRegion->sendPackage( &package, rdma_no_op );
+
 	communicationRegion->busy = false;
 }
 

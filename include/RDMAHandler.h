@@ -6,6 +6,7 @@
 #include "RDMARegion.h"
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 
 class RDMAHandler {
     public:
@@ -22,6 +23,7 @@ class RDMAHandler {
 
         /* Members */        
         uint32_t current_id;
+        std::mutex regionMutex;
         std::unordered_map< uint64_t, RDMARegion* > regions;
 
     public:

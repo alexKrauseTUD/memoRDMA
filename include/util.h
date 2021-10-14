@@ -24,7 +24,7 @@
 
 #include <iostream>
 
-#define MAX_POLL_CQ_TIMEOUT 30000 // ms
+#define MAX_POLL_CQ_TIMEOUT 1000 // ms
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
@@ -62,6 +62,7 @@ struct config_t {
     const char *dev_name; // IB device name
     char *server_name;    // server hostname
     uint32_t tcp_port;    // server TCP port
+    bool client_mode;     // Don't run an event loop
     int ib_port;          // local IB port to work with
     int gid_idx;          // GID index to use
 };

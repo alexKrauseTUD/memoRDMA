@@ -31,6 +31,7 @@ class RDMACommunicator {
         std::size_t lastRegionId() const;
 
         void stop();
+        bool abortSignaled() const;
 
     private:
         /* Singleton-required */
@@ -43,7 +44,8 @@ class RDMACommunicator {
         void receiveDataFromRemote( RDMARegion* communicationRegion, bool soloPackage );
         void throughputTest( RDMARegion* communicationRegion );
         void consumingTest( RDMARegion* communicationRegion );
-        
+        void mt_throughputTest( RDMARegion* communicationRegion );
+
         std::map< uint32_t, std::tuple< bool*, uint64_t*, std::thread* > > pool;
 	    std::vector< std::thread* > regionThreads;
 	    std::atomic< size_t > global_id = {0};
