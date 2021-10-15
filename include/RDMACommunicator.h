@@ -33,6 +33,8 @@ class RDMACommunicator {
         void stop();
         bool abortSignaled() const;
 
+        config_t globalConfig;
+
     private:
         /* Singleton-required */
         RDMACommunicator(); 

@@ -45,6 +45,9 @@ RDMACommunicator::RDMACommunicator() :
 				case rdma_mt_tput_test: {
 					mt_throughputTest( communicationRegion );
 				} break;
+				case rdma_mt_consume_test: {
+					mt_consumingTest( communicationRegion );
+				} break;
 				case rdma_shutdown: {
 					if ( config->client_mode ) {
 						std::cout << "[CommRegion] Received RDMA_SHUTDOWN" << std::endl;
@@ -88,6 +91,7 @@ RDMACommunicator::RDMACommunicator() :
 }
 
 void RDMACommunicator::init( config_t& config ) {
+	globalConfig = config;
 	RDMAHandler::getInstance().setupCommunicationBuffer( config );
 	auto region = RDMAHandler::getInstance().communicationBuffer;
 	region->clearCompleteBuffer();
@@ -218,7 +222,7 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 				initDone = true;
 				localData = (uint64_t*) malloc( package_head->total_data_size );
 				localWritePtr = localData;
-				std::cout << "[RDMACommunicator] MultiPackage: Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size / sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+				// std::cout << "[RDMACommunicator] MultiPackage: Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size / sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 			}
 			memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size ); // +1 for commit code
 			localWritePtr = (uint64_t*) ((char*)localWritePtr + package_head->current_payload_size);
@@ -232,7 +236,7 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 		memcpy( localWritePtr, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size );
 	} else {
 		localData = (uint64_t*) malloc( package_head->total_data_size );
-		std::cout << "[RDMACommunicator] SoloPackage: Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
+		// std::cout << "[RDMACommunicator] SoloPackage: Created memory region for " << package_head->total_data_size << " bytes (" << (package_head->total_data_size/sizeof(uint64_t)) << " uint64_t elements)." << std::endl;
 		memcpy( localData, communicationRegion->receivePtr()+1+package_t::metaDataSize(), package_head->current_payload_size );
 		communicationRegion->clearCompleteBuffer();
 	}
@@ -256,7 +260,7 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 	std::ofstream out;
 	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
 	std::stringstream logName;
-	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "tput_log.log";
+	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ss_tput.log";
 	out.open( logName.str(), std::ios_base::app );
 
 	std::ios_base::fmtflags f( std::cout.flags() );
@@ -314,7 +318,7 @@ void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
 	std::ofstream out;
 	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
 	std::stringstream logName;
-	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "consume_log.log";
+	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ds_tput.log";
 	out.open( logName.str(), std::ios_base::app );
 
 	std::ios_base::fmtflags f( std::cout.flags() );

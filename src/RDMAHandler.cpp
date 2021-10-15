@@ -166,6 +166,7 @@ RDMARegion* RDMAHandler::selectRegion( bool withDefault ) {
         if ( !withDefault ) {
             return nullptr;
         }
+        std::cout << "Default buffer: " << communicationBuffer << std::endl;
         return communicationBuffer;
     }
 };

@@ -15,7 +15,8 @@ enum rdma_handler_communication {
     rdma_tput_test      =  9,
     rdma_consume_test   = 10,
     rdma_next_test      = 11,
-    rdma_mt_tput_test   = 12
+    rdma_mt_tput_test   = 12,
+    rdma_mt_consume_test= 13
 };
 
 // #define BUFF_SIZE 1024*1024*2
