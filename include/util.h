@@ -24,7 +24,7 @@
 
 #include <iostream>
 
-#define MAX_POLL_CQ_TIMEOUT 1000 // ms
+#define MAX_POLL_CQ_TIMEOUT 30000 // ms
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }

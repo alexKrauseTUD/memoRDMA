@@ -252,16 +252,16 @@ void RDMACommunicator::receiveDataFromRemote( RDMARegion* communicationRegion, b
 }
 
 void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
+	/* We can create a string from a plain char* and our buffer is primed with \0 */
+	std::string logName( communicationRegion->receivePtr()+1 );
 	communicationRegion->clearCompleteBuffer();
+
 	/* provide data to remote */
 	std::size_t maxDataElements = 1ull << 32;
 	DataProvider d;
 	d.generateDummyData( maxDataElements >> 1 );
 	std::ofstream out;
-	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
-	std::stringstream logName;
-	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ss_tput.log";
-	out.open( logName.str(), std::ios_base::app );
+	out.open( logName, std::ios_base::app );
 
 	std::ios_base::fmtflags f( std::cout.flags() );
 	for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
@@ -298,6 +298,7 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 
 			auto readable_size = GetBytesReadable( datasize );
 
+  			std::cout.precision(15);
 			std::cout.setf(std::ios::fixed, std::ios::floatfield);
 			std::cout.setf(std::ios::showpoint);
 			out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
@@ -310,16 +311,16 @@ void RDMACommunicator::throughputTest( RDMARegion* communicationRegion ) {
 }
 
 void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
+	/* We can create a string from a plain char* and our buffer is primed with \0 */
+	std::string logName( communicationRegion->receivePtr()+1 );
 	communicationRegion->clearCompleteBuffer();
+
 	/* provide data to remote */
 	std::size_t maxDataElements = 1ull << 32;
 	DataProvider d;
 	d.generateDummyData( maxDataElements >> 1 );
 	std::ofstream out;
-	auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
-	std::stringstream logName;
-	logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ds_tput.log";
-	out.open( logName.str(), std::ios_base::app );
+	out.open( logName, std::ios_base::app );
 
 	std::ios_base::fmtflags f( std::cout.flags() );
 	for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
@@ -361,6 +362,7 @@ void RDMACommunicator::consumingTest( RDMARegion* communicationRegion ) {
 
 			auto readable_size = GetBytesReadable( datasize );
 
+			std::cout.precision(15);
 			std::cout.setf(std::ios::fixed, std::ios::floatfield);
 			std::cout.setf(std::ios::showpoint);
 			out << communicationRegion->bufferSize << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;

@@ -156,6 +156,13 @@ void TaskManager::setup() {
     ) );
 
     registerTask( new Task( "ss_tput", "Single-sided throughput test", [] () -> void {
+        auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+        std::stringstream logNameStream;
+        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ss_tput.log";
+        std::string logName = logNameStream.str();
+
+        std::cout << "[Task] Set name: " << logNameStream.str() << std::endl;
+        // for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
         for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
             RDMACommunicator::getInstance().setupNewRegion( RDMACommunicator::getInstance().globalConfig, bytes );
             while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
@@ -166,6 +173,11 @@ void TaskManager::setup() {
             std::cout << "[main] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
             auto currentRegion = RDMAHandler::getInstance().getRegion( regionId );
             std::cout << std::endl << "Single-sided throughput test." << std::endl;
+            
+            /* Set global log file name */
+            currentRegion->clearCompleteBuffer();
+            memcpy( currentRegion->receivePtr()+1, logName.c_str(), logName.size() );
+
             currentRegion->receivePtr()[0] = rdma_tput_test;	
             currentRegion->busy = true;
 
@@ -181,6 +193,11 @@ void TaskManager::setup() {
     ) );
 
     registerTask( new Task( "ds_tput", "Double-sided throughput test", [] () -> void {
+        auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+        std::stringstream logNameStream;
+        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ds_tput.log";
+        std::string logName = logNameStream.str();
+
         for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
             RDMACommunicator::getInstance().setupNewRegion( RDMACommunicator::getInstance().globalConfig, bytes );
             while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
@@ -191,6 +208,11 @@ void TaskManager::setup() {
             std::cout << "[main] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
             auto currentRegion = RDMAHandler::getInstance().getRegion( regionId );
             std::cout << std::endl << "Double-sided throughput test." << std::endl;
+            
+            /* Set global log file name */
+            currentRegion->clearCompleteBuffer();
+            memcpy( currentRegion->receivePtr()+1, logName.c_str(), logName.size() );
+
             currentRegion->receivePtr()[0] = rdma_consume_test;	
             currentRegion->busy = true;
 
@@ -272,6 +294,7 @@ void TaskManager::setup() {
                     std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s times " << regionCount << " regions -- " << BtoMB( datasize * regionCount ) / (secs.count()) << " MB/s " << std::endl;
 
                     auto readable_size = GetBytesReadable( datasize );
+                    std::cout.precision(15);
                     std::cout.setf(std::ios::fixed, std::ios::floatfield);
                     std::cout.setf(std::ios::showpoint);
                     out << regionCount << "\t" << bytes << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
@@ -354,6 +377,7 @@ void TaskManager::setup() {
                     std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s times " << regionCount << " regions -- " << BtoMB( datasize * regionCount ) / (secs.count()) << " MB/s " << std::endl;
 
                     auto readable_size = GetBytesReadable( datasize );
+                    std::cout.precision(15);
                     std::cout.setf(std::ios::fixed, std::ios::floatfield);
                     std::cout.setf(std::ios::showpoint);
                     out << regionCount << "\t" << bytes << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
