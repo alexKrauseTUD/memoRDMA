@@ -19,6 +19,11 @@ enum rdma_handler_communication {
     rdma_mt_consume_test= 13
 };
 
+enum buffer_type {
+    send_buffer = 0,
+    receive_buffer = 1
+};
+
 // #define BUFF_SIZE 1024*1024*2
 
 #endif // COMMON_H
