@@ -41,7 +41,7 @@ class Buffer {
 
 class SendBuffer : public Buffer {
    public:
-    explicit SendBuffer(std::size_t _bufferSize = 1024 * 1024 * 2);
+    explicit SendBuffer(std::size_t _bufferSize);
 
     void setSendData(std::string s);
     void setSendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize);
@@ -61,7 +61,7 @@ class SendBuffer : public Buffer {
 
 class ReceiveBuffer : public Buffer {
    public:
-    explicit ReceiveBuffer(std::size_t _bufferSize = 1024 * 1024 * 2 + 128);
+    explicit ReceiveBuffer(std::size_t _bufferSize);
 
     void consumeData();
 

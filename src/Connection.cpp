@@ -1,16 +1,20 @@
 #include "Connection.h"
 
-Connection::Connection() {}
-
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : globalAbort(false) {
     config = _config;
     bufferConfig = _bufferConfig;
     res.sock = -1;
 
+    if (config.clientMode) {
+        
+    }
+
     setupSendBuffer();
     setupReceiveBuffer();
     initTCP();
-    createResources();
+
+    std::cout << "Evertything seems to work up to this point!" << std::endl;
+    // createResources();
 
     // check_receive = [this]( Buffer* communicationRegion, config_t* config, bool* abort ) -> void {
     // 	using namespace std::chrono_literals;
@@ -93,16 +97,12 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
 }
 
 void Connection::setupSendBuffer() {
-    SendBuffer *buffer = new SendBuffer(bufferConfig.size_own_send);
-
-    ownSendBuffer = buffer;
+    ownSendBuffer = new SendBuffer(bufferConfig.size_own_send);
 }
 
 void Connection::setupReceiveBuffer() {
-    for (size_t i = 0; i < bufferConfig.size_own_receive; ++i) {
-        ReceiveBuffer *buffer = new ReceiveBuffer(bufferConfig.size_own_receive);
-
-        ownReceiveBuffer.push_back(buffer);
+    for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
+        ownReceiveBuffer.push_back(new ReceiveBuffer(bufferConfig.size_own_receive));
     }
 }
 
@@ -111,8 +111,8 @@ struct ibv_mr *Connection::registerMemoryRegion(struct ibv_pd *pd, void *buffer,
 }
 
 void Connection::initTCP() {
-    if (!config.server_name.empty()) {
-        // @client
+    if (!config.client_mode) {
+        // @server
         res.sock = sock_connect(config.server_name, config.tcp_port);
         if (res.sock < 0) {
             ERROR("Failed to establish TCP connection to server %s, port %d\n",
@@ -120,9 +120,9 @@ void Connection::initTCP() {
             exit(EXIT_FAILURE);
         }
     } else {
-        // @server
+        // @client
         INFO("Waiting on port %d for TCP connection\n", config.tcp_port);
-        res.sock = sock_connect(NULL, config.tcp_port);
+        res.sock = sock_connect("", config.tcp_port);
         if (res.sock < 0) {
             ERROR("Failed to establish TCP connection with client on port %d\n",
                   config.tcp_port);

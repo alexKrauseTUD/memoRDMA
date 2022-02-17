@@ -27,7 +27,7 @@ class ConnectionManager {
     bool resizeReceiveBuffer(std::string connectionName, std::size_t newSize);
     bool resizeSendBuffer(std::string connectionName, std::size_t newSize);
 
-    std::map<std::string, Connection> connections;
+    std::map<std::string, Connection*> connections;
 
     bool pendingBufferCreation(std::string connectionName);
 

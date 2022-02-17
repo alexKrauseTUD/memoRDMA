@@ -32,19 +32,18 @@ struct resources {
 
 class Connection {
    public:
-    Connection();
-    Connection(config_t _config, buffer_config_t _bufferConfig);
+    explicit Connection(config_t _config, buffer_config_t _bufferConfig);
     ~Connection();
 
     config_t config;
     buffer_config_t bufferConfig;
     struct resources res;
 
-    SendBuffer *ownSendBuffer;
-    SendBuffer remoteSendBuffer;
+    SendBuffer *ownSendBuffer = NULL;
+    SendBuffer *remoteSendBuffer = NULL;
 
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
-    std::vector<ReceiveBuffer> remoteReceiveBuffer;
+    std::vector<ReceiveBuffer *> remoteReceiveBuffer;
 
     std::array<uint16_t, 16> metaInfo;
     struct ibv_mr *metaInfoMR;

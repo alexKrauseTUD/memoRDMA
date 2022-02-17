@@ -14,7 +14,7 @@ Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
     buf = (char*)calloc(1, bufferSize);
     assert(buf != NULL);
 
-    memset(buf, 0, sizeof(buf));
+    memset(buf, 0, bufferSize);
 }
 
 Buffer::~Buffer() {

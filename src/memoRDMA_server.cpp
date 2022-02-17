@@ -15,8 +15,8 @@
 #include "util.h"
 
 int main(int argc, char *argv[]) {
-    config_t config = {.dev_name = NULL,
-                       .server_name = NULL,
+    config_t config = {.dev_name = "",
+                       .server_name = "",
                        .tcp_port = 20000,
                        .client_mode = false,
                        .ib_port = 1,
@@ -45,15 +45,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // parse the last parameter (if exists) as the server name
-    if (optind == argc - 1) {
-        config.server_name = argv[optind];
-    } else if (optind < argc) {
-        print_usage(argv[0]);
-        exit(EXIT_FAILURE);
-    }
+    // // parse the last parameter (if exists) as the server name
+    // if (optind == argc - 1) {
+    //     config.server_name = argv[optind];
+    // } else if (optind < argc) {
+    //     print_usage(argv[0]);
+    //     exit(EXIT_FAILURE);
+    // }
 
-    print_config(config);
+    
     {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(100ms);

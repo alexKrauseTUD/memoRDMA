@@ -11,9 +11,7 @@ ConnectionManager::~ConnectionManager() {
 
 bool ConnectionManager::openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig) {
     if (connections.find(connectionName) == connections.end()) {
-        Connection con(config, bufferConfig);
-
-        connections.insert(std::pair<std::string, Connection>(connectionName, con));
+        connections.insert(std::make_pair(connectionName, new Connection(config, bufferConfig)));
 
         return true;
     } else {
@@ -25,15 +23,15 @@ bool ConnectionManager::openConnection(std::string connectionName, config_t &con
 
 void ConnectionManager::printConnections() {
     for (auto const &[name, con] : connections) {
-        std::cout << name << ':' << con.res.sock << std::endl;
+        std::cout << name << ':' << con->res.sock << std::endl;
     }
 }
 
 bool ConnectionManager::closeConnection(std::string connectionName) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].close();
+        return connections[connectionName]->close();
     }
 
     return false;
@@ -42,7 +40,7 @@ bool ConnectionManager::closeConnection(std::string connectionName) {
 bool ConnectionManager::closeAllConnections() {
     bool success = true;
     for (auto &[name, con] : connections) {
-        success = success && con.close();
+        success = success && con->close();
         if (success)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
     }
@@ -52,10 +50,10 @@ bool ConnectionManager::closeAllConnections() {
 
 // TODO: How about a pointer to the data;; Generic datatype?
 bool ConnectionManager::sendData(std::string connectionName, std::string &data) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].sendData(data);
+        return connections[connectionName]->sendData(data);
     }
 
     return false;
@@ -79,10 +77,10 @@ bool ConnectionManager::sendDataToAllConnections(std::string &data) {
 
 bool ConnectionManager::addReceiveBuffer(std::string connectionName, uint8_t quantity = 1) {
     // TODO: sanity check
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].addReceiveBuffer(quantity);
+        return connections[connectionName]->addReceiveBuffer(quantity);
     }
 
     return false;
@@ -90,40 +88,40 @@ bool ConnectionManager::addReceiveBuffer(std::string connectionName, uint8_t qua
 
 bool ConnectionManager::removeReceiveBuffer(std::string connectionName, uint8_t quantity = 1) {
     // TODO: sanity check// TODO: sanity check
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].removeReceiveBuffer(quantity);
+        return connections[connectionName]->removeReceiveBuffer(quantity);
     }
 
     return false;
 }
 
 bool ConnectionManager::resizeReceiveBuffer(std::string connectionName, std::size_t newSize) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].resizeReceiveBuffer(newSize);
+        return connections[connectionName]->resizeReceiveBuffer(newSize);
     }
 
     return false;
 }
 
 bool ConnectionManager::resizeSendBuffer(std::string connectionName, std::size_t newSize) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].resizeSendBuffer(newSize);
+        return connections[connectionName]->resizeSendBuffer(newSize);
     }
 
     return false;
 }
 
 bool ConnectionManager::pendingBufferCreation(std::string connectionName) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (connections.contains(connectionName)) {
         std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName].pendingBufferCreation();
+        return connections[connectionName]->pendingBufferCreation();
     }
 
     return true;
