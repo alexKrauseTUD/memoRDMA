@@ -54,17 +54,18 @@ class Connection {
     struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, size_t size);
 
     void initTCP();
+    void exchangeBufferInfo();
     void createResources();
     struct ibv_context *createContext();
     struct ibv_qp *createQueuePair(struct ibv_pd *pd, struct ibv_cq *cq);
     bool changeQueuePairStateToInit(struct ibv_qp *queue_pair);
     bool changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
-    void connectQpTCP(config_t &config);
+    void connectQpTCP();
     int poll_completion();
 
     bool sendData(std::string &data);
-    bool close();
+    bool closeConnection();
 
     bool addReceiveBuffer(unsigned int quantity);
     bool removeReceiveBuffer(unsigned int quantity);

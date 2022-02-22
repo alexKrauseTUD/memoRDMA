@@ -1,99 +1,19 @@
 #include "Connection.h"
 
+#include "util.h"
+
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : globalAbort(false) {
     config = _config;
     bufferConfig = _bufferConfig;
     res.sock = -1;
 
-    if (config.clientMode) {
-        
-    }
-
-    setupSendBuffer();
-    setupReceiveBuffer();
     initTCP();
 
+    exchangeBufferInfo();
+
+    sock_close(res.sock);
+
     std::cout << "Evertything seems to work up to this point!" << std::endl;
-    // createResources();
-
-    // check_receive = [this]( Buffer* communicationRegion, config_t* config, bool* abort ) -> void {
-    // 	using namespace std::chrono_literals;
-    // 	std::ios_base::fmtflags f( std::cout.flags() );
-    // 	std::cout << "Starting monitoring thread for region " << communicationRegion << std::endl;
-    // 	while( !*abort ) {
-    // 		std::this_thread::sleep_for( 10ms );
-    // 		switch( communicationRegion->receivePtr()[0] ) {
-    // 			case rdma_create_region: {
-    // 				createRdmaRegion( config, communicationRegion );
-    // 			}; break;
-    // 			case rdma_delete_region: {
-    // 				deleteRdmaRegion( communicationRegion );
-    // 				return;
-    // 			}; break;
-    // 			case rdma_data_ready: {
-    // 				readCommittedData( communicationRegion );
-    // 			}; break;
-    // 			case rdma_data_fetch: {
-    // 				sendDataToRemote( communicationRegion );
-    // 			} break;
-    // 			case rdma_data_finished: {
-    // 				receiveDataFromRemote( communicationRegion, true );
-    // 			}; break;
-    // 			case rdma_data_receive: {
-    // 				receiveDataFromRemote( communicationRegion, false );
-    // 			} break;
-    // 			case rdma_tput_test: {
-    // 				throughputTest( communicationRegion );
-    // 			} break;
-    // 			case rdma_consume_test: {
-    // 				consumingTest( communicationRegion );
-    // 			} break;
-    // 			case rdma_mt_tput_test: {
-    // 				mt_throughputTest( communicationRegion );
-    // 			} break;
-    // 			case rdma_mt_consume_test: {
-    // 				mt_consumingTest( communicationRegion );
-    // 			} break;
-    // 			case rdma_shutdown: {
-    // 				if ( config->client_mode ) {
-    // 					std::cout << "[CommRegion] Received RDMA_SHUTDOWN" << std::endl;
-    // 					RDMACommunicator::getInstance().stop();
-    // 				} else {
-    // 					communicationRegion->clearCompleteBuffer();
-    // 				}
-    // 			}; break;
-    // 			default: {
-    // 				continue;
-    // 			}; break;
-    // 		}
-    // 		std::cout.flags( f );
-    // 	}
-    // 	std::cout << "[check_receive] Ending through global abort." << std::endl;
-    // };
-
-    // check_regions = [this]( bool* abort ) -> void {
-    // 	using namespace std::chrono_literals;
-    // 	while (!*abort) {
-    // 		for ( auto it = pool.begin(); it != pool.end(); ) {
-    // 			if ( *std::get<0>(it->second) ) {
-    // 				const std::lock_guard< std::mutex > lock( poolMutex );
-    // 				/* Memory region created, old thread can be let go */
-    // 				std::cout << "Joining thread " << it->first << std::endl;
-    // 				std::get<2>(it->second)->join();
-    // 				/* Spawning new thread to listen to it */
-    // 				auto newRegion = RDMAHandler::getInstance().getRegion( *std::get<1>(it->second) );
-    // 				regionThreads.emplace_back( new std::thread(check_receive, newRegion, &config, abort) );
-    // 				std::cout << "Spawned new listener thread for region: " << *std::get<1>(it->second) << std::endl;
-    // 				/* Cleanup & remove element from global map */
-    // 				free( std::get<2>( it->second ) ); // thread pointer
-    // 				free( std::get<1>( it->second ) ); // regionid pointer
-    // 				it = pool.erase( it );
-    // 			}
-    // 		}
-    // 		std::this_thread::sleep_for( 50ms );
-    // 	}
-    // 	std::cout << "[check_regions] Ending through global abort." << std::endl;
-    // };
 }
 
 void Connection::setupSendBuffer() {
@@ -132,13 +52,82 @@ void Connection::initTCP() {
     INFO("TCP connection was established\n");
 }
 
+void Connection::exchangeBufferInfo() {
+    struct cm_con_data_t local_con_data;
+    struct cm_con_data_t remote_con_data;
+    struct cm_con_data_t tmp_con_data;
+    char temp_char;
+
+    if (config.client_mode) {
+        receive_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data);
+
+        bufferConfig = invertBufferConfig(tmp_con_data.buffer_config);
+    }
+
+    setupSendBuffer();
+    setupReceiveBuffer();
+
+    createResources();
+
+    union ibv_gid my_gid;
+
+    memset(&my_gid, 0, sizeof(my_gid));
+
+    // if (config.gid_idx >= 0) {
+    //     CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx,
+    //                         &my_gid));
+    // }
+
+    std::vector<uint64_t> receive_buf;
+    std::vector<uint32_t> receive_rkey;
+
+    // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
+    // etc. exchange using TCP sockets info required to connect QPs
+    local_con_data.meta_buf = htonll((uintptr_t)&metaInfo);
+    local_con_data.meta_rkey = htonl(metaInfoMR->rkey);
+    local_con_data.send_buf = htonll((uintptr_t)&ownSendBuffer->buf);
+    local_con_data.send_rkey = htonl(ownSendBuffer->mr->rkey);
+    local_con_data.receive_num = ownReceiveBuffer.size();
+    for (const auto &rb : ownReceiveBuffer) {
+        receive_buf.push_back(htonll((uintptr_t)rb->buf));
+        receive_rkey.push_back(htonl(rb->mr->rkey));
+    }
+    local_con_data.receive_buf = receive_buf.data();
+    local_con_data.receive_rkey = receive_rkey.data();
+    local_con_data.qp_num = htonl(res.qp->qp_num);
+    local_con_data.lid = htons(res.port_attr.lid);
+    local_con_data.buffer_config = bufferConfig;
+    memcpy(local_con_data.gid, &my_gid, 16);
+
+    if (!config.client_mode) {
+        sock_sync_data(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
+    } else {
+        send_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data);
+    }
+
+    remote_con_data.meta_buf = ntohll(tmp_con_data.meta_buf);
+    remote_con_data.meta_rkey = ntohl(tmp_con_data.meta_rkey);
+    remote_con_data.send_buf = ntohll(tmp_con_data.send_buf);
+    remote_con_data.send_rkey = ntohl(tmp_con_data.send_rkey);
+    remote_con_data.receive_num = tmp_con_data.receive_num;
+    remote_con_data.receive_buf = tmp_con_data.receive_buf;
+    remote_con_data.receive_rkey = tmp_con_data.receive_rkey;
+    remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
+    remote_con_data.lid = ntohs(tmp_con_data.lid);
+    remote_con_data.buffer_config = tmp_con_data.buffer_config;
+    memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
+
+    // save the remote side attributes, we will need it for the post SR
+    res.remote_props = remote_con_data;
+}
+
 void Connection::createResources() {
     // https://insujang.github.io/2020-02-09/introduction-to-programming-infiniband/
 
     struct ibv_context *context = createContext();
 
     // query port properties
-    CHECK(ibv_query_port(res.ib_ctx, config.ib_port, &res.port_attr));
+    // CHECK(ibv_query_port(res.ib_ctx, config.ib_port, &res.port_attr));
 
     /* Create a protection domain */
     struct ibv_pd *protection_domain = ibv_alloc_pd(context);
@@ -155,7 +144,7 @@ void Connection::createResources() {
         res.own_buffer.push_back(rb->buf);
     }
 
-    metaInfoMR = registerMemoryRegion(protection_domain, &metaInfo, sizeof(metaInfo) * 8);
+    metaInfoMR = registerMemoryRegion(protection_domain, &metaInfo, sizeof(metaInfo));
 
     /* Create a completion queue */
     int cq_size = 0x10;
@@ -181,6 +170,7 @@ struct ibv_context *Connection::createContext() {
     struct ibv_context *context = nullptr;
     int num_devices;
     struct ibv_device **device_list = ibv_get_device_list(&num_devices);
+
     for (int i = 0; i < num_devices; i++) {
         /* match device name. open the device and return it */
         if (device_name.compare(ibv_get_device_name(device_list[i])) == 0) {
@@ -283,81 +273,6 @@ int Connection::changeQueuePairStateToRTS(struct ibv_qp *qp) {
     return ibv_modify_qp(qp, &attr, flags) == 0 ? true : false;
 }
 
-// Connect the QP, then transition the server side to RTR, sender side to RTS.
-void Connection::connectQpTCP(config_t &config) {
-    std::cout << "End of current implementation." << std::endl;
-
-    return;
-
-    // struct cm_con_data_t local_con_data;
-    // struct cm_con_data_t remote_con_data;
-    // struct cm_con_data_t tmp_con_data;
-    // char temp_char;
-    // union ibv_gid my_gid;
-
-    // memset(&my_gid, 0, sizeof(my_gid));
-
-    // if (config.gid_idx >= 0)
-    // {
-    // 	CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx,
-    // 						&my_gid));
-    // }
-
-    // // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
-    // // etc. exchange using TCP sockets info required to connect QPs
-    // local_con_data.addr = htonll((uintptr_t)region.res.buf);
-    // local_con_data.rkey = htonl(region.res.mr->rkey);
-    // local_con_data.qp_num = htonl(region.res.qp->qp_num);
-    // local_con_data.lid = htons(region.res.port_attr.lid);
-    // memcpy(local_con_data.gid, &my_gid, 16);
-
-    // INFO("\n Local LID      = 0x%x\n", region.res.port_attr.lid);
-
-    // sock_sync_data(region.res.sock, sizeof(struct cm_con_data_t),
-    // 			   (char *)&local_con_data, (char *)&tmp_con_data);
-
-    // remote_con_data.addr = ntohll(tmp_con_data.addr);
-    // remote_con_data.rkey = ntohl(tmp_con_data.rkey);
-    // remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
-    // remote_con_data.lid = ntohs(tmp_con_data.lid);
-    // memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
-
-    // // save the remote side attributes, we will need it for the post SR
-    // region.res.remote_props = remote_con_data;
-    // // \end exchange required info
-
-    // INFO("Remote address = 0x%" PRIx64 "\n", remote_con_data.addr);
-    // INFO("Remote rkey = 0x%x\n", remote_con_data.rkey);
-    // INFO("Remote QP number = 0x%x\n", remote_con_data.qp_num);
-    // INFO("Remote LID = 0x%x\n", remote_con_data.lid);
-
-    // if (config.gid_idx >= 0)
-    // {
-    // 	uint8_t *p = remote_con_data.gid;
-    // 	int i;
-    // 	printf("Remote GID = ");
-    // 	for (i = 0; i < 15; i++)
-    // 		printf("%02x:", p[i]);
-    // 	printf("%02x\n", p[15]);
-    // }
-
-    // // modify the QP to init
-    // region.modify_qp_to_init(config, region.res.qp);
-
-    // // modify the QP to RTR
-    // region.modify_qp_to_rtr(config, region.res.qp, remote_con_data.qp_num, remote_con_data.lid,
-    // 						remote_con_data.gid);
-
-    // // modify QP state to RTS
-    // region.modify_qp_to_rts(region.res.qp);
-
-    // // sync to make sure that both sides are in states that they can connect to
-    // // prevent packet lose
-    // char Q = 'Q';
-    // sock_sync_data(region.res.sock, 1, &Q, &temp_char);
-    // return;
-}
-
 // Poll the CQ for a single event. This function will continue to poll the queue
 // until MAX_POLL_TIMEOUT ms have passed.
 int Connection::poll_completion() {
@@ -406,7 +321,7 @@ bool Connection::sendData(std::string &data) {
     return true;
 }
 
-bool Connection::close() {
+bool Connection::closeConnection() {
     std::cout << "This function closes a connection but isn't implemented yet. Sorry!" << std::endl;
     return true;
 }

@@ -34,17 +34,23 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 #error __BYTE_ORDER is neither __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
-#define ERROR(fmt, args...) \
-    { fprintf(stderr, "ERROR: %s(): " fmt, __func__, ##args); }
+#define ERROR(fmt, args...)                                     \
+    {                                                           \
+        fprintf(stderr, "ERROR: %s(): " fmt, __func__, ##args); \
+    }
 #define ERR_DIE(fmt, args...) \
     {                         \
         ERROR(fmt, ##args);   \
         exit(EXIT_FAILURE);   \
     }
-#define INFO(fmt, args...) \
-    { printf("INFO: %s(): " fmt, __func__, ##args); }
-#define WARN(fmt, args...) \
-    { printf("WARN: %s(): " fmt, __func__, ##args); }
+#define INFO(fmt, args...)                            \
+    {                                                 \
+        printf("INFO: %s(): " fmt, __func__, ##args); \
+    }
+#define WARN(fmt, args...)                            \
+    {                                                 \
+        printf("WARN: %s(): " fmt, __func__, ##args); \
+    }
 
 #define CHECK(expr)                  \
     {                                \
@@ -73,6 +79,15 @@ struct buffer_config_t {
     std::size_t size_own_send;
     std::size_t size_remote_send;
 };
+
+static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
+    return {.num_own_receive = bufferConfig.num_remote_receive,
+            .size_own_receive = bufferConfig.size_remote_receive,
+            .num_remote_receive = bufferConfig.num_own_receive,
+            .size_remote_receive = bufferConfig.size_own_receive,
+            .size_own_send = bufferConfig.size_remote_send,
+            .size_remote_send = bufferConfig.size_own_send};
+}
 
 // \begin socket operation
 //
@@ -109,25 +124,86 @@ static int sock_connect(std::string server_name, int port) {
 
     // resolve DNS address, user sockfd as temp storage
     sprintf(service, "%d", port);
-    CHECK(getaddrinfo(server_name.c_str(), service, &hints, &resolved_addr));
+    if (server_name.empty()) {
+        CHECK(getaddrinfo(NULL, service, &hints, &resolved_addr));
+    } else {
+        CHECK(getaddrinfo(server_name.c_str(), service, &hints, &resolved_addr));
+    }
 
     for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
         sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
         assert(sockfd >= 0);
 
         if (server_name.empty()) {
-            // Server mode: setup listening socket and accept a connection
+            // Client mode: setup listening socket and accept a connection
             listenfd = sockfd;
             CHECK(bind(listenfd, iterator->ai_addr, iterator->ai_addrlen));
             CHECK(listen(listenfd, 1));
             sockfd = accept(listenfd, NULL, 0);
         } else {
-            // Client mode: initial connection to remote
+            // Server mode: initial connection to remote
             CHECK(connect(sockfd, iterator->ai_addr, iterator->ai_addrlen));
         }
     }
 
     return sockfd;
+}
+
+static bool is_port_free(int port, char *host = "localhost") {
+    int sockfd;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        ERROR("ERROR opening socket");
+    }
+
+    server = gethostbyname(host);
+
+    if (server == NULL) {
+        fprintf(stderr, "ERROR, no such host\n");
+        exit(0);
+    }
+
+    bzero((char *)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr,
+          (char *)&serv_addr.sin_addr.s_addr,
+          server->h_length);
+
+    serv_addr.sin_port = htons(port);
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        close(sockfd);
+        return false;
+    } else {
+        close(sockfd);
+        return true;
+    }
+}
+
+static void sock_close(int &sockfd) {
+    close(sockfd);
+}
+
+static int receive_tcp(int sockfd, int xfer_size, char *remote_data) {
+    int read_bytes = 0;
+
+    read_bytes = read(sockfd, remote_data, xfer_size);
+    assert(read_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
+}
+
+static int send_tcp(int sockfd, int xfer_size, char *local_data) {
+    int write_bytes = 0;
+
+    write_bytes = write(sockfd, local_data, xfer_size);
+    assert(write_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
 }
 
 // Sync data across a socket. The indicated local data will be sent to the
@@ -160,7 +236,9 @@ static void print_config(struct config_t &config) {
     if (!config.server_name.empty()) {
         INFO("IP:                   %s\n", config.server_name.c_str());
     }
-    { INFO("TCP port:             %u\n", config.tcp_port); }
+    {
+        INFO("TCP port:             %u\n", config.tcp_port);
+    }
     if (config.gid_idx >= 0) {
         INFO("GID index:            %u\n", config.gid_idx);
     }

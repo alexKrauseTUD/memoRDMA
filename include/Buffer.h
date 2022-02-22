@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include <string>
+#include <vector>
 
 #include "common.h"
 #include "package_manager.hpp"
@@ -13,8 +14,14 @@
 
 // // structure to exchange data which is needed to connect the QPs
 struct cm_con_data_t {
-    uint64_t addr;    // buffer address
-    uint32_t rkey;    // remote key
+    uint64_t meta_buf;
+    uint32_t meta_rkey;
+    uint64_t send_buf;
+    uint32_t send_rkey;
+    uint32_t receive_num;
+    uint64_t *receive_buf;   // buffer address
+    uint32_t *receive_rkey;  // remote key
+    buffer_config_t buffer_config;
     uint32_t qp_num;  // QP number
     uint16_t lid;     // LID of the IB port
     uint8_t gid[16];  // GID

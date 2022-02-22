@@ -83,30 +83,7 @@ void TaskManager::setup()
 {
     registerTask(new Task("openConnection", "Open Connection", []() -> void
                           {
-        bool correctInput;
-        bool clientMode;
-        std::string inp;
-
-        do
-        {
-            std::cin.clear();
-            std::cin.sync();
-            std::cout << "Is this the client ('y' / 'yes') or the server ('n' / 'no')?" << std::endl;
-            std::getline(std::cin, inp);
-
-            if (inp.compare("y") == 0 || inp.compare("yes") == 0) {
-                correctInput = true;
-                clientMode = true;
-            } else if (inp.compare("n") == 0 || inp.compare("no") == 0) {
-                correctInput = true;
-                clientMode = false;
-            } else {
-                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
-                correctInput = false;
-            }
-
-        } while (!correctInput);
-
+        bool clientMode = false;
         
         bool correct;
         bool useDefaultConfig;
@@ -132,11 +109,11 @@ void TaskManager::setup()
 
         } while (!correct);
 
-        std::string devName = "";
+        std::string devName = "mlx5_0";
         std::string serverName = clientMode ? "141.76.47.8" : "141.76.47.9";
-        uint32_t tcpPort = 20001;
+        uint32_t tcpPort = 20000;
         int ibPort = 0;
-        int gidIndex = 0;
+        int gidIndex = -1;
 
         unsigned int numOwnReceive = 2;
         std::size_t sizeOwnReceive = 1024 * 1024 * 2 + 128;
@@ -146,10 +123,8 @@ void TaskManager::setup()
         std::size_t sizeRemoteSend = 1024 * 1024 * 4 + 4 * 128;
 
         if (!useDefaultConfig) {
-            if (clientMode) {
             std::cout << "Please enter the Server-IP!" << std::endl;
             std::cin >> serverName;
-            }
 
             std::string devName = "0";
 
@@ -203,7 +178,7 @@ void TaskManager::setup()
                     confBuffer = false;
                 } else {
                     std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
-                    correctInput = false;
+                    correctInput2 = false;
                 }
 
             } while (!correctInput2);
@@ -300,6 +275,64 @@ void TaskManager::setup()
         if (ConnectionManager::getInstance().openConnection(connectionName, config, bufferConfig)) {
             std::cout << "[Success] Connection opened for config: " << std::endl;
             print_config(config);
+        } else {
+            std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
+        }
+        print_config(config); }));
+
+    registerTask(new Task("listenConnection", "Listen for Connection", []() -> void
+                          {
+        bool clientMode = true;
+
+        bool correct;
+        bool useDefaultConfig;
+        std::string input;
+
+        do
+        {
+            std::cin.clear();
+            std::cin.sync();
+            std::cout << "Do you want to use the defaul configuration ('y' / 'yes') or an own one ('n' / 'no')?" << std::endl;
+            std::getline(std::cin, input);
+
+            if (input.compare("y") == 0 || input.compare("yes") == 0) {
+                correct = true;
+                useDefaultConfig = true;
+            } else if (input.compare("n") == 0 || input.compare("no") == 0) {
+                correct = true;
+                useDefaultConfig = false;
+            } else {
+                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
+                correct = false;
+            }
+
+        } while (!correct);
+
+        uint32_t tcpPort = 20000;
+
+        if (!useDefaultConfig) {
+            std::cout << "Please enter the TCP-Port that you want to use (if already used, another one is selected automatically)!" << std::endl;
+            std::cin >> tcpPort;
+        }
+
+        config_t config = {.dev_name = "mlx5_0",
+                          .server_name = clientMode ? "141.76.47.8" : "141.76.47.9",
+                          .tcp_port = tcpPort ? tcpPort : 20000,
+                          .client_mode = clientMode,
+                          .ib_port = 0,
+                          .gid_idx = 0
+                        };
+                        
+        print_config(config);
+        
+        std::string connectionName;
+
+        std::cout << "Please enter a name for the connection that you want to create! (Numerical suggested)" << std::endl;
+        std::getline(std::cin, connectionName);
+
+
+        if (ConnectionManager::getInstance().receiveConnection(connectionName, config)) {
+            std::cout << "[Success] Connection opened for config: " << std::endl;
         } else {
             std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
         }

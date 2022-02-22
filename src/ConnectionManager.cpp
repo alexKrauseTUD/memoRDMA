@@ -10,7 +10,20 @@ ConnectionManager::~ConnectionManager() {
 }
 
 bool ConnectionManager::openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig) {
-    if (connections.find(connectionName) == connections.end()) {
+    if (!connections.contains(connectionName)) {
+        connections.insert(std::make_pair(connectionName, new Connection(config, bufferConfig)));
+
+        return true;
+    } else {
+        std::cout << "There is already a connection with the name '" << connectionName << "'! Please use another one!" << std::endl;
+    }
+
+    return false;
+}
+
+bool ConnectionManager::receiveConnection(std::string connectionName, config_t &config) {
+    if (!connections.contains(connectionName)) {
+        buffer_config_t bufferConfig;
         connections.insert(std::make_pair(connectionName, new Connection(config, bufferConfig)));
 
         return true;
@@ -31,7 +44,7 @@ bool ConnectionManager::closeConnection(std::string connectionName) {
     if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName]->close();
+        return connections[connectionName]->closeConnection();
     }
 
     return false;
@@ -40,7 +53,7 @@ bool ConnectionManager::closeConnection(std::string connectionName) {
 bool ConnectionManager::closeAllConnections() {
     bool success = true;
     for (auto &[name, con] : connections) {
-        success = success && con->close();
+        success = success && con->closeConnection();
         if (success)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
     }
@@ -87,7 +100,7 @@ bool ConnectionManager::addReceiveBuffer(std::string connectionName, uint8_t qua
 }
 
 bool ConnectionManager::removeReceiveBuffer(std::string connectionName, uint8_t quantity = 1) {
-    // TODO: sanity check// TODO: sanity check
+    // TODO: sanity check
     if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
     } else {
