@@ -14,7 +14,25 @@
 #include "common.h"
 #include "util.h"
 
+bool checkLinkUp() {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen("ibstat", "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return (result.find( "State: Active" ) != std::string::npos);
+}
+
 int main(int argc, char *argv[]) {
+    if ( !checkLinkUp() ) {
+        std::cerr << "[ERROR] Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl;
+        exit(-2);
+    }
+
     config_t config = {.dev_name = "",
                        .server_name = "",
                        .tcp_port = 20000,
