@@ -19,8 +19,8 @@ struct cm_con_data_t {
     uint64_t send_buf;
     uint32_t send_rkey;
     uint32_t receive_num;
-    uint64_t *receive_buf;   // buffer address
-    uint32_t *receive_rkey;  // remote key
+    uint64_t receive_buf[7] {0,0,0,0,0,0,0};   // buffer address
+    uint32_t receive_rkey[7] {0,0,0,0,0,0,0};  // remote key
     buffer_config_t buffer_config;
     uint32_t qp_num;  // QP number
     uint16_t lid;     // LID of the IB port
@@ -37,6 +37,8 @@ class Buffer {
     std::size_t bufferSize;
     std::size_t getBufferSize();
 
+    char *bufferPtr();
+
     void clearCode();
     void clearBuffer();
 
@@ -50,16 +52,16 @@ class SendBuffer : public Buffer {
    public:
     explicit SendBuffer(std::size_t _bufferSize);
 
-    void setSendData(std::string s);
-    void setSendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize);
-    void setCommitCode(rdma_handler_communication opcode);
+    void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
+    void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    int post_send(int len, ibv_wr_opcode opcode, char *receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    //  void setCommitCode(rdma_handler_communication opcode);
 
-    void setPackageHeader(package_t *p);
-    void sendPackage(package_t *p, rdma_handler_communication opcode);
+    //  void setPackageHeader(package_t *p);
+    //  void sendPackage(package_t *p, rdma_handler_communication opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
 
-    std::size_t getMaxWriteSize();
-
-    int post_send(int len, ibv_wr_opcode opcode, size_t offset = 0);
+    //  std::size_t getMaxWriteSize();
 
     void print() const;
 
@@ -71,6 +73,8 @@ class ReceiveBuffer : public Buffer {
     explicit ReceiveBuffer(std::size_t _bufferSize);
 
     void consumeData();
+
+    std::size_t getMaxPayloadSize();
 
     int modify_qp_to_init(struct config_t &config, struct ibv_qp *qp);
     int modify_qp_to_rtr(struct config_t &config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);

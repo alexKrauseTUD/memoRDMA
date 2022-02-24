@@ -30,3 +30,11 @@ int Buffer::resources_destroy() {
 std::size_t Buffer::getBufferSize() {
     return bufferSize;
 }
+
+char* Buffer::bufferPtr() {
+    return buf;
+}
+
+void Buffer::clearBuffer() {
+    memset(buf, 0, bufferSize);
+}

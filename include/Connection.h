@@ -26,8 +26,15 @@ struct resources {
     std::vector<struct ibv_mr *> own_mr;     // MR handle for buf
     std::vector<struct ibv_mr *> remote_mr;  // MR handle for buf
     std::vector<char *> own_buffer;          // memory buffer pointer, used for RDMA send ops
-    std::vector<char *> remote_buffer;       // memory buffer pointer, used for RDMA send ops
+    std::vector<uint64_t> remote_buffer;       // memory buffer pointer, used for RDMA send ops
+    std::vector<uint32_t> remote_rkeys;
     int sock;                                // TCP socket file descriptor
+};
+
+struct receive_data {
+    bool done;
+    uint64_t* localPtr;
+    data_types dt;
 };
 
 class Connection {
@@ -39,11 +46,15 @@ class Connection {
     buffer_config_t bufferConfig;
     struct resources res;
 
+    bool busy;
+
     SendBuffer *ownSendBuffer = NULL;
     SendBuffer *remoteSendBuffer = NULL;
 
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
     std::vector<ReceiveBuffer *> remoteReceiveBuffer;
+
+    std::map<uint64_t, receive_data> receiveMap;
 
     std::array<uint16_t, 16> metaInfo;
     struct ibv_mr *metaInfoMR;
@@ -58,14 +69,17 @@ class Connection {
     void createResources();
     struct ibv_context *createContext();
     struct ibv_qp *createQueuePair(struct ibv_pd *pd, struct ibv_cq *cq);
-    bool changeQueuePairStateToInit(struct ibv_qp *queue_pair);
-    bool changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
+    int changeQueuePairStateToInit(struct ibv_qp *queue_pair);
+    int changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
     void connectQpTCP();
     int poll_completion();
 
     bool sendData(std::string &data);
+    bool sendData(package_t* p);
     bool closeConnection();
+
+    void receiveDataFromRemote(size_t index);
 
     bool addReceiveBuffer(unsigned int quantity);
     bool removeReceiveBuffer(unsigned int quantity);
@@ -74,8 +88,19 @@ class Connection {
 
     bool pendingBufferCreation();
 
+    int getNextFreeReceive();
+    uint32_t getOwnSendToRemoteReceiveRatio();
+    void setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote);
+    uint64_t generatePackageID();
+
    private:
     bool globalAbort;
+
+    std::function< void (bool*) > check_receive;
+    std::function< void (bool*) > check_regions;
+
+    std::thread* readWorker;
+    std::thread* creationWorker;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

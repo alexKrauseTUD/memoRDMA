@@ -149,7 +149,7 @@ static int sock_connect(std::string server_name, int port) {
     return sockfd;
 }
 
-static bool is_port_free(int port, char *host = "localhost") {
+static bool is_port_free(int port, const char *host = "localhost") {
     int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;

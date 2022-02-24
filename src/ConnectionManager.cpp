@@ -63,7 +63,7 @@ bool ConnectionManager::closeAllConnections() {
 
 // TODO: How about a pointer to the data;; Generic datatype?
 bool ConnectionManager::sendData(std::string connectionName, std::string &data) {
-    if (connections.contains(connectionName)) {
+    if (!connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct name!" << std::endl;
     } else {
         return connections[connectionName]->sendData(data);

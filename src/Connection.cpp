@@ -1,5 +1,10 @@
 #include "Connection.h"
 
+#include <stdlib.h>
+
+#include <cmath>
+#include <cstring>
+
 #include "util.h"
 
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : globalAbort(false) {
@@ -13,16 +18,77 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
 
     sock_close(res.sock);
 
-    std::cout << "Evertything seems to work up to this point!" << std::endl;
+    setOpcode(0, rdma_data_ready, true);
+    for (size_t rbi = 0; rbi < ownReceiveBuffer.size(); ++rbi) {
+        setOpcode(rbi, rdma_data_ready, true);
+    }
+
+    check_receive = [this](bool *abort) -> void {
+        using namespace std::chrono_literals;
+        std::ios_base::fmtflags f(std::cout.flags());
+        std::cout << "Starting monitoring thread for connection!" << std::endl;
+        size_t metaSize = std::size(metaInfo);
+
+        while (!*abort) {
+            std::this_thread::sleep_for(10ms);
+            for (size_t i = 1; i < metaSize / 2; ++i) {
+                switch (metaInfo[i]) {
+                    case rdma_create_region: {
+                        // createRdmaRegion(config, communicationRegion);
+                    }; break;
+                    case rdma_delete_region: {
+                        // deleteRdmaRegion(communicationRegion);
+                        // return;
+                    }; break;
+                    case rdma_data_ready: {
+                        // readCommittedData(communicationRegion);
+                    }; break;
+                    case rdma_data_fetch: {
+                        // sendDataToRemote(communicationRegion);
+                    } break;
+                    case rdma_data_finished: {
+                        receiveDataFromRemote(i - 1);
+                    }; break;
+                    case rdma_data_receive: {
+                        // receiveDataFromRemote(communicationRegion, false);
+                    } break;
+                    case rdma_tput_test: {
+                        // throughputTest(communicationRegion);
+                    } break;
+                    case rdma_consume_test: {
+                        // consumingTest(communicationRegion);
+                    } break;
+                    case rdma_mt_tput_test: {
+                        // mt_throughputTest(communicationRegion);
+                    } break;
+                    case rdma_mt_consume_test: {
+                        // mt_consumingTest(communicationRegion);
+                    } break;
+                    case rdma_shutdown: {
+                        closeConnection();
+                    }; break;
+                    default: {
+                        continue;
+                    }; break;
+                }
+                std::cout.flags(f);
+            }
+        }
+        std::cout << "[check_receive] Ending through global abort." << std::endl;
+    };
+
+    readWorker = new std::thread(check_receive, &globalAbort);
 }
 
 void Connection::setupSendBuffer() {
     ownSendBuffer = new SendBuffer(bufferConfig.size_own_send);
+    metaInfo[0] = rdma_ready;
 }
 
 void Connection::setupReceiveBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
         ownReceiveBuffer.push_back(new ReceiveBuffer(bufferConfig.size_own_receive));
+        metaInfo[i + 1] = rdma_ready;
     }
 }
 
@@ -73,10 +139,9 @@ void Connection::exchangeBufferInfo() {
 
     memset(&my_gid, 0, sizeof(my_gid));
 
-    // if (config.gid_idx >= 0) {
-    //     CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx,
-    //                         &my_gid));
-    // }
+    if (config.gid_idx >= 0) {
+        CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
+    }
 
     std::vector<uint64_t> receive_buf;
     std::vector<uint32_t> receive_rkey;
@@ -92,8 +157,14 @@ void Connection::exchangeBufferInfo() {
         receive_buf.push_back(htonll((uintptr_t)rb->buf));
         receive_rkey.push_back(htonl(rb->mr->rkey));
     }
-    local_con_data.receive_buf = receive_buf.data();
-    local_con_data.receive_rkey = receive_rkey.data();
+    auto pos = 0;
+    for (auto &ptr : receive_buf) {
+        local_con_data.receive_buf[pos++] = ptr;
+    }
+    pos = 0;
+    for (auto &ptr : receive_rkey) {
+        local_con_data.receive_rkey[pos++] = ptr;
+    }
     local_con_data.qp_num = htonl(res.qp->qp_num);
     local_con_data.lid = htons(res.port_attr.lid);
     local_con_data.buffer_config = bufferConfig;
@@ -110,8 +181,8 @@ void Connection::exchangeBufferInfo() {
     remote_con_data.send_buf = ntohll(tmp_con_data.send_buf);
     remote_con_data.send_rkey = ntohl(tmp_con_data.send_rkey);
     remote_con_data.receive_num = tmp_con_data.receive_num;
-    remote_con_data.receive_buf = tmp_con_data.receive_buf;
-    remote_con_data.receive_rkey = tmp_con_data.receive_rkey;
+    // remote_con_data.receive_buf = tmp_con_data.receive_buf;
+    // remote_con_data.receive_rkey = tmp_con_data.receive_rkey;
     remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
     remote_con_data.lid = ntohs(tmp_con_data.lid);
     remote_con_data.buffer_config = tmp_con_data.buffer_config;
@@ -119,6 +190,17 @@ void Connection::exchangeBufferInfo() {
 
     // save the remote side attributes, we will need it for the post SR
     res.remote_props = remote_con_data;
+
+    std::vector<uint64_t> temp_buf(tmp_con_data.receive_buf, tmp_con_data.receive_buf + remote_con_data.receive_num);
+    std::vector<uint32_t> temp_rkey(tmp_con_data.receive_rkey, tmp_con_data.receive_rkey + remote_con_data.receive_num);
+
+    res.remote_buffer = temp_buf;
+    res.remote_rkeys = temp_rkey;
+
+    /* Change the queue pair state */
+    CHECK(changeQueuePairStateToInit(res.qp));
+    CHECK(changeQueuePairStateToRTR(res.qp, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid));
+    CHECK(changeQueuePairStateToRTS(res.qp));
 }
 
 void Connection::createResources() {
@@ -127,7 +209,7 @@ void Connection::createResources() {
     struct ibv_context *context = createContext();
 
     // query port properties
-    // CHECK(ibv_query_port(res.ib_ctx, config.ib_port, &res.port_attr));
+    CHECK(ibv_query_port(context, config.ib_port, &res.port_attr));
 
     /* Create a protection domain */
     struct ibv_pd *protection_domain = ibv_alloc_pd(context);
@@ -152,11 +234,6 @@ void Connection::createResources() {
 
     /* Create a queue pair */
     struct ibv_qp *queue_pair = createQueuePair(protection_domain, completion_queue);
-
-    /* Exchange identifier information to establish connection and change the queue pair state */
-    changeQueuePairStateToInit(queue_pair);
-    // changeQueuePairStateToRTR(queue_pair, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid);
-    // changeQueuePairStateToRTS(queue_pair);
 
     res.pd = protection_domain;
     res.cq = completion_queue;
@@ -202,7 +279,7 @@ struct ibv_qp *Connection::createQueuePair(struct ibv_pd *pd, struct ibv_cq *cq)
     return ibv_create_qp(pd, &queue_pair_init_attr);
 }
 
-bool Connection::changeQueuePairStateToInit(struct ibv_qp *queue_pair) {
+int Connection::changeQueuePairStateToInit(struct ibv_qp *queue_pair) {
     struct ibv_qp_attr init_attr;
     int flags;
 
@@ -216,10 +293,10 @@ bool Connection::changeQueuePairStateToInit(struct ibv_qp *queue_pair) {
 
     flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
 
-    return ibv_modify_qp(queue_pair, &init_attr, flags) == 0 ? true : false;
+    return ibv_modify_qp(queue_pair, &init_attr, flags);
 }
 
-bool Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id) {
+int Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id) {
     struct ibv_qp_attr rtr_attr;
     int flags;
 
@@ -250,7 +327,7 @@ bool Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t d
     flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
             IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
 
-    return ibv_modify_qp(queue_pair, &rtr_attr, flags) == 0 ? true : false;
+    return ibv_modify_qp(queue_pair, &rtr_attr, flags);
 }
 
 // Transition a QP from the RTR to RTS state
@@ -270,7 +347,7 @@ int Connection::changeQueuePairStateToRTS(struct ibv_qp *qp) {
     flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
             IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
 
-    return ibv_modify_qp(qp, &attr, flags) == 0 ? true : false;
+    return ibv_modify_qp(qp, &attr, flags);
 }
 
 // Poll the CQ for a single event. This function will continue to poll the queue
@@ -317,8 +394,161 @@ die:
 }
 
 bool Connection::sendData(std::string &data) {
-    std::cout << "This function sends data over a connection but isn't implemented yet. Sorry!" << std::endl;
+    if (metaInfo[0] == rdma_no_op) {
+        std::cout << "There is no buffer for sending initialized!" << std::endl;
+        return false;
+    }
+
+    busy = true;
+
+    while (metaInfo[0] != rdma_ready) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(100ns);
+        continue;
+    }
+
+    uint64_t packageID = generatePackageID();
+
+    setOpcode(0, rdma_sending, false);
+
+    const char *dataCString = data.c_str();
+
+    size_t dataSize = std::strlen(dataCString);
+    uint32_t ownSendToRemoteReceiveRatio = getOwnSendToRemoteReceiveRatio();
+    size_t sendPackages = std::ceil(dataSize / (ownSendBuffer->getBufferSize() - (META_INFORMATION_SIZE * ownSendToRemoteReceiveRatio)));
+    size_t alreadySentSize = 0;
+    int currentSize = bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
+    uint8_t nextFree;
+
+    for (size_t i = 0; i < sendPackages; ++i) {
+        ownSendBuffer->clearBuffer();
+        for (size_t k = 0; k < ownSendToRemoteReceiveRatio; ++k) {
+            int c = 0;
+            nextFree = getNextFreeReceive();
+
+            while (nextFree == -1) {
+                ++c;
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(100ns);
+                nextFree = getNextFreeReceive();
+                if (c >= 100) {
+                    std::cout << "There was no free remote receive buffer found for a longer period!" << std::endl;
+                    busy = false;
+                    return false;
+                }
+
+                continue;
+            }
+
+            setOpcode(std::size(metaInfo) + 1 + nextFree, rdma_data_receive, false);
+
+            if (dataSize < alreadySentSize + currentSize) currentSize = dataSize - alreadySentSize;
+            ownSendBuffer->loadData(dataCString + alreadySentSize, ownSendBuffer->buf + k * bufferConfig.size_remote_receive, dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
+            ownSendBuffer->post_send(currentSize + META_INFORMATION_SIZE, IBV_WR_RDMA_WRITE, (char *)res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp);
+
+            poll_completion();
+
+            alreadySentSize += currentSize;
+            setOpcode(std::size(metaInfo) + 1 + nextFree, rdma_data_finished, true);
+        }
+    }
+
+    setOpcode(0, rdma_ready, true);
+
+    busy = false;
     return true;
+}
+
+uint64_t Connection::generatePackageID() {
+    return std::rand();
+}
+
+int Connection::getNextFreeReceive() {
+    size_t metaSize = std::size(metaInfo);
+    for (size_t i = (metaSize / 2) + 1; i < metaSize; ++i) {
+        if (metaInfo[i] == rdma_ready) return i - (metaSize / 2) - 1;
+    }
+
+    return -1;
+}
+
+uint32_t Connection::getOwnSendToRemoteReceiveRatio() {
+    return std::floor(ownSendBuffer->getBufferSize() / bufferConfig.size_remote_receive);
+}
+
+void Connection::setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote) {
+    metaInfo[index] = opcode;
+
+    if (sendToRemote) {
+        size_t remoteIndex = ((index + std::size(metaInfo)) / 2) % std::size(metaInfo);
+
+        struct ibv_send_wr sr;
+        struct ibv_sge sge;
+        struct ibv_send_wr *bad_wr = NULL;
+
+        size_t entrySize = sizeof metaInfo[0];
+
+        // prepare the scatter / gather entry
+        memset(&sge, 0, sizeof(sge));
+
+        sge.addr = (uintptr_t)(&(metaInfo[index]));
+        sge.length = entrySize;
+        sge.lkey = metaInfoMR->lkey;
+
+        // prepare the send work request
+        memset(&sr, 0, sizeof(sr));
+
+        sr.next = NULL;
+        sr.wr_id = 0;
+        sr.sg_list = &sge;
+
+        sr.num_sge = 1;
+        sr.opcode = IBV_WR_RDMA_WRITE;
+        sr.send_flags = IBV_SEND_SIGNALED;
+
+        sr.wr.rdma.remote_addr = res.remote_props.meta_buf + entrySize * remoteIndex;
+        sr.wr.rdma.rkey = res.remote_props.meta_rkey;
+
+        ibv_post_send(res.qp, &sr, &bad_wr);
+
+        poll_completion();
+    }
+}
+
+void Connection::receiveDataFromRemote(size_t index) {
+    setOpcode(index + 1, rdma_data_consuming, false);
+
+    char *ptr = ownReceiveBuffer[index]->buf;
+    size_t bufferPayloadSize = ownReceiveBuffer[index]->getMaxPayloadSize();
+    uint64_t dataId = (uint64_t)ptr;
+    uint64_t dataSize = (uint64_t)(ptr + 32);
+
+    if (!receiveMap.contains(dataId)) {
+        uint64_t *localPtr = (uint64_t *)malloc(dataSize);
+        receive_data rd = {.localPtr = localPtr};
+
+        receiveMap.insert(std::make_pair(dataId, rd));
+        receiveMap[dataId].dt = (data_types)(uint64_t)(ptr + 24);
+    }
+
+    uint64_t currentPackageSize = (uint64_t)(ptr + 8);
+    uint64_t currentPackageNumber = (uint64_t)(ptr + 16);
+
+    if (currentPackageSize == dataSize) {
+        memcpy(receiveMap[dataId].localPtr, ptr + META_INFORMATION_SIZE, currentPackageSize);
+        receiveMap[dataId].done = true;
+
+        std::cout << receiveMap[dataId].localPtr << std::endl;
+    } else {
+        memcpy(receiveMap[dataId].localPtr + currentPackageNumber * bufferPayloadSize, ptr + META_INFORMATION_SIZE, currentPackageSize);
+    }
+
+    // TODO: find suitable solution to check whether all packages have arived
+    if (currentPackageNumber * bufferPayloadSize + currentPackageSize == dataSize) {
+        receiveMap[dataId].done = true;
+    }
+
+    setOpcode(index + 1, rdma_data_ready, true);
 }
 
 bool Connection::closeConnection() {
@@ -336,12 +566,12 @@ bool Connection::removeReceiveBuffer(unsigned int quantity = 1) {
     return true;
 }
 
-bool Connection::resizeReceiveBuffer(std::size_t newSize) {
+bool Connection::resizeReceiveBuffer(size_t newSize) {
     std::cout << "This function resizes all receive buffer of this connection but isn't implemented yet. Sorry!" << std::endl;
     return true;
 }
 
-bool Connection::resizeSendBuffer(std::size_t newSize) {
+bool Connection::resizeSendBuffer(size_t newSize) {
     std::cout << "This function resizes the send buffer of this connection but isn't implemented yet. Sorry!" << std::endl;
     return true;
 }
@@ -356,5 +586,5 @@ bool Connection::pendingBufferCreation() {
 
 Connection::~Connection() {
     // stop();
-    // closeAllConnections();
+    // closeConnection();
 }
