@@ -11,7 +11,7 @@ SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
 }
 
 // This function will create and post a send work request.
-int SendBuffer::post_send(int len, ibv_wr_opcode opcode, char* receivePtr, uint32_t receiveRkey, ibv_qp* qp) {
+int SendBuffer::post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr* bad_wr = NULL;
@@ -35,7 +35,7 @@ int SendBuffer::post_send(int len, ibv_wr_opcode opcode, char* receivePtr, uint3
     sr.send_flags = IBV_SEND_SIGNALED;
 
     if (opcode != IBV_WR_SEND) {
-        sr.wr.rdma.remote_addr = (uintptr_t)receivePtr;
+        sr.wr.rdma.remote_addr = receivePtr;
         sr.wr.rdma.rkey = receiveRkey;
     }
 

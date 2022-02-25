@@ -55,7 +55,7 @@ class SendBuffer : public Buffer {
     void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
     void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
-    int post_send(int len, ibv_wr_opcode opcode, char *receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     //  void setCommitCode(rdma_handler_communication opcode);
 
     //  void setPackageHeader(package_t *p);

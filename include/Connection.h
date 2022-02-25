@@ -35,6 +35,7 @@ struct receive_data {
     bool done;
     uint64_t* localPtr;
     data_types dt;
+    uint64_t size;
 };
 
 class Connection {

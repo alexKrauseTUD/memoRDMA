@@ -18,9 +18,9 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
 
     sock_close(res.sock);
 
-    setOpcode(0, rdma_data_ready, true);
-    for (size_t rbi = 0; rbi < ownReceiveBuffer.size(); ++rbi) {
-        setOpcode(rbi, rdma_data_ready, true);
+    setOpcode(0, rdma_ready, true);
+    for (size_t rbi = 1; rbi <= ownReceiveBuffer.size(); ++rbi) {
+        setOpcode(rbi, rdma_ready, true);
     }
 
     check_receive = [this](bool *abort) -> void {
@@ -40,7 +40,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
                         // deleteRdmaRegion(communicationRegion);
                         // return;
                     }; break;
-                    case rdma_data_ready: {
+                    case rdma_ready: {
                         // readCommittedData(communicationRegion);
                     }; break;
                     case rdma_data_fetch: {
@@ -125,6 +125,7 @@ void Connection::exchangeBufferInfo() {
     char temp_char;
 
     if (config.client_mode) {
+        // Client waits on Server-Information as it is needed to create the buffers
         receive_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data);
 
         bufferConfig = invertBufferConfig(tmp_con_data.buffer_config);
@@ -143,14 +144,14 @@ void Connection::exchangeBufferInfo() {
         CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
     }
 
-    std::vector<uint64_t> receive_buf;
+    std::vector<uintptr_t> receive_buf;
     std::vector<uint32_t> receive_rkey;
 
     // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
     // etc. exchange using TCP sockets info required to connect QPs
     local_con_data.meta_buf = htonll((uintptr_t)&metaInfo);
     local_con_data.meta_rkey = htonl(metaInfoMR->rkey);
-    local_con_data.send_buf = htonll((uintptr_t)&ownSendBuffer->buf);
+    local_con_data.send_buf = htonll((uintptr_t)ownSendBuffer->buf);
     local_con_data.send_rkey = htonl(ownSendBuffer->mr->rkey);
     local_con_data.receive_num = ownReceiveBuffer.size();
     for (const auto &rb : ownReceiveBuffer) {
@@ -171,8 +172,10 @@ void Connection::exchangeBufferInfo() {
     memcpy(local_con_data.gid, &my_gid, 16);
 
     if (!config.client_mode) {
+        // Server sends information to Client and waits on Client-Information
         sock_sync_data(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
     } else {
+        // Client responds to server with own information
         send_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data);
     }
 
@@ -193,6 +196,11 @@ void Connection::exchangeBufferInfo() {
 
     std::vector<uint64_t> temp_buf(tmp_con_data.receive_buf, tmp_con_data.receive_buf + remote_con_data.receive_num);
     std::vector<uint32_t> temp_rkey(tmp_con_data.receive_rkey, tmp_con_data.receive_rkey + remote_con_data.receive_num);
+
+    for (size_t i = 0; i < temp_buf.size(); ++i) {
+        temp_buf[i] = ntohll(temp_buf[i]);
+        temp_rkey[i] = ntohl(temp_rkey[i]);
+    }
 
     res.remote_buffer = temp_buf;
     res.remote_rkeys = temp_rkey;
@@ -416,8 +424,9 @@ bool Connection::sendData(std::string &data) {
     size_t dataSize = std::strlen(dataCString);
     uint32_t ownSendToRemoteReceiveRatio = getOwnSendToRemoteReceiveRatio();
     size_t sendPackages = std::ceil(dataSize / (ownSendBuffer->getBufferSize() - (META_INFORMATION_SIZE * ownSendToRemoteReceiveRatio)));
+    sendPackages = sendPackages > 0 ? sendPackages : 1;
     size_t alreadySentSize = 0;
-    int currentSize = bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
+    uint64_t currentSize = 0;
     uint8_t nextFree;
 
     for (size_t i = 0; i < sendPackages; ++i) {
@@ -440,16 +449,19 @@ bool Connection::sendData(std::string &data) {
                 continue;
             }
 
-            setOpcode(std::size(metaInfo) + 1 + nextFree, rdma_data_receive, false);
+            setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_data_receive, false);
 
-            if (dataSize < alreadySentSize + currentSize) currentSize = dataSize - alreadySentSize;
+            currentSize = dataSize - alreadySentSize <= bufferConfig.size_remote_receive - META_INFORMATION_SIZE ? dataSize - alreadySentSize : bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
             ownSendBuffer->loadData(dataCString + alreadySentSize, ownSendBuffer->buf + k * bufferConfig.size_remote_receive, dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
-            ownSendBuffer->post_send(currentSize + META_INFORMATION_SIZE, IBV_WR_RDMA_WRITE, (char *)res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp);
+            ownSendBuffer->post_send(currentSize + META_INFORMATION_SIZE, IBV_WR_RDMA_WRITE, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp);
 
             poll_completion();
 
             alreadySentSize += currentSize;
-            setOpcode(std::size(metaInfo) + 1 + nextFree, rdma_data_finished, true);
+
+            setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_data_finished, true);
+
+            if (alreadySentSize == dataSize) break;
         }
     }
 
@@ -480,13 +492,13 @@ void Connection::setOpcode(size_t index, rdma_handler_communication opcode, bool
     metaInfo[index] = opcode;
 
     if (sendToRemote) {
-        size_t remoteIndex = ((index + std::size(metaInfo)) / 2) % std::size(metaInfo);
+        size_t remoteIndex = (index + (std::size(metaInfo) / 2)) % std::size(metaInfo);
 
         struct ibv_send_wr sr;
         struct ibv_sge sge;
         struct ibv_send_wr *bad_wr = NULL;
 
-        size_t entrySize = sizeof metaInfo[0];
+        size_t entrySize = sizeof(metaInfo[0]);
 
         // prepare the scatter / gather entry
         memset(&sge, 0, sizeof(sge));
@@ -518,27 +530,26 @@ void Connection::setOpcode(size_t index, rdma_handler_communication opcode, bool
 void Connection::receiveDataFromRemote(size_t index) {
     setOpcode(index + 1, rdma_data_consuming, false);
 
-    char *ptr = ownReceiveBuffer[index]->buf;
+    void *ptr = ownReceiveBuffer[index]->buf;
     size_t bufferPayloadSize = ownReceiveBuffer[index]->getMaxPayloadSize();
-    uint64_t dataId = (uint64_t)ptr;
-    uint64_t dataSize = (uint64_t)(ptr + 32);
+    uint64_t dataId = *((uint64_t *)ptr);
+    uint64_t dataSize = *((uint64_t *)(ptr + 32));
 
     if (!receiveMap.contains(dataId)) {
         uint64_t *localPtr = (uint64_t *)malloc(dataSize);
-        receive_data rd = {.localPtr = localPtr};
+        receive_data rd = {.localPtr = localPtr,
+                           .size = dataSize};
 
         receiveMap.insert(std::make_pair(dataId, rd));
-        receiveMap[dataId].dt = (data_types)(uint64_t)(ptr + 24);
+        receiveMap[dataId].dt = (data_types)(*(uint64_t *)(ptr + 24));
     }
 
-    uint64_t currentPackageSize = (uint64_t)(ptr + 8);
-    uint64_t currentPackageNumber = (uint64_t)(ptr + 16);
+    uint64_t currentPackageSize = *((uint64_t *)(ptr + 8));
+    uint64_t currentPackageNumber = *((uint64_t *)(ptr + 16));
 
     if (currentPackageSize == dataSize) {
         memcpy(receiveMap[dataId].localPtr, ptr + META_INFORMATION_SIZE, currentPackageSize);
         receiveMap[dataId].done = true;
-
-        std::cout << receiveMap[dataId].localPtr << std::endl;
     } else {
         memcpy(receiveMap[dataId].localPtr + currentPackageNumber * bufferPayloadSize, ptr + META_INFORMATION_SIZE, currentPackageSize);
     }
@@ -548,7 +559,7 @@ void Connection::receiveDataFromRemote(size_t index) {
         receiveMap[dataId].done = true;
     }
 
-    setOpcode(index + 1, rdma_data_ready, true);
+    setOpcode(index + 1, rdma_ready, true);
 }
 
 bool Connection::closeConnection() {
