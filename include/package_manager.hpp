@@ -18,11 +18,11 @@ class package_t {
     using payload_t = void;
 
     struct __attribute__((packed)) header_t {
-        payload_size_t total_data_size;       // this encodes the to-be-expected size of the total data received (in multiple packages).
-        payload_size_t current_payload_size;  // this encodes the size of the current payload in bytes.
         payload_size_t id;
+        payload_size_t current_payload_size;  // this encodes the size of the current payload in bytes.
         payload_size_t package_number;
         payload_size_t data_type;
+        payload_size_t total_data_size;       // this encodes the to-be-expected size of the total data received (in multiple packages).
 
         header_t() : id{0},
                      current_payload_size{0},
@@ -73,6 +73,10 @@ class package_t {
 
     void setCurrentPackageSize(const std::size_t bytes) {
         header.current_payload_size = bytes;
+    }
+
+    void setCurrentPackageNumber(const std::size_t num) {
+        header.package_number = num;
     }
 
     void advancePayloadPtr(const std::size_t bytes) {

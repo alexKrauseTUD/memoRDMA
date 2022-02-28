@@ -35,6 +35,7 @@ struct receive_data {
     uint64_t* localPtr;
     data_types dt;
     uint64_t size;
+    std::chrono::_V2::system_clock::time_point endTime;
 };
 
 class Connection {
@@ -56,7 +57,7 @@ class Connection {
 
     std::map<uint64_t, receive_data> receiveMap;
 
-    std::array<uint16_t, 16> metaInfo;
+    std::array<uint16_t, 16> metaInfo{0};
     struct ibv_mr *metaInfoMR;
 
     void setupSendBuffer();
@@ -75,34 +76,38 @@ class Connection {
     void connectQpTCP();
     int poll_completion();
 
-    bool sendData(std::string &data);
-    bool sendData(package_t* p);
-    bool closeConnection(bool send_remote = true);
+    int sendData(std::string &data);
+    int sendData(package_t* p);
+    int closeConnection(bool send_remote = true);
 
     void receiveDataFromRemote(size_t index);
+    void consume(size_t index);
 
-    bool addReceiveBuffer(unsigned int quantity);
-    bool removeReceiveBuffer(unsigned int quantity);
-    bool resizeReceiveBuffer(std::size_t newSize);
-    bool resizeSendBuffer(std::size_t newSize);
+    int addReceiveBuffer(unsigned int quantity);
+    int removeReceiveBuffer(unsigned int quantity);
+    int resizeReceiveBuffer(std::size_t newSize);
+    int resizeSendBuffer(std::size_t newSize);
 
-    bool pendingBufferCreation();
+    int pendingBufferCreation();
 
     int getNextFreeReceive();
     uint32_t getOwnSendToRemoteReceiveRatio();
     void setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
-    bool throughputTest(std::string logName);
+    int throughputTest(std::string logName);
+    int consumingTest( std::string logName);
 
    private:
     bool globalAbort;
 
     std::function< void (bool*) > check_receive;
     std::function< void (bool*) > check_regions;
+    std::function< void (bool*) > check_receive_done;
 
     std::thread* readWorker;
     std::thread* creationWorker;
+    std::thread* receiveDoneWorker;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

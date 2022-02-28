@@ -381,7 +381,7 @@ void TaskManager::setup() {
                            .ib_port = 1,
                            .gid_idx = 0};
 
-        for (size_t num_rb = 2; num_rb < 5; ++num_rb) {
+        for (size_t num_rb = 1; num_rb < 5; ++num_rb) {
             auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::stringstream logNameStream;
             logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ss_tput.log";
@@ -389,25 +389,60 @@ void TaskManager::setup() {
             std::cout << "[Task] Set name: " << logName << std::endl;
 
             for (std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1) {
-                buffer_config_t bufferConfig = {.num_own_receive = 0,
-                                                .size_own_receive = 0,
+                buffer_config_t bufferConfig = {.num_own_receive = 1,
+                                                .size_own_receive = 640,
                                                 .num_remote_receive = num_rb,
                                                 .size_remote_receive = bytes,
                                                 .size_own_send = bytes * num_rb,
-                                                .size_remote_send = 0};
+                                                .size_remote_send = 640};
 
                 CHECK(ConnectionManager::getInstance().openConnection("ss_tput", config, bufferConfig));
 
                 std::cout << "[main] Opened connection with id 'ss_tput' and size for one receive: " << GetBytesReadable(bytes) << std::endl;
-                std::cout << std::endl
-                          << "Single-sided throughput test." << std::endl;
+                std::cout << std::endl << "Single-sided throughput test." << std::endl;
 
                 CHECK(ConnectionManager::getInstance().throughputTest("ss_tput", logName));
 
-                std::cout << std::endl
-                          << "Single-sided throughput test ended." << std::endl;
+                std::cout << std::endl << "Single-sided throughput test ended." << std::endl;
 
                 CHECK(ConnectionManager::getInstance().closeConnection("ss_tput"));
+            }
+        }
+    }));
+
+    registerTask(new Task("ds_tput", "Double-sided throughput test", []() -> void {
+        config_t config = {.dev_name = "mlx5_0",
+                           .server_name = "141.76.47.9",
+                           .tcp_port = 20000,
+                           .client_mode = false,
+                           .ib_port = 1,
+                           .gid_idx = 0};
+
+        for (size_t num_rb = 1; num_rb < 5; ++num_rb) {
+            auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::stringstream logNameStream;
+            logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "ds_tput.log";
+            std::string logName = logNameStream.str();
+            std::cout << "[Task] Set name: " << logName << std::endl;
+
+            for (std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1) {
+                buffer_config_t bufferConfig = {.num_own_receive = 1,
+                                                .size_own_receive = 640,
+                                                .num_remote_receive = num_rb,
+                                                .size_remote_receive = bytes,
+                                                .size_own_send = bytes * num_rb,
+                                                .size_remote_send = 640};
+
+                CHECK(ConnectionManager::getInstance().openConnection("ds_tput", config, bufferConfig));
+
+                std::cout << "[main] Opened connection with id 'ds_tput' and size for one receive: " << GetBytesReadable(bytes) << std::endl;
+                std::cout << std::endl << "Double-sided throughput test." << std::endl;
+
+                CHECK(ConnectionManager::getInstance().consumingTest("ds_tput", logName));
+
+                std::cout << std::endl << "Double-sided throughput test ended." << std::endl;
+
+                CHECK(ConnectionManager::getInstance().closeConnection("ds_tput"));
             }
         }
     }));

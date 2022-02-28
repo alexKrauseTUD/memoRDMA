@@ -126,7 +126,7 @@ static int sock_connect(std::string client_name, int port) {
         int err;
         for (int k = 0; k < 20; ++k) {
             // resolve DNS address, user sockfd as temp storage
-            sprintf(service, "%d", port);
+            sprintf(service, "%d", port + k);
 
             CHECK(getaddrinfo(NULL, service, &hints, &resolved_addr));
 
@@ -136,12 +136,14 @@ static int sock_connect(std::string client_name, int port) {
 
                 // Client mode: setup listening socket and accept a connection
                 listenfd = sockfd;
-                CHECK(bind(listenfd, iterator->ai_addr, iterator->ai_addrlen));
-                err = listen(listenfd, 1);
+                err = bind(listenfd, iterator->ai_addr, iterator->ai_addrlen);
                 if (err == 0) {
-                    INFO("Waiting on port %d for TCP connection\n", port + k);
+                    err = listen(listenfd, 1);
+                    if (err == 0) {
+                        INFO("Waiting on port %d for TCP connection\n", port + k);
+                        sockfd = accept(listenfd, NULL, 0);
+                    }
                 }
-                sockfd = accept(listenfd, NULL, 0);
             }
 
             if (err == 0) {

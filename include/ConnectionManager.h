@@ -16,23 +16,24 @@ class ConnectionManager {
     ConnectionManager(ConnectionManager const &) = delete;
     void operator=(ConnectionManager const &) = delete;
 
-    bool openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig);
+    int openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig);
     void printConnections();
-    bool closeConnection(std::string connectionName);
-    bool closeAllConnections();
-    bool sendData(std::string connectionName, std::string &data);
-    bool sendDataToAllConnections(std::string &data);
-    bool addReceiveBuffer(std::string connectionName, uint8_t quantity);
-    bool removeReceiveBuffer(std::string connectionName, uint8_t quantity);
-    bool resizeReceiveBuffer(std::string connectionName, std::size_t newSize);
-    bool resizeSendBuffer(std::string connectionName, std::size_t newSize);
-    bool receiveConnection(std::string connectionName, config_t &config);
+    int closeConnection(std::string connectionName);
+    int closeAllConnections();
+    int sendData(std::string connectionName, std::string &data);
+    int sendDataToAllConnections(std::string &data);
+    int addReceiveBuffer(std::string connectionName, uint8_t quantity);
+    int removeReceiveBuffer(std::string connectionName, uint8_t quantity);
+    int resizeReceiveBuffer(std::string connectionName, std::size_t newSize);
+    int resizeSendBuffer(std::string connectionName, std::size_t newSize);
+    int receiveConnection(std::string connectionName, config_t &config);
 
-    bool throughputTest(std::string connectionName, std::string logName);
+    int throughputTest(std::string connectionName, std::string logName);
+    int consumingTest(std::string connectionName, std::string logName);
 
     std::map<std::string, Connection*> connections;
 
-    bool pendingBufferCreation(std::string connectionName);
+    int pendingBufferCreation(std::string connectionName);
 
     void stop();
     bool abortSignaled() const;
