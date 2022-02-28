@@ -14,20 +14,32 @@
 
 class package_t {
    public:
-    using payload_size_t = std::size_t;
+    using payload_size_t = uint64_t;
     using payload_t = void;
 
     struct __attribute__((packed)) header_t {
         payload_size_t total_data_size;       // this encodes the to-be-expected size of the total data received (in multiple packages).
         payload_size_t current_payload_size;  // this encodes the size of the current payload in bytes.
+        payload_size_t id;
+        payload_size_t package_number;
+        payload_size_t data_type;
 
-        header_t() : total_data_size{0},
-                     current_payload_size{0} {}
+        header_t() : id{0},
+                     current_payload_size{0},
+                     package_number{0},
+                     data_type{0},
+                     total_data_size{0} {}
 
         explicit header_t(
-            payload_size_t _total_data_size,
-            payload_size_t _payload_size) : total_data_size{_total_data_size},
-                                            current_payload_size{_payload_size} {}
+            payload_size_t _id,
+            payload_size_t _payload_size,
+            payload_size_t _package_number,
+            payload_size_t _data_type,
+            payload_size_t _total_data_size) : id{_id},
+                                               current_payload_size{_payload_size},
+                                               package_number{_package_number},
+                                               data_type{data_type},
+                                               total_data_size{_total_data_size} {}
     };
 
     [[nodiscard]] auto& get_header() const {
@@ -50,9 +62,12 @@ class package_t {
    public:
     package_t() = delete;
     package_t(
-        payload_size_t total_size,
+        payload_size_t id,
         payload_size_t current_size,
-        payload_t* _payload) : header{total_size, current_size},
+        payload_size_t package_number,
+        payload_size_t data_type,
+        payload_size_t total_size,
+        payload_t* _payload) : header{id, current_size, package_number, data_type, total_size},
                                payload{_payload} {
     }
 

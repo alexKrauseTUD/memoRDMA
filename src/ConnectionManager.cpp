@@ -6,7 +6,6 @@ ConnectionManager::ConnectionManager() {}
 
 ConnectionManager::~ConnectionManager() {
     stop();
-    closeAllConnections();
 }
 
 bool ConnectionManager::openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig) {
@@ -44,7 +43,9 @@ bool ConnectionManager::closeConnection(std::string connectionName) {
     if (connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
     } else {
-        return connections[connectionName]->closeConnection();
+        auto con = connections[connectionName];
+        connections.erase(connectionName);
+        return con->closeConnection();
     }
 
     return false;
@@ -57,6 +58,8 @@ bool ConnectionManager::closeAllConnections() {
         if (success)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
     }
+
+    connections = std::map<std::string, Connection*>();
 
     return success;
 }
@@ -141,9 +144,23 @@ bool ConnectionManager::pendingBufferCreation(std::string connectionName) {
 }
 
 void ConnectionManager::stop() {
+    closeAllConnections();
     globalAbort = true;
 }
 
 bool ConnectionManager::abortSignaled() const {
     return globalAbort;
 }
+
+
+
+bool ConnectionManager::throughputTest(std::string connectionName, std::string logName) {
+    if (connections.contains(connectionName)) {
+        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+    } else {
+        return connections[connectionName]->throughputTest(logName);
+    }
+
+    return true;
+}
+

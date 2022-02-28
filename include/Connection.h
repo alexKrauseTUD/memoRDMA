@@ -24,7 +24,6 @@ struct resources {
     struct ibv_cq *cq;                       // CQ handle
     struct ibv_qp *qp;                       // QP handle
     std::vector<struct ibv_mr *> own_mr;     // MR handle for buf
-    std::vector<struct ibv_mr *> remote_mr;  // MR handle for buf
     std::vector<char *> own_buffer;          // memory buffer pointer, used for RDMA send ops
     std::vector<uint64_t> remote_buffer;       // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_rkeys;
@@ -78,7 +77,7 @@ class Connection {
 
     bool sendData(std::string &data);
     bool sendData(package_t* p);
-    bool closeConnection();
+    bool closeConnection(bool send_remote = true);
 
     void receiveDataFromRemote(size_t index);
 
@@ -93,6 +92,8 @@ class Connection {
     uint32_t getOwnSendToRemoteReceiveRatio();
     void setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote);
     uint64_t generatePackageID();
+
+    bool throughputTest(std::string logName);
 
    private:
     bool globalAbort;

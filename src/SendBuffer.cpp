@@ -11,7 +11,7 @@ SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
 }
 
 // This function will create and post a send work request.
-int SendBuffer::post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp) {
+int SendBuffer::post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr* bad_wr = NULL;
@@ -19,7 +19,7 @@ int SendBuffer::post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, ui
     // prepare the scatter / gather entry
     memset(&sge, 0, sizeof(sge));
 
-    sge.addr = (uintptr_t)buf;
+    sge.addr = (uintptr_t)writePtr;
     sge.length = len;
     sge.lkey = mr->lkey;
 
@@ -68,18 +68,11 @@ void SendBuffer::loadData(const char* data, char* writePtr, uint64_t totalSize, 
 //     // poll_completion();
 // }
 
-// void SendBuffer::setPackageHeader(package_t* p) {
-//     memcpy(buf, &p->get_header(), sizeof(package_t::header_t));
-// }
+void SendBuffer::loadPackage(char* writePtr, package_t* p) {
+    memcpy(writePtr, &p->get_header(), sizeof(package_t::header_t));
+    memcpy(writePtr + package_t::metaDataSize(), p->get_payload(), p->get_header().current_payload_size);
+}
 
-// void SendBuffer::sendPackage(package_t* p, rdma_handler_communication opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp) {
-//     // clearCommitCode();
-//     memcpy(buf, &p->get_header(), sizeof(package_t::header_t));
-//     memcpy(buf + sizeof(package_t::header_t), p->get_payload(), p->get_header().current_payload_size);
-//     post_send(p->packageSize(), IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp);
-//     // poll_completion();
-
-//     // *writePtr() = (char)opcode;
-//     // post_send(sizeof(char), IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp);
-//     // poll_completion();
-// }
+void SendBuffer::sendPackage(package_t* p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr) {
+    post_send(p->packageSize(), IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr);
+}

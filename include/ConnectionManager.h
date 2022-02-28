@@ -28,6 +28,8 @@ class ConnectionManager {
     bool resizeSendBuffer(std::string connectionName, std::size_t newSize);
     bool receiveConnection(std::string connectionName, config_t &config);
 
+    bool throughputTest(std::string connectionName, std::string logName);
+
     std::map<std::string, Connection*> connections;
 
     bool pendingBufferCreation(std::string connectionName);

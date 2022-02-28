@@ -99,7 +99,7 @@ static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
 // Connect a socket. If servername is specified a client connection will be
 // initiated to the indicated server and port. Otherwise listen on the indicated
 // port for an incoming connection.
-static int sock_connect(std::string server_name, int port) {
+static int sock_connect(std::string client_name, int port) {
     struct addrinfo *resolved_addr = NULL;
     struct addrinfo *iterator;
     char service[6];
@@ -122,64 +122,55 @@ static int sock_connect(std::string server_name, int port) {
                              .ai_socktype = SOCK_STREAM,
                              .ai_protocol = 0};
 
-    // resolve DNS address, user sockfd as temp storage
-    sprintf(service, "%d", port);
-    if (server_name.empty()) {
-        CHECK(getaddrinfo(NULL, service, &hints, &resolved_addr));
+    if (client_name.empty()) {
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port);
+
+            CHECK(getaddrinfo(NULL, service, &hints, &resolved_addr));
+
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Client mode: setup listening socket and accept a connection
+                listenfd = sockfd;
+                CHECK(bind(listenfd, iterator->ai_addr, iterator->ai_addrlen));
+                err = listen(listenfd, 1);
+                if (err == 0) {
+                    INFO("Waiting on port %d for TCP connection\n", port + k);
+                }
+                sockfd = accept(listenfd, NULL, 0);
+            }
+
+            if (err == 0) {
+                return sockfd;
+            }
+        }
     } else {
-        CHECK(getaddrinfo(server_name.c_str(), service, &hints, &resolved_addr));
-    }
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port + k);
 
-    for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
-        sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
-        assert(sockfd >= 0);
+            CHECK(getaddrinfo(client_name.c_str(), service, &hints, &resolved_addr));
 
-        if (server_name.empty()) {
-            // Client mode: setup listening socket and accept a connection
-            listenfd = sockfd;
-            CHECK(bind(listenfd, iterator->ai_addr, iterator->ai_addrlen));
-            CHECK(listen(listenfd, 1));
-            sockfd = accept(listenfd, NULL, 0);
-        } else {
-            // Server mode: initial connection to remote
-            CHECK(connect(sockfd, iterator->ai_addr, iterator->ai_addrlen));
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Server mode: initial connection to remote
+                err = connect(sockfd, iterator->ai_addr, iterator->ai_addrlen);
+            }
+
+            if (err == 0) {
+                return sockfd;
+            }
         }
     }
 
-    return sockfd;
-}
-
-static bool is_port_free(int port, const char *host = "localhost") {
-    int sockfd;
-    struct sockaddr_in serv_addr;
-    struct hostent *server;
-
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        ERROR("ERROR opening socket");
-    }
-
-    server = gethostbyname(host);
-
-    if (server == NULL) {
-        fprintf(stderr, "ERROR, no such host\n");
-        exit(0);
-    }
-
-    bzero((char *)&serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,
-          (char *)&serv_addr.sin_addr.s_addr,
-          server->h_length);
-
-    serv_addr.sin_port = htons(port);
-    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        close(sockfd);
-        return false;
-    } else {
-        close(sockfd);
-        return true;
-    }
+    return -1;
 }
 
 static void sock_close(int &sockfd) {

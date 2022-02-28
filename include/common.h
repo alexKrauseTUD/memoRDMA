@@ -2,7 +2,6 @@
 #define COMMON_H
 
 enum rdma_handler_communication {
-    rdma_shutdown       = -1,
     rdma_no_op          =  0,
     rdma_ready          =  1,
     rdma_create_region  =  2,
@@ -18,12 +17,14 @@ enum rdma_handler_communication {
     rdma_consume_test   = 12,
     rdma_next_test      = 13,
     rdma_mt_tput_test   = 14,
-    rdma_mt_consume_test= 15
+    rdma_mt_consume_test= 15,
+    rdma_shutdown       = 16
 };
 
 enum data_types {
-    type_string      = 0,
-    type_int         = 1
+    type_string      = 1,
+    type_int         = 2,
+    type_package     = 3
 };
 
 #define META_INFORMATION_SIZE 40

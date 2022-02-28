@@ -19,8 +19,8 @@ struct cm_con_data_t {
     uint64_t send_buf;
     uint32_t send_rkey;
     uint32_t receive_num;
-    uint64_t receive_buf[7] {0,0,0,0,0,0,0};   // buffer address
-    uint32_t receive_rkey[7] {0,0,0,0,0,0,0};  // remote key
+    uint64_t receive_buf[7]{0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[7]{0, 0, 0, 0, 0, 0, 0};  // remote key
     buffer_config_t buffer_config;
     uint32_t qp_num;  // QP number
     uint16_t lid;     // LID of the IB port
@@ -55,11 +55,11 @@ class SendBuffer : public Buffer {
     void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
     void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
-    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void* writePtr);
     //  void setCommitCode(rdma_handler_communication opcode);
 
-    //  void setPackageHeader(package_t *p);
-    //  void sendPackage(package_t *p, rdma_handler_communication opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
+    void loadPackage(char *writePtr, package_t *p);
+    void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void* writePtr);
 
     //  std::size_t getMaxWriteSize();
 
