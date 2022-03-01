@@ -2,7 +2,29 @@
 
 #include "Connection.h"
 
-ConnectionManager::ConnectionManager() {}
+ConnectionManager::ConnectionManager() {
+    monitor_connection = [this](bool *abort) -> void {
+        using namespace std::chrono_literals;
+
+        std::cout << "Starting monitoring thread for connections!" << std::flush;
+
+        while (!*abort) {
+            std::this_thread::sleep_for(100ms);
+            for (auto const &[name, con] : connections) {
+                if (con->conStat == closing) {
+                    std::cout << "\nCLOSING\n" << std::endl;
+                    closeConnection(name, false, false);
+                } else if (con->conStat == reinitialize) {
+                    std::cout << "\nREINITIALIZE\n" << std::endl;
+                    con->init(true);
+                }
+            }
+        }
+        std::cout << "[monitor_connection] Ending through global abort." << std::endl;
+    };
+
+    monitorWorker = new std::thread(monitor_connection, &globalAbort);
+}
 
 ConnectionManager::~ConnectionManager() {
     stop();
@@ -39,13 +61,13 @@ void ConnectionManager::printConnections() {
     }
 }
 
-int ConnectionManager::closeConnection(std::string connectionName) {
+int ConnectionManager::closeConnection(std::string connectionName, bool sendRemote, bool sendReinitialize) {
     if (!connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
     } else {
         auto con = connections[connectionName];
         connections.erase(connectionName);
-        return con->closeConnection();
+        return con->closeConnection(sendRemote, sendReinitialize);
     }
 
     return 1;
@@ -55,11 +77,11 @@ int ConnectionManager::closeAllConnections() {
     int success = 0;
     for (auto &[name, con] : connections) {
         success += con->closeConnection();
-        if (success==0)
+        if (success == 0)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
     }
 
-    connections = std::map<std::string, Connection*>();
+    connections = std::map<std::string, Connection *>();
 
     return success;
 }
@@ -146,12 +168,12 @@ int ConnectionManager::pendingBufferCreation(std::string connectionName) {
 void ConnectionManager::stop() {
     closeAllConnections();
     globalAbort = true;
+    monitorWorker->join();
 }
 
 bool ConnectionManager::abortSignaled() const {
     return globalAbort;
 }
-
 
 int ConnectionManager::throughputTest(std::string connectionName, std::string logName) {
     if (!connections.contains(connectionName)) {
@@ -172,3 +194,23 @@ int ConnectionManager::consumingTest(std::string connectionName, std::string log
 
     return 0;
 }
+
+// int ConnectionManager::throughputTestMultiThread(std::string connectionName, std::string logName) {
+//     if (!connections.contains(connectionName)) {
+//         std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+//     } else {
+//         return connections[connectionName]->throughputTestMultiThread(logName);
+//     }
+
+//     return 0;
+// }
+
+// int ConnectionManager::consumingTestMultiThread(std::string connectionName, std::string logName) {
+//     if (!connections.contains(connectionName)) {
+//         std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+//     } else {
+//         return connections[connectionName]->consumingTestMultiThread(logName);
+//     }
+
+//     return 0;
+// }

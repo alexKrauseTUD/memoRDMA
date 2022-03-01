@@ -18,7 +18,7 @@ class ConnectionManager {
 
     int openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig);
     void printConnections();
-    int closeConnection(std::string connectionName);
+    int closeConnection(std::string connectionName, bool sendRemote = true, bool sendReinitialize = false);
     int closeAllConnections();
     int sendData(std::string connectionName, std::string &data);
     int sendDataToAllConnections(std::string &data);
@@ -30,8 +30,10 @@ class ConnectionManager {
 
     int throughputTest(std::string connectionName, std::string logName);
     int consumingTest(std::string connectionName, std::string logName);
+    int throughputTestMultiThread(std::string connectionName, std::string logName);
+    int consumingTestMultiThread(std::string connectionName, std::string logName);
 
-    std::map<std::string, Connection*> connections;
+    std::map<std::string, Connection *> connections;
 
     int pendingBufferCreation(std::string connectionName);
 
@@ -43,6 +45,10 @@ class ConnectionManager {
     ConnectionManager();
 
     bool globalAbort;
+
+    std::function<void(bool *)> monitor_connection;
+
+    std::thread *monitorWorker;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION_MANAGER

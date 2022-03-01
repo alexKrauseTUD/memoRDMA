@@ -16,26 +16,32 @@
 
 // structure of system resources
 struct resources {
-    struct ibv_device_attr device_attr;      // device attributes
-    struct ibv_port_attr port_attr;          // IB port attributes
-    struct cm_con_data_t remote_props;       // values to connect to remote side
-    struct ibv_context *ib_ctx;              // device handle
-    struct ibv_pd *pd;                       // PD handle
-    struct ibv_cq *cq;                       // CQ handle
-    struct ibv_qp *qp;                       // QP handle
-    std::vector<struct ibv_mr *> own_mr;     // MR handle for buf
-    std::vector<char *> own_buffer;          // memory buffer pointer, used for RDMA send ops
-    std::vector<uint64_t> remote_buffer;       // memory buffer pointer, used for RDMA send ops
+    struct ibv_device_attr device_attr;   // device attributes
+    struct ibv_port_attr port_attr;       // IB port attributes
+    struct cm_con_data_t remote_props;    // values to connect to remote side
+    struct ibv_context *ib_ctx;           // device handle
+    struct ibv_pd *pd;                    // PD handle
+    struct ibv_cq *cq;                    // CQ handle
+    struct ibv_qp *qp;                    // QP handle
+    std::vector<struct ibv_mr *> own_mr;  // MR handle for buf
+    std::vector<char *> own_buffer;       // memory buffer pointer, used for RDMA send ops
+    std::vector<uint64_t> remote_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_rkeys;
-    int sock;                                // TCP socket file descriptor
+    int sock;  // TCP socket file descriptor
 };
 
 struct receive_data {
     bool done;
-    uint64_t* localPtr;
+    uint64_t *localPtr;
     data_types dt;
     uint64_t size;
     std::chrono::_V2::system_clock::time_point endTime;
+};
+
+enum connection_status {
+    active = 1,
+    closing = 2,
+    reinitialize = 3
 };
 
 class Connection {
@@ -45,7 +51,7 @@ class Connection {
 
     config_t config;
     buffer_config_t bufferConfig;
-    struct resources res;
+    resources res;
 
     bool busy;
 
@@ -65,6 +71,8 @@ class Connection {
 
     struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, size_t size);
 
+    void init(bool reinitialize = false);
+
     void initTCP();
     void exchangeBufferInfo();
     void createResources();
@@ -77,8 +85,9 @@ class Connection {
     int poll_completion();
 
     int sendData(std::string &data);
-    int sendData(package_t* p);
-    int closeConnection(bool send_remote = true);
+    int sendData(package_t *p);
+    int closeConnection(bool send_remote = true, bool sendReinitializ = false);
+    void destroyResources();
 
     void receiveDataFromRemote(size_t index);
     void consume(size_t index);
@@ -96,18 +105,22 @@ class Connection {
     uint64_t generatePackageID();
 
     int throughputTest(std::string logName);
-    int consumingTest( std::string logName);
+    int consumingTest(std::string logName);
+    int throughputTestMultiThread(std::string logName);
+    int consumingTestMultiThread(std::string logName);
+
+    std::atomic<connection_status> conStat;
 
    private:
-    bool globalAbort;
+    std::atomic<bool> globalAbort;
 
-    std::function< void (bool*) > check_receive;
-    std::function< void (bool*) > check_regions;
-    std::function< void (bool*) > check_receive_done;
+    std::function<void(std::atomic<bool> *)> check_receive;
+    std::function<void(bool *)> check_regions;
+    std::function<void(bool *)> check_receive_done;
 
-    std::thread* readWorker;
-    std::thread* creationWorker;
-    std::thread* receiveDoneWorker;
+    std::thread *readWorker;
+    std::thread *creationWorker;
+    std::thread *receiveDoneWorker;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

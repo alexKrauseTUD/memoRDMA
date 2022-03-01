@@ -167,6 +167,7 @@ static int sock_connect(std::string client_name, int port) {
             }
 
             if (err == 0) {
+                INFO("Connecting on port %d for TCP connection\n", port + k);
                 return sockfd;
             }
         }
@@ -176,7 +177,7 @@ static int sock_connect(std::string client_name, int port) {
 }
 
 static void sock_close(int &sockfd) {
-    close(sockfd);
+    CHECK(close(sockfd));
 }
 
 static int receive_tcp(int sockfd, int xfer_size, char *remote_data) {
