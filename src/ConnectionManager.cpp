@@ -195,22 +195,22 @@ int ConnectionManager::consumingTest(std::string connectionName, std::string log
     return 0;
 }
 
-// int ConnectionManager::throughputTestMultiThread(std::string connectionName, std::string logName) {
-//     if (!connections.contains(connectionName)) {
-//         std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-//     } else {
-//         return connections[connectionName]->throughputTestMultiThread(logName);
-//     }
+int ConnectionManager::throughputTestMultiThread(std::string connectionName, std::string logName) {
+    if (!connections.contains(connectionName)) {
+        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+    } else {
+        return connections[connectionName]->throughputTestMultiThread(logName);
+    }
 
-//     return 0;
-// }
+    return 0;
+}
 
-// int ConnectionManager::consumingTestMultiThread(std::string connectionName, std::string logName) {
-//     if (!connections.contains(connectionName)) {
-//         std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-//     } else {
-//         return connections[connectionName]->consumingTestMultiThread(logName);
-//     }
+int ConnectionManager::consumingTestMultiThread(std::string connectionName, std::string logName) {
+    if (!connections.contains(connectionName)) {
+        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+    } else {
+        return connections[connectionName]->consumingTestMultiThread(logName);
+    }
 
-//     return 0;
-// }
+    return 0;
+}

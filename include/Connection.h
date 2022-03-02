@@ -56,14 +56,13 @@ class Connection {
     bool busy;
 
     SendBuffer *ownSendBuffer = NULL;
-    SendBuffer *remoteSendBuffer = NULL;
 
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
-    std::vector<ReceiveBuffer *> remoteReceiveBuffer;
 
     std::map<uint64_t, receive_data> receiveMap;
 
     std::array<uint16_t, 16> metaInfo{0};
+    
     struct ibv_mr *metaInfoMR;
 
     void setupSendBuffer();
@@ -90,7 +89,6 @@ class Connection {
     void destroyResources();
 
     void receiveDataFromRemote(size_t index);
-    void consume(size_t index);
 
     int addReceiveBuffer(unsigned int quantity);
     int removeReceiveBuffer(unsigned int quantity);
@@ -108,6 +106,9 @@ class Connection {
     int consumingTest(std::string logName);
     int throughputTestMultiThread(std::string logName);
     int consumingTestMultiThread(std::string logName);
+
+    void consume(size_t index);
+    void consumeMultiThread(size_t index);
 
     std::atomic<connection_status> conStat;
 

@@ -437,7 +437,7 @@ void TaskManager::setup() {
             std::string logName = logNameStream.str();
             std::cout << "[Task] Set name: " << logName << std::endl;
 
-            for (std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1) {
+            for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
                 buffer_config_t bufferConfig = {.num_own_receive = 1,
                                                 .size_own_receive = 640,
                                                 .num_remote_receive = num_rb,
@@ -458,7 +458,7 @@ void TaskManager::setup() {
 
                 std::this_thread::sleep_for(1s);
 
-                if (!(num_rb == 4 && bytes == 1ull << 31)) {
+                if (!(num_rb == 4 && bytes == 1ull << 29)) {
                     CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", false, true));
                 }
 
@@ -469,219 +469,101 @@ void TaskManager::setup() {
         CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", true, false));
     }));
 
-    // registerTask( new Task( "mt_ss_tput", "Multi-threaded single-sided throughput test", [] () -> void {
-    //     using namespace std::chrono_literals;
+    registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", []() -> void {
+        using namespace std::chrono_literals;
 
-    //     config_t config = {.dev_name = "mlx5_0",
-    //                        .server_name = "141.76.47.9",
-    //                        .tcp_port = 20000,
-    //                        .client_mode = false,
-    //                        .ib_port = 1,
-    //                        .gid_idx = 0};
+        config_t config = {.dev_name = "mlx5_0",
+                           .server_name = "141.76.47.9",
+                           .tcp_port = 20000,
+                           .client_mode = false,
+                           .ib_port = 1,
+                           .gid_idx = 0};
 
-    //     for (size_t num_rb = 1; num_rb < 5; ++num_rb) {
-    //         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    //         std::stringstream logNameStream;
-    //         logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ss_tput" << num_rb << ".log";
-    //         std::string logName = logNameStream.str();
-    //         std::cout << "[Task] Set name: " << logName << std::endl;
+        for (size_t num_rb = 2; num_rb < 5; ++num_rb) {
+            auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::stringstream logNameStream;
+            logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ss_tput" << num_rb << ".log";
+            std::string logName = logNameStream.str();
+            std::cout << "[Task] Set name: " << logName << std::endl;
 
-    //         for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
-    //             buffer_config_t bufferConfig = {.num_own_receive = 1,
-    //                                             .size_own_receive = 640,
-    //                                             .num_remote_receive = num_rb,
-    //                                             .size_remote_receive = bytes,
-    //                                             .size_own_send = bytes * num_rb,
-    //                                             .size_remote_send = 640};
+            for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
+                buffer_config_t bufferConfig = {.num_own_receive = 1,
+                                                .size_own_receive = 640,
+                                                .num_remote_receive = num_rb,
+                                                .size_remote_receive = bytes,
+                                                .size_own_send = bytes * num_rb,
+                                                .size_remote_send = 640};
 
-    //             CHECK(ConnectionManager::getInstance().openConnection("mt_ss_tput", config, bufferConfig));
+                CHECK(ConnectionManager::getInstance().openConnection("mt_ss_tput", config, bufferConfig));
 
-    //             std::cout << "[main] Opened connection with id 'mt_ss_tput' and size for one receive: " << GetBytesReadable(bytes) << std::endl;
-    //             std::cout << std::endl
-    //                       << "Single-sided throughput test." << std::endl;
+                std::cout << "[main] Opened connection with id 'mt_ss_tput' and size for one receive: " << GetBytesReadable(bytes) << std::endl;
+                std::cout << std::endl
+                          << "Single-sided throughput test." << std::endl;
 
-    //             CHECK(ConnectionManager::getInstance().throughputTestMultiThread("mt_ss_tput", logName));
+                CHECK(ConnectionManager::getInstance().throughputTestMultiThread("mt_ss_tput", logName));
 
-    //             std::cout << std::endl
-    //                       << "Single-sided throughput test ended." << std::endl;
+                std::cout << std::endl
+                          << "Single-sided throughput test ended." << std::endl;
 
-    //             if (!(num_rb == 4 && bytes == 1ull << 29)) {
-    //                 CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", false, true));
-    //             }
+                if (!(num_rb == 4 && bytes == 1ull << 29)) {
+                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", false, true));
+                }
 
-    //             config.tcp_port += 1;
-    //             std::this_thread::sleep_for(2s);
-    //         }
-    //     }
-    //     CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", true, false));
+                config.tcp_port += 1;
+                std::this_thread::sleep_for(2s);
+            }
+        }
+        CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", true, false));
+    }));
 
+    registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", []() -> void {
+        using namespace std::chrono_literals;
 
+        config_t config = {.dev_name = "mlx5_0",
+                           .server_name = "141.76.47.9",
+                           .tcp_port = 20000,
+                           .client_mode = false,
+                           .ib_port = 1,
+                           .gid_idx = 0};
 
+        for (size_t num_rb = 2; num_rb < 5; ++num_rb) {
+            auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::stringstream logNameStream;
+            logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ds_tput" << num_rb << ".log";
+            std::string logName = logNameStream.str();
+            std::cout << "[Task] Set name: " << logName << std::endl;
 
-    //     std::size_t maxDataElements = 1ull << 32;
-    //     DataProvider* d = new DataProvider();
-    //     std::cout << "[memoRDMA server] Generating dummy data for MT Tput tests..." << std::endl;
-    //     d->generateDummyData( maxDataElements >> 1 );
-    //     std::ofstream out;
-    //     auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
-    //     std::stringstream logName;
-    //     logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ss_tput.log";
-    //     out.open( logName.str(), std::ios_base::app );
+            for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
+                buffer_config_t bufferConfig = {.num_own_receive = 1,
+                                                .size_own_receive = 640,
+                                                .num_remote_receive = num_rb,
+                                                .size_remote_receive = bytes,
+                                                .size_own_send = bytes * num_rb,
+                                                .size_remote_send = 640};
 
-    //     for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
-    //         std::vector< RDMARegion* > regions{};
+                CHECK(ConnectionManager::getInstance().openConnection("mt_ds_tput", config, bufferConfig));
 
-    //         const std::size_t regionCount = 16;
-    //         for ( std::size_t rCnt = 0; rCnt < regionCount; ++rCnt ) {
-    //             RDMACommunicator::getInstance().setupNewRegion( RDMACommunicator::getInstance().globalConfig, bytes );
-    //             while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
-    //                 using namespace std::chrono_literals;
-    //                 std::this_thread::sleep_for( 10ms );
-    //             }
-    //             std::size_t regionId = RDMACommunicator::getInstance().lastRegionId() - 1;
-    //             std::cout << "[memoRDMA server] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
-                
-    //             regions.emplace_back( RDMAHandler::getInstance().getRegion( regionId ) );
-    //         }
-            
-    //         std::cout << std::endl << "Single-sided throughput test." << std::endl;
+                std::cout << "[main] Opened connection with id 'mt_ds_tput' and size for one receive: " << GetBytesReadable(bytes) << std::endl;
+                std::cout << std::endl
+                          << "Double-sided throughput test." << std::endl;
 
-    //         for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
-    //             std::cout << "[memoRDMA server] Processing " << elementCount << " elements..." << std::endl;
-    //             for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
-    //                 // Copy data provider pointer and current element count to all regions
-    //                 for ( auto r : regions ) {
-    //                     r->clearCompleteBuffer();
-    //                     r->busy = true;
-    //                     memcpy( r->receivePtr()+1, (char*)&elementCount, sizeof(std::size_t) );
-    //                     memcpy( r->receivePtr()+9, (char*)&d, sizeof(DataProvider*) );
-    //                     std::size_t stuff;
-    //                     memcpy( &stuff, r->receivePtr()+9, sizeof(DataProvider*) );
-    //                 }
-                    
-    //                 // Tell all regions to start
-    //                 for ( auto r : regions ) {
-    //                     r->receivePtr()[0] = rdma_mt_tput_test;
-    //                 }
-                    
-    //                 auto s_ts = std::chrono::high_resolution_clock::now();
-    //                 bool anyBusy = true;
-    //                 while ( anyBusy ) {
-    //                     using namespace std::chrono_literals;
-    //                     std::this_thread::sleep_for( 1ms );
-    //                     anyBusy = false;
-    //                     for ( auto r : regions ) {
-    //                         anyBusy |= r->busy;
-    //                     }
-    //                 }
-    //                 auto e_ts = std::chrono::high_resolution_clock::now();
+                CHECK(ConnectionManager::getInstance().consumingTestMultiThread("mt_ds_tput", logName));
 
-    //                 typedef std::chrono::duration<double> d_sec;
-    //                 d_sec secs = e_ts - s_ts;
-                    
-    //                 auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
-    //                 auto datasize = elementCount * sizeof(uint64_t);
-    //                 std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s times " << regionCount << " regions -- " << BtoMB( datasize * regionCount ) / (secs.count()) << " MB/s " << std::endl;
+                std::cout << std::endl
+                          << "Double-sided throughput test ended." << std::endl;
 
-    //                 auto readable_size = GetBytesReadable( datasize );
-    //                 std::cout.precision(15);
-    //                 std::cout.setf(std::ios::fixed, std::ios::floatfield);
-    //                 std::cout.setf(std::ios::showpoint);
-    //                 out << regionCount << "\t" << bytes << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
-    //             }
-    //         }
-            
-    //         for ( auto r : regions ) {
-    //             r->setCommitCode( rdma_delete_region );
-    //             r->receivePtr()[0] = rdma_delete_region;
-    //         }
-    //     }
-    //     out.close();
-    // }
-    // ) );
+                std::this_thread::sleep_for(1s);
 
-    // registerTask( new Task( "mt_ds_tput", "Multi-threaded double-sided throughput test", [] () -> void {
-    //     std::size_t maxDataElements = 1ull << 32;
-    //     DataProvider* d = new DataProvider();
-    //     std::cout << "[memoRDMA server] Generating dummy data for MT Consume tests..." << std::endl;
-    //     d->generateDummyData( maxDataElements >> 1 );
-    //     std::ofstream out;
-    //     auto in_time_t = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
-    //     std::stringstream logName;
-    //     logName << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ds_tput.log";
-    //     out.open( logName.str(), std::ios_base::app );
+                if (!(num_rb == 4 && bytes == 1ull << 29)) {
+                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", false, true));
+                }
 
-    //     for ( std::size_t bytes = 1ull << 10; bytes < 1ull << 32; bytes <<= 1 ) {
-    //         std::vector< RDMARegion* > regions{};
-
-    //         const std::size_t regionCount = 16;
-    //         for ( std::size_t rCnt = 0; rCnt < regionCount; ++rCnt ) {
-    //             RDMACommunicator::getInstance().setupNewRegion( RDMACommunicator::getInstance().globalConfig, bytes );
-    //             while ( RDMACommunicator::getInstance().pendingRegionCreation() ) {
-    //                 using namespace std::chrono_literals;
-    //                 std::this_thread::sleep_for( 10ms );
-    //             }
-    //             std::size_t regionId = RDMACommunicator::getInstance().lastRegionId() - 1;
-    //             std::cout << "[memoRDMA server] Created region with id " << regionId << " and size " << GetBytesReadable( bytes ) << std::endl;
-                
-    //             regions.emplace_back( RDMAHandler::getInstance().getRegion( regionId ) );
-    //         }
-            
-    //         std::cout << std::endl << "Double-sided Consume test." << std::endl;
-
-    //         for ( std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1 ) {
-    //             std::cout << "[memoRDMA server] Processing " << elementCount << " elements..." << std::endl;
-    //             for ( std::size_t iteration = 0; iteration < 10; ++iteration ) {
-    //                 // Copy data provider pointer and current element count to all regions
-    //                 for ( auto r : regions ) {
-    //                     r->clearCompleteBuffer();
-    //                     r->busy = true;
-    //                     memcpy( r->receivePtr()+1, (char*)&elementCount, sizeof(std::size_t) );
-    //                     memcpy( r->receivePtr()+9, (char*)&d, sizeof(DataProvider*) );
-    //                     std::size_t stuff;
-    //                     memcpy( &stuff, r->receivePtr()+9, sizeof(DataProvider*) );
-    //                 }
-                    
-    //                 // Tell all regions to start
-    //                 for ( auto r : regions ) {
-    //                     r->receivePtr()[0] = rdma_mt_consume_test;
-    //                 }
-                    
-    //                 auto s_ts = std::chrono::high_resolution_clock::now();
-    //                 bool anyBusy = true;
-    //                 while ( anyBusy ) {
-    //                     using namespace std::chrono_literals;
-    //                     std::this_thread::sleep_for( 1ms );
-    //                     anyBusy = false;
-    //                     for ( auto r : regions ) {
-    //                         anyBusy |= r->busy;
-    //                     }
-    //                 }
-    //                 auto e_ts = std::chrono::high_resolution_clock::now();
-
-    //                 typedef std::chrono::duration<double> d_sec;
-    //                 d_sec secs = e_ts - s_ts;
-                    
-    //                 auto transfertime_ns = std::chrono::duration_cast< std::chrono::nanoseconds >( e_ts - s_ts ).count();
-    //                 auto datasize = elementCount * sizeof(uint64_t);
-    //                 std::cout << "Communicated " << datasize << " Bytes (" << BtoMB( datasize ) << " MB) in " << secs.count() << " s times " << regionCount << " regions -- " << BtoMB( datasize * regionCount ) / (secs.count()) << " MB/s " << std::endl;
-
-    //                 auto readable_size = GetBytesReadable( datasize );
-    //                 std::cout.precision(15);
-    //                 std::cout.setf(std::ios::fixed, std::ios::floatfield);
-    //                 std::cout.setf(std::ios::showpoint);
-    //                 out << regionCount << "\t" << bytes << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB( datasize ) / (secs.count()) << std::endl << std::flush;
-    //             }
-    //         }
-            
-    //         for ( auto r : regions ) {
-    //             r->setCommitCode( rdma_delete_region );
-    //             r->receivePtr()[0] = rdma_delete_region;
-    //         }
-    //     }
-    //     out.close();
-    // }
-    // ) );
+                config.tcp_port += 1;
+                std::this_thread::sleep_for(2s);
+            }
+        }
+        CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", true, false));
+    }));
 }
 
 void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
