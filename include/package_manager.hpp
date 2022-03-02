@@ -71,6 +71,17 @@ class package_t {
                                payload{_payload} {
     }
 
+    package_t(package_t& other) : header(other.header), payload(other.payload) {
+
+    }
+
+    // package_t& operator=(package_t other)
+    // {
+    //     std::swap(header, other.header);
+    //     std::swap(payload, other.payload);
+    //     return *this;
+    // }
+
     void setCurrentPackageSize(const std::size_t bytes) {
         header.current_payload_size = bytes;
     }

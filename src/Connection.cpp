@@ -922,6 +922,7 @@ int Connection::throughputTestMultiThread(std::string logName) {
             ownSendBuffer->loadPackage(ownSendBuffer->buf + (tid * bufferConfig.size_remote_receive), pack);
             ownSendBuffer->sendPackage(pack, res.remote_buffer[tid], res.remote_rkeys[tid], res.qp, ownSendBuffer->buf + (tid * bufferConfig.size_remote_receive), tid);
             poll_completion();
+            free(pack);
         }
     };
 
@@ -963,8 +964,9 @@ int Connection::throughputTestMultiThread(std::string logName) {
                         package.setCurrentPackageSize(remainingSize);
                         remainingSize = 0;
                     }
+                    package_t newPackage = package;
 
-                    work_queue[rbi].push_back(&package);
+                    work_queue[rbi].push_back(&newPackage);
 
                     if (remainingSize > maxDataToWrite) {
                         remainingSize -= maxDataToWrite;
