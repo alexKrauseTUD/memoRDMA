@@ -82,6 +82,10 @@ class package_t {
     //     return *this;
     // }
 
+    package_t* deep_copy() const {
+        return new package_t( header.id, header.current_payload_size, header.package_number, header.data_type, header.total_data_size, payload );
+    }
+
     void setCurrentPackageSize(const std::size_t bytes) {
         header.current_payload_size = bytes;
     }

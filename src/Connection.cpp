@@ -964,9 +964,9 @@ int Connection::throughputTestMultiThread(std::string logName) {
                         package.setCurrentPackageSize(remainingSize);
                         remainingSize = 0;
                     }
-                    package_t newPackage = package;
+                    package_t* newPackage = package.deep_copy();
 
-                    work_queue[rbi].push_back(&newPackage);
+                    work_queue[rbi].push_back( newPackage );
 
                     if (remainingSize > maxDataToWrite) {
                         remainingSize -= maxDataToWrite;
