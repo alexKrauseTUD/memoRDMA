@@ -18,7 +18,7 @@ class ConnectionManager {
 
     int openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig);
     void printConnections();
-    int closeConnection(std::string connectionName, bool sendRemote = true, bool sendReinitialize = false);
+    int closeConnection(std::string connectionName, bool sendRemote = true);
     int closeAllConnections();
     int sendData(std::string connectionName, std::string &data);
     int sendDataToAllConnections(std::string &data);

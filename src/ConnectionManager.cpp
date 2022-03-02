@@ -11,12 +11,22 @@ ConnectionManager::ConnectionManager() {
         while (!*abort) {
             std::this_thread::sleep_for(100ms);
             for (auto const &[name, con] : connections) {
-                if (con->conStat == closing) {
-                    std::cout << "\nCLOSING\n" << std::endl;
-                    closeConnection(name, false, false);
-                } else if (con->conStat == reinitialize) {
-                    std::cout << "\nREINITIALIZE\n" << std::endl;
-                    con->init(true);
+                switch (con->conStat) {
+                    case closing:
+                        closeConnection(name, false);
+                        break;
+                    case reinitialize:
+                        con->init(true);
+                        break;
+                    case mt_consume:
+                        con->consumeMultiThread(true);
+                        break;
+                    case next_mt_consume:
+                        con->init(true);
+                        con->consumeMultiThread();
+                        break;
+                    default:
+                        break;
                 }
             }
         }
@@ -61,13 +71,13 @@ void ConnectionManager::printConnections() {
     }
 }
 
-int ConnectionManager::closeConnection(std::string connectionName, bool sendRemote, bool sendReinitialize) {
+int ConnectionManager::closeConnection(std::string connectionName, bool sendRemote) {
     if (!connections.contains(connectionName)) {
         std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
     } else {
         auto con = connections[connectionName];
         connections.erase(connectionName);
-        return con->closeConnection(sendRemote, sendReinitialize);
+        return con->closeConnection(sendRemote);
     }
 
     return 1;
@@ -81,7 +91,7 @@ int ConnectionManager::closeAllConnections() {
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
     }
 
-    connections = std::map<std::string, Connection *>();
+    connections.clear();
 
     return success;
 }

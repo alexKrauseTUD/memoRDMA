@@ -41,7 +41,9 @@ struct receive_data {
 enum connection_status {
     active = 1,
     closing = 2,
-    reinitialize = 3
+    reinitialize = 3,
+    mt_consume = 4,
+    next_mt_consume = 5
 };
 
 class Connection {
@@ -62,7 +64,7 @@ class Connection {
     std::map<uint64_t, receive_data> receiveMap;
 
     std::array<uint16_t, 16> metaInfo{0};
-    
+
     struct ibv_mr *metaInfoMR;
 
     void setupSendBuffer();
@@ -85,7 +87,7 @@ class Connection {
 
     int sendData(std::string &data);
     int sendData(package_t *p);
-    int closeConnection(bool send_remote = true, bool sendReinitializ = false);
+    int closeConnection(bool send_remote = true);
     void destroyResources();
 
     void receiveDataFromRemote(size_t index);
@@ -108,7 +110,7 @@ class Connection {
     int consumingTestMultiThread(std::string logName);
 
     void consume(size_t index);
-    void consumeMultiThread(size_t index);
+    void consumeMultiThread(bool first = false);
 
     std::atomic<connection_status> conStat;
 

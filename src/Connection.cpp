@@ -57,10 +57,11 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
                         consume(i - 1);
                     } break;
                     case rdma_mt_tput_test: {
-                        // mt_throughputTest(communicationRegion);
+                        // consumeMultiThread(true);
                     } break;
                     case rdma_mt_consume_test: {
-                        // mt_consumingTest(communicationRegion);
+                        metaInfo[i] = rdma_no_op;
+                        conStat = mt_consume;
                     } break;
                     case rdma_next_test: {
                         metaInfo[i] = rdma_no_op;
@@ -372,13 +373,13 @@ struct ibv_qp *Connection::createQueuePair(struct ibv_pd *pd, struct ibv_cq *cq)
     struct ibv_qp_init_attr queue_pair_init_attr;
     memset(&queue_pair_init_attr, 0, sizeof(queue_pair_init_attr));
     queue_pair_init_attr.qp_type = IBV_QPT_RC;
-    queue_pair_init_attr.sq_sig_all = 1;        // if not set 0, all work requests submitted to SQ will always generate a Work Completion.
-    queue_pair_init_attr.send_cq = cq;          // completion queue can be shared or you can use distinct completion queues.
-    queue_pair_init_attr.recv_cq = cq;          // completion queue can be shared or you can use distinct completion queues.
-    queue_pair_init_attr.cap.max_send_wr = 0x10;   // increase if you want to keep more send work requests in the SQ.
-    queue_pair_init_attr.cap.max_recv_wr = 0x10;   // increase if you want to keep more receive work requests in the RQ.
-    queue_pair_init_attr.cap.max_send_sge = 1;  // increase if you allow send work requests to have multiple scatter gather entry (SGE).
-    queue_pair_init_attr.cap.max_recv_sge = 1;  // increase if you allow receive work requests to have multiple scatter gather entry (SGE).
+    queue_pair_init_attr.sq_sig_all = 1;          // if not set 0, all work requests submitted to SQ will always generate a Work Completion.
+    queue_pair_init_attr.send_cq = cq;            // completion queue can be shared or you can use distinct completion queues.
+    queue_pair_init_attr.recv_cq = cq;            // completion queue can be shared or you can use distinct completion queues.
+    queue_pair_init_attr.cap.max_send_wr = 0x10;  // increase if you want to keep more send work requests in the SQ.
+    queue_pair_init_attr.cap.max_recv_wr = 0x10;  // increase if you want to keep more receive work requests in the RQ.
+    queue_pair_init_attr.cap.max_send_sge = 1;    // increase if you allow send work requests to have multiple scatter gather entry (SGE).
+    queue_pair_init_attr.cap.max_recv_sge = 1;    // increase if you allow receive work requests to have multiple scatter gather entry (SGE).
 
     return ibv_create_qp(pd, &queue_pair_init_attr);
 }
@@ -661,12 +662,9 @@ void Connection::receiveDataFromRemote(size_t index) {
     setOpcode(index + 1, rdma_ready, true);
 }
 
-int Connection::closeConnection(bool sendRemote, bool sendReinitialize) {
+int Connection::closeConnection(bool sendRemote) {
     globalAbort = true;
 
-    if (sendReinitialize) {
-        setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
-    }
     setOpcode((metaInfo.size() / 2) + 1, rdma_shutdown, sendRemote);
 
     destroyResources();
@@ -782,6 +780,8 @@ int Connection::throughputTest(std::string logName) {
     out.close();
     busy = false;
 
+    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+
     return 0;
 }
 
@@ -880,6 +880,8 @@ int Connection::consumingTest(std::string logName) {
     out.close();
     busy = false;
 
+    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+
     return 0;
 }
 
@@ -914,7 +916,6 @@ int Connection::throughputTestMultiThread(std::string logName) {
     std::vector<std::vector<package_t *>> work_queue(core_cnt);
 
     auto work = [this](size_t tid, std::vector<package_t *> *queue, bool *local_ready, std::shared_future<void> *sync_barrier) -> void {
-        std::cout << "Thread " << tid << " initialized" << std::endl;
         local_ready[tid] = true;
         sync_barrier->wait();
 
@@ -927,7 +928,142 @@ int Connection::throughputTestMultiThread(std::string logName) {
     };
 
     /* provide data to remote */
-    std::size_t maxDataElements = 1ull << 30;
+    std::size_t maxDataElements = 1ull << 32;
+    DataProvider d;
+    d.generateDummyData(maxDataElements >> 1);
+    std::ofstream out;
+    out.open(logName, std::ios_base::app);
+
+    uint64_t packageID = generatePackageID();
+
+    std::ios_base::fmtflags f(std::cout.flags());
+    for (std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1) {
+        for (std::size_t iteration = 0; iteration < 10; ++iteration) {
+            memset(ready_vec, 0, core_cnt * sizeof(bool));
+            uint64_t remainingSize = elementCount * sizeof(uint64_t);
+            uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
+            uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
+            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+            std::cout << "[ThroughputTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
+            uint64_t *copy = d.data;
+            size_t maxPackNum;
+            work_queue.resize(core_cnt);
+
+            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, copy);
+
+            while (remainingSize > 0) {
+                maxPackNum = bufferConfig.num_remote_receive;
+                for (size_t pack = 1; pack <= bufferConfig.num_remote_receive; ++pack) {
+                    if (remainingSize < maxPayloadSize * pack) {
+                        maxPackNum = pack;
+                        break;
+                    }
+                }
+
+                for (size_t rbi = 0; rbi < maxPackNum; ++rbi) {
+                    if (remainingSize <= maxDataToWrite) {
+                        package.setCurrentPackageSize(remainingSize);
+                        remainingSize = 0;
+                    }
+                    package_t *newPackage = package.deep_copy();
+
+                    work_queue[rbi].push_back(newPackage);
+
+                    if (remainingSize > maxDataToWrite) {
+                        remainingSize -= maxDataToWrite;
+                        package.advancePayloadPtr(maxDataToWrite);
+                    }
+                }
+            }
+
+            std::promise<void> p;
+            std::shared_future<void> ready_future(p.get_future());
+
+            for (size_t tid = 0; tid < core_cnt; ++tid) {
+                pool.emplace_back(new std::thread(work, tid, &work_queue[tid], ready_vec, &ready_future));
+            }
+
+            bool all_ready = false;
+            while (!all_ready) {
+                /* Wait until all threads are ready to go before we pull the trigger */
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+                all_ready = true;
+                for (size_t i = 0; i < core_cnt; ++i) {
+                    all_ready &= ready_vec[i];
+                }
+            }
+            auto s_ts = std::chrono::high_resolution_clock::now();
+            p.set_value();                                                   /* Start execution by notifying on the void promise */
+            std::for_each(pool.begin(), pool.end(), [](std::thread *t) { t->join(); delete t; }); /* Join and delete threads as soon as they are finished */
+
+            auto e_ts = std::chrono::high_resolution_clock::now();
+            auto transfertime_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(e_ts - s_ts).count();
+
+            work_queue.clear();
+            pool.clear();
+            auto datasize = elementCount * sizeof(uint64_t);
+
+            typedef std::chrono::duration<double> d_sec;
+            d_sec secs = e_ts - s_ts;
+
+            std::cout << "[ThroughputTest] Communicated " << datasize << " Bytes (" << BtoMB(datasize) << " MB) in " << secs.count() << " s -- " << BtoMB(datasize) / (secs.count()) << " MB/s " << std::endl;
+
+            auto readable_size = GetBytesReadable(datasize);
+
+            std::cout.precision(15);
+            std::cout.setf(std::ios::fixed, std::ios::floatfield);
+            std::cout.setf(std::ios::showpoint);
+            out << ownSendBuffer->bufferSize << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB(datasize) / (secs.count()) << std::endl
+                << std::flush;
+            std::cout.flags(f);
+        }
+    }
+    std::cout << "[ThroughputTest] Finished." << std::endl;
+    out.close();
+    busy = false;
+    free(ready_vec);
+
+    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+
+    return 0;
+}
+
+int Connection::consumingTestMultiThread(std::string logName) {
+    ownSendBuffer->clearBuffer();
+    setOpcode(1 + (metaInfo.size() / 2), rdma_mt_consume_test, true);
+
+    while (metaInfo[1 + (metaInfo.size() / 2)] != rdma_ready) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(10ms);
+    }
+
+    std::vector<std::thread *> pool;
+    size_t core_cnt = bufferConfig.num_remote_receive;
+    bool *ready_vec = (bool *)malloc(core_cnt * sizeof(bool));
+    std::vector<std::vector<package_t *>> work_queue(core_cnt);
+
+    auto work = [this](size_t tid, std::vector<package_t *> *queue, bool *local_ready, std::shared_future<void> *sync_barrier) -> void {
+        local_ready[tid] = true;
+        sync_barrier->wait();
+
+        for (package_t *pack : *queue) {
+            while (metaInfo[tid + 1 + (metaInfo.size() / 2)] != rdma_ready) {
+                continue;
+            }
+            setOpcode(metaInfo[tid + 1 + (metaInfo.size() / 2)], rdma_sending, false);
+            ownSendBuffer->loadPackage(ownSendBuffer->buf + (tid * bufferConfig.size_remote_receive), pack);
+            ownSendBuffer->sendPackage(pack, res.remote_buffer[tid], res.remote_rkeys[tid], res.qp, ownSendBuffer->buf + (tid * bufferConfig.size_remote_receive), tid);
+            poll_completion();
+
+            setOpcode(tid + 1 + (metaInfo.size() / 2), rdma_data_finished, true);
+
+            free(pack);
+        }
+    };
+
+    /* provide data to remote */
+    std::size_t maxDataElements = 1ull << 32;
     DataProvider d;
     d.generateDummyData(maxDataElements >> 1);
     std::ofstream out;
@@ -964,9 +1100,9 @@ int Connection::throughputTestMultiThread(std::string logName) {
                         package.setCurrentPackageSize(remainingSize);
                         remainingSize = 0;
                     }
-                    package_t* newPackage = package.deep_copy();
+                    package_t *newPackage = package.deep_copy();
 
-                    work_queue[rbi].push_back( newPackage );
+                    work_queue[rbi].push_back(newPackage);
 
                     if (remainingSize > maxDataToWrite) {
                         remainingSize -= maxDataToWrite;
@@ -977,7 +1113,6 @@ int Connection::throughputTestMultiThread(std::string logName) {
 
             std::promise<void> p;
             std::shared_future<void> ready_future(p.get_future());
-
 
             for (size_t tid = 0; tid < core_cnt; ++tid) {
                 pool.emplace_back(new std::thread(work, tid, &work_queue[tid], ready_vec, &ready_future));
@@ -994,7 +1129,7 @@ int Connection::throughputTestMultiThread(std::string logName) {
                 }
             }
             auto s_ts = std::chrono::high_resolution_clock::now();
-            p.set_value(); /* Start execution by notifying on the void promise */
+            p.set_value();                                                   /* Start execution by notifying on the void promise */
             std::for_each(pool.begin(), pool.end(), [](std::thread *t) { t->join(); delete t; }); /* Join and delete threads as soon as they are finished */
 
             auto e_ts = std::chrono::high_resolution_clock::now();
@@ -1024,125 +1159,59 @@ int Connection::throughputTestMultiThread(std::string logName) {
     busy = false;
     free(ready_vec);
 
+    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+
     return 0;
 }
 
-int Connection::consumingTestMultiThread(std::string logName) {
-    ownSendBuffer->clearBuffer();
+void Connection::consumeMultiThread(bool first) {
+    std::vector<std::thread *> pool;
 
-    /* provide data to remote */
-    std::size_t maxDataElements = 1ull << 30;
-    DataProvider d;
-    d.generateDummyData(maxDataElements >> 1);
-    std::ofstream out;
-    out.open(logName, std::ios_base::app);
-
-    std::ios_base::fmtflags f(std::cout.flags());
-    for (std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1) {
-        for (std::size_t iteration = 0; iteration < 10; ++iteration) {
-            uint64_t remainingSize = elementCount * sizeof(uint64_t);
-            uint64_t wholePackSize = elementCount * sizeof(uint64_t);
-            uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
-            uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
-            uint64_t packageID = generatePackageID();
-            std::cout << "[ConsumeTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
-            std::cout << "[ConsumeTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
-            uint64_t *copy = d.data;
-            int nextFree;
-            size_t packNum = 0;
-            size_t maxPackNum;
-
-            package_t package(packageID, maxDataToWrite, 1, type_package, wholePackSize, copy);
-            auto s_ts = std::chrono::high_resolution_clock::now();
-
-            while (remainingSize > maxPayloadSize) {
-                maxPackNum = bufferConfig.num_remote_receive;
-                for (size_t pack = 1; pack <= bufferConfig.num_remote_receive; ++pack) {
-                    if (remainingSize < maxPayloadSize * pack) {
-                        maxPackNum = pack - 1;
-                        break;
-                    }
-                }
-                for (size_t rbi = 0; rbi < maxPackNum; ++rbi) {
-                    package.setCurrentPackageNumber(packNum);
-                    ownSendBuffer->loadPackage(ownSendBuffer->buf + (rbi * bufferConfig.size_remote_receive), &package);
-                    ++packNum;
-                }
-                for (size_t rbi = 0; rbi < maxPackNum; ++rbi) {
-                    do {
-                        nextFree = getNextFreeReceive();
-                        continue;
-                    } while (nextFree == -1);
-                    setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_sending, false);
-
-                    if (remainingSize <= maxPayloadSize) break;
-                    ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf + (rbi * bufferConfig.size_remote_receive), 0);
-                    poll_completion();
-
-                    setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_consume_test, true);
-
-                    remainingSize -= maxDataToWrite;
-                    package.advancePayloadPtr(maxDataToWrite);
-                }
-            }
-
-            do {
-                nextFree = getNextFreeReceive();
-                continue;
-            } while (nextFree == -1);
-
-            setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_sending, false);
-            package.setCurrentPackageNumber(packNum);
-            package.setCurrentPackageSize(remainingSize);
-            ownSendBuffer->loadPackage(ownSendBuffer->buf, &package);
-            ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf, 0);
-            poll_completion();
-            setOpcode(std::size(metaInfo) / 2 + 1 + nextFree, rdma_consume_test, true);
-
-            auto e_ts = std::chrono::high_resolution_clock::now();
-            auto transfertime_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(e_ts - s_ts).count();
-            auto datasize = elementCount * sizeof(uint64_t);
-
-            typedef std::chrono::duration<double> d_sec;
-            d_sec secs = e_ts - s_ts;
-
-            std::cout << "[ConsumeTest] Communicated " << datasize << " Bytes (" << BtoMB(datasize) << " MB) in " << secs.count() << " s -- " << BtoMB(datasize) / (secs.count()) << " MB/s " << std::endl;
-
-            auto readable_size = GetBytesReadable(datasize);
-
-            std::cout.precision(15);
-            std::cout.setf(std::ios::fixed, std::ios::floatfield);
-            std::cout.setf(std::ios::showpoint);
-            out << ownSendBuffer->bufferSize << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << datasize << "\t" << transfertime_ns << "\t" << BtoMB(datasize) / (secs.count()) << std::endl
-                << std::flush;
-            std::cout.flags(f);
+    if (!first) {
+        if (readWorker) {
+            globalAbort = true;
+            readWorker->join();
+            globalAbort = false;
         }
     }
-    std::cout << "[ConsumeTest] Finished." << std::endl;
-    out.close();
-    busy = false;
 
-    return 0;
-}
+    size_t core_cnt = bufferConfig.num_own_receive;
 
-void Connection::consumeMultiThread(size_t index) {
-    setOpcode(index + 1, rdma_data_consuming, false);
+    auto mtConsume = [this](std::atomic<bool> *abort, size_t index) -> void {
+        using namespace std::chrono_literals;
+        std::ios_base::fmtflags f(std::cout.flags());
+        std::cout << "Starting monitoring thread for connection!" << std::flush;
+        size_t metaSize = std::size(metaInfo);
 
-    void *ptr = ownReceiveBuffer[index]->buf;
-    size_t bufferPayloadSize = ownReceiveBuffer[index]->getMaxPayloadSize();
-    uint64_t dataId = *((uint64_t *)ptr);
-    uint64_t dataSize = *((uint64_t *)(ptr + 32));
-    uint64_t *localPtr = (uint64_t *)malloc(dataSize);
-    uint64_t currentPackageSize = *((uint64_t *)(ptr + 8));
-    uint64_t currentPackageNumber = *((uint64_t *)(ptr + 16));
-    data_types dataType = (data_types)(*(uint64_t *)(ptr + 24));
+        while (!*abort) {
+            switch (metaInfo[index]) {
+                case rdma_data_finished: {
+                    consume(index);
+                } break;
+                case rdma_next_mt_consume_test: {
+                    *abort = true;
+                    metaInfo[index] = rdma_no_op;
+                    conStat = next_mt_consume;
+                } break;
+                case rdma_shutdown: {
+                    metaInfo[index] = rdma_no_op;
+                    conStat = closing;
+                }; break;
+                default: {
+                    continue;
+                }; break;
+            }
+            std::cout.flags(f);
+        }
+        std::cout << "[mtConsume] Ending through global abort." << std::endl;
+    };
 
-    std::cout << bufferPayloadSize << "\t" << dataId << "\t" << dataSize << "\t" << currentPackageNumber << "\t" << dataType << std::endl;
+    for (size_t tid = 0; tid < core_cnt; ++tid) {
+        pool.emplace_back(new std::thread(mtConsume, &globalAbort, tid));
+    }
 
-    memcpy(localPtr, ptr + META_INFORMATION_SIZE, currentPackageSize);
+    setOpcode(1, rdma_ready, true);
 
-    ownReceiveBuffer[index]->clearBuffer();
-
-    setOpcode(index + 1, rdma_ready, true);
-    free(localPtr);
+    std::for_each(pool.begin(), pool.end(), [](std::thread *t) { t->join(); delete t; });
+    pool.clear();
 }

@@ -410,14 +410,14 @@ void TaskManager::setup() {
                           << "Single-sided throughput test ended." << std::endl;
 
                 if (!(num_rb == 4 && bytes == 1ull << 29)) {
-                    CHECK(ConnectionManager::getInstance().closeConnection("ss_tput", false, true));
+                    CHECK(ConnectionManager::getInstance().closeConnection("ss_tput", false));
                 }
 
                 config.tcp_port += 1;
                 std::this_thread::sleep_for(2s);
             }
         }
-        CHECK(ConnectionManager::getInstance().closeConnection("ss_tput", true, false));
+        CHECK(ConnectionManager::getInstance().closeConnection("ss_tput", true));
     }));
 
     registerTask(new Task("ds_tput", "Double-sided throughput test", []() -> void {
@@ -459,14 +459,14 @@ void TaskManager::setup() {
                 std::this_thread::sleep_for(1s);
 
                 if (!(num_rb == 4 && bytes == 1ull << 29)) {
-                    CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", false, true));
+                    CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", false));
                 }
 
                 config.tcp_port += 1;
                 std::this_thread::sleep_for(2s);
             }
         }
-        CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", true, false));
+        CHECK(ConnectionManager::getInstance().closeConnection("ds_tput", true));
     }));
 
     registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", []() -> void {
@@ -479,7 +479,7 @@ void TaskManager::setup() {
                            .ib_port = 1,
                            .gid_idx = 0};
 
-        for (size_t num_rb = 2; num_rb < 5; ++num_rb) {
+        for (size_t num_rb = 2; num_rb < 7; ++num_rb) {
             auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::stringstream logNameStream;
             logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ss_tput" << num_rb << ".log";
@@ -505,15 +505,15 @@ void TaskManager::setup() {
                 std::cout << std::endl
                           << "Single-sided throughput test ended." << std::endl;
 
-                if (!(num_rb == 4 && bytes == 1ull << 29)) {
-                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", false, true));
+                if (!(num_rb == 6 && bytes == 1ull << 29)) {
+                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", false));
                 }
 
                 config.tcp_port += 1;
                 std::this_thread::sleep_for(2s);
             }
         }
-        CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", true, false));
+        CHECK(ConnectionManager::getInstance().closeConnection("mt_ss_tput", true));
     }));
 
     registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", []() -> void {
@@ -554,15 +554,15 @@ void TaskManager::setup() {
 
                 std::this_thread::sleep_for(1s);
 
-                if (!(num_rb == 4 && bytes == 1ull << 29)) {
-                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", false, true));
+                if (!(num_rb == 6 && bytes == 1ull << 29)) {
+                    CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", false));
                 }
 
                 config.tcp_port += 1;
                 std::this_thread::sleep_for(2s);
             }
         }
-        CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", true, false));
+        CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", true));
     }));
 }
 
