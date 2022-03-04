@@ -110,7 +110,7 @@ class Connection {
     int consumingTestMultiThread(std::string logName);
 
     void consume(size_t index);
-    void consumeMultiThread(bool first = false);
+    void consumeMultiThread();
 
     std::atomic<connection_status> conStat;
 

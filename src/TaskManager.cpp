@@ -392,11 +392,11 @@ void TaskManager::setup() {
 
             for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
                 buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                                .size_own_receive = 640,
+                                                .size_own_receive = 64,
                                                 .num_remote_receive = num_rb,
                                                 .size_remote_receive = bytes,
                                                 .size_own_send = bytes * num_rb,
-                                                .size_remote_send = 640};
+                                                .size_remote_send = 64};
 
                 CHECK(ConnectionManager::getInstance().openConnection("ss_tput", config, bufferConfig));
 
@@ -439,11 +439,11 @@ void TaskManager::setup() {
 
             for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
                 buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                                .size_own_receive = 640,
+                                                .size_own_receive = 64,
                                                 .num_remote_receive = num_rb,
                                                 .size_remote_receive = bytes,
                                                 .size_own_send = bytes * num_rb,
-                                                .size_remote_send = 640};
+                                                .size_remote_send = 64};
 
                 CHECK(ConnectionManager::getInstance().openConnection("ds_tput", config, bufferConfig));
 
@@ -488,11 +488,11 @@ void TaskManager::setup() {
 
             for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
                 buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                                .size_own_receive = 640,
+                                                .size_own_receive = 64,
                                                 .num_remote_receive = num_rb,
                                                 .size_remote_receive = bytes,
                                                 .size_own_send = bytes * num_rb,
-                                                .size_remote_send = 640};
+                                                .size_remote_send = 64};
 
                 CHECK(ConnectionManager::getInstance().openConnection("mt_ss_tput", config, bufferConfig));
 
@@ -526,7 +526,7 @@ void TaskManager::setup() {
                            .ib_port = 1,
                            .gid_idx = 0};
 
-        for (size_t num_rb = 2; num_rb < 5; ++num_rb) {
+        for (size_t num_rb = 2; num_rb < 7; ++num_rb) {
             auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::stringstream logNameStream;
             logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << "mt_ds_tput" << num_rb << ".log";
@@ -535,11 +535,11 @@ void TaskManager::setup() {
 
             for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
                 buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                                .size_own_receive = 640,
+                                                .size_own_receive = 64,
                                                 .num_remote_receive = num_rb,
                                                 .size_remote_receive = bytes,
-                                                .size_own_send = bytes * num_rb,
-                                                .size_remote_send = 640};
+                                                .size_own_send = bytes * (int)(num_rb/2),
+                                                .size_remote_send = 64};
 
                 CHECK(ConnectionManager::getInstance().openConnection("mt_ds_tput", config, bufferConfig));
 
@@ -551,8 +551,6 @@ void TaskManager::setup() {
 
                 std::cout << std::endl
                           << "Double-sided throughput test ended." << std::endl;
-
-                std::this_thread::sleep_for(1s);
 
                 if (!(num_rb == 6 && bytes == 1ull << 29)) {
                     CHECK(ConnectionManager::getInstance().closeConnection("mt_ds_tput", false));

@@ -38,7 +38,7 @@ class package_t {
             payload_size_t _total_data_size) : id{_id},
                                                current_payload_size{_payload_size},
                                                package_number{_package_number},
-                                               data_type{data_type},
+                                               data_type{_data_type},
                                                total_data_size{_total_data_size} {}
     };
 
@@ -51,8 +51,11 @@ class package_t {
     }
 
     [[nodiscard]] auto header_str() const {
-        return " Total expected payload is " + std::to_string(header.total_data_size) + " bytes." +
-               ". Carrying " + std::to_string(header.current_payload_size) + " bytes.";
+        return "Total data size is " + std::to_string(header.total_data_size) + " bytes.\n" +
+               "Carrying " + std::to_string(header.current_payload_size) + " bytes.\n" + 
+               "Package id: " + std::to_string(header.id) + "\n" + 
+               "Package Number: " + std::to_string(header.package_number) + "\n" +
+               "Data Type: " + std::to_string(header.data_type) + "\n";
     }
 
    private:
@@ -83,7 +86,7 @@ class package_t {
     // }
 
     package_t* deep_copy() const {
-        return new package_t( header.id, header.current_payload_size, header.package_number, header.data_type, header.total_data_size, payload );
+        return new package_t( header.id, header.current_payload_size, header.package_number, (uint64_t)header.data_type, header.total_data_size, payload );
     }
 
     void setCurrentPackageSize(const std::size_t bytes) {

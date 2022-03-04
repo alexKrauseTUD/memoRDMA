@@ -19,7 +19,7 @@ ConnectionManager::ConnectionManager() {
                         con->init(true);
                         break;
                     case mt_consume:
-                        con->consumeMultiThread(true);
+                        con->consumeMultiThread();
                         break;
                     case next_mt_consume:
                         con->init(true);
