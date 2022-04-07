@@ -2,7 +2,7 @@
 
 #include "Connection.h"
 
-ConnectionManager::ConnectionManager() {
+ConnectionManager::ConnectionManager() : globalConnectionId{1} {
     monitor_connection = [this](bool *abort) -> void {
         using namespace std::chrono_literals;
 
@@ -12,19 +12,12 @@ ConnectionManager::ConnectionManager() {
             std::this_thread::sleep_for(100ms);
             for (auto const &[name, con] : connections) {
                 switch (con->conStat) {
-                    case closing:
+                    case closing: {
                         closeConnection(name, false);
-                        break;
-                    case reinitialize:
-                        con->init(true);
-                        break;
-                    case mt_consume:
+                    } break;
+                    case mt_consume: {
                         con->consumeMultiThread();
-                        break;
-                    case next_mt_consume:
-                        con->init(true);
-                        con->consumeMultiThread();
-                        break;
+                    } break;
                     default:
                         break;
                 }
@@ -40,68 +33,66 @@ ConnectionManager::~ConnectionManager() {
     stop();
 }
 
-int ConnectionManager::openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig) {
-    if (!connections.contains(connectionName)) {
-        connections.insert(std::make_pair(connectionName, new Connection(config, bufferConfig)));
+int ConnectionManager::registerConnection(config_t &config, buffer_config_t &bufferConfig) {
+    do {
+        ++globalConnectionId;
+    } while (connections.contains(globalConnectionId));
 
-        return 0;
-    } else {
-        std::cout << "There is already a connection with the name '" << connectionName << "'! Please use another one!" << std::endl;
-    }
+    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig)));
 
-    return 1;
-}
-
-int ConnectionManager::receiveConnection(std::string connectionName, config_t &config) {
-    if (!connections.contains(connectionName)) {
-        buffer_config_t bufferConfig;
-        connections.insert(std::make_pair(connectionName, new Connection(config, bufferConfig)));
-
-        return 0;
-    } else {
-        std::cout << "There is already a connection with the name '" << connectionName << "'! Please use another one!" << std::endl;
-    }
-
-    return 1;
+    return globalConnectionId;
 }
 
 void ConnectionManager::printConnections() {
     for (auto const &[name, con] : connections) {
-        std::cout << name << ':' << con->res.sock << std::endl;
+        std::cout << "Connection ID:\t\t" << name << std::endl;
+        con->printConnectionInfo();
+        std::cout << "\n"
+                  << std::endl;
     }
 }
 
-int ConnectionManager::closeConnection(std::string connectionName, bool sendRemote) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct name!" << std::endl;
-    } else {
-        auto con = connections[connectionName];
-        connections.erase(connectionName);
+int ConnectionManager::closeConnection(std::size_t connectionId, bool sendRemote) {
+    if (connections.contains(connectionId)) {
+        auto con = connections[connectionId];
+        connections.erase(connectionId);
         return con->closeConnection(sendRemote);
+    } else {
+        std::cout << "The Connection you wanted to close was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
 }
 
 int ConnectionManager::closeAllConnections() {
-    int success = 0;
+    std::size_t success = 0;
+    std::size_t allSuccess = 0;
+
     for (auto &[name, con] : connections) {
-        success += con->closeConnection();
+        success = con->closeConnection();
         if (success == 0)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
+        else
+            std::cout << "Something went wrong while closing connection '" << name << "'!" << std::endl;
+        allSuccess += success;
     }
 
-    connections.clear();
+    if (allSuccess == 0) {
+        std::cout << "All Connections were successfully closed!" << std::endl;
+        connections.clear();
+    } else {
+        return 1;
+    }
 
-    return success;
+    return allSuccess;
 }
 
 // TODO: How about a pointer to the data;; Generic datatype?
-int ConnectionManager::sendData(std::string connectionName, std::string &data) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct name!" << std::endl;
+int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->sendData(data);
     } else {
-        return connections[connectionName]->sendData(data);
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
@@ -115,64 +106,117 @@ int ConnectionManager::sendDataToAllConnections(std::string &data) {
         success += sendData(name, data);
     }
 
-    if (success == 0)
+    if (success == 0) {
         std::cout << "The data was successfully broadcasted to all connections!" << std::endl;
-    else
+    } else {
         std::cout << "Something went wrong when trying to broadcast the data to all connections!" << std::endl;
+        success = 1;
+    }
 
     return success;
 }
 
-int ConnectionManager::addReceiveBuffer(std::string connectionName, uint8_t quantity = 1) {
+int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {
     // TODO: sanity check
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->reconfigureBuffer(bufferConfig);
     } else {
-        return connections[connectionName]->addReceiveBuffer(quantity);
+        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
 }
 
-int ConnectionManager::removeReceiveBuffer(std::string connectionName, uint8_t quantity = 1) {
+int ConnectionManager::addReceiveBuffer(std::size_t connectionId, uint8_t quantity = 1) {
     // TODO: sanity check
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->addReceiveBuffer(quantity);
     } else {
-        return connections[connectionName]->removeReceiveBuffer(quantity);
+        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
 }
 
-int ConnectionManager::resizeReceiveBuffer(std::string connectionName, std::size_t newSize) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
+int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, uint8_t quantity = 1) {
+    // TODO: sanity check
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->removeReceiveBuffer(quantity);
     } else {
-        return connections[connectionName]->resizeReceiveBuffer(newSize);
+        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
 }
 
-int ConnectionManager::resizeSendBuffer(std::string connectionName, std::size_t newSize) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct name!" << std::endl;
+int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->resizeReceiveBuffer(newSize);
     } else {
-        return connections[connectionName]->resizeSendBuffer(newSize);
+        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
     return 1;
 }
 
-int ConnectionManager::pendingBufferCreation(std::string connectionName) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
+int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t newSize) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->resizeSendBuffer(newSize);
     } else {
-        return connections[connectionName]->pendingBufferCreation();
+        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
-    return 0;
+    return 1;
+}
+
+int ConnectionManager::pendingBufferCreation(std::size_t connectionId) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->pendingBufferCreation();
+    } else {
+        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
+int ConnectionManager::throughputTest(std::size_t connectionId, std::string logName) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->throughputTest(logName);
+    } else {
+        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
+int ConnectionManager::consumingTest(std::size_t connectionId, std::string logName) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->consumingTest(logName);
+    } else {
+        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
+int ConnectionManager::throughputTestMultiThread(std::size_t connectionId, std::string logName) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->throughputTestMultiThread(logName);
+    } else {
+        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
+int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::string logName) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->consumingTestMultiThread(logName);
+    } else {
+        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
 }
 
 void ConnectionManager::stop() {
@@ -183,44 +227,4 @@ void ConnectionManager::stop() {
 
 bool ConnectionManager::abortSignaled() const {
     return globalAbort;
-}
-
-int ConnectionManager::throughputTest(std::string connectionName, std::string logName) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-    } else {
-        return connections[connectionName]->throughputTest(logName);
-    }
-
-    return 0;
-}
-
-int ConnectionManager::consumingTest(std::string connectionName, std::string logName) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-    } else {
-        return connections[connectionName]->consumingTest(logName);
-    }
-
-    return 0;
-}
-
-int ConnectionManager::throughputTestMultiThread(std::string connectionName, std::string logName) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-    } else {
-        return connections[connectionName]->throughputTestMultiThread(logName);
-    }
-
-    return 0;
-}
-
-int ConnectionManager::consumingTestMultiThread(std::string connectionName, std::string logName) {
-    if (!connections.contains(connectionName)) {
-        std::cout << "The Connection was not found. Please be sure to use the correct name!" << std::endl;
-    } else {
-        return connections[connectionName]->consumingTestMultiThread(logName);
-    }
-
-    return 0;
 }

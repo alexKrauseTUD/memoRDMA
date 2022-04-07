@@ -78,6 +78,7 @@ struct buffer_config_t {
     std::size_t size_remote_receive;
     std::size_t size_own_send;
     std::size_t size_remote_send;
+    std::size_t meta_info_size;
 };
 
 static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
@@ -86,7 +87,8 @@ static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
             .num_remote_receive = bufferConfig.num_own_receive,
             .size_remote_receive = bufferConfig.size_own_receive,
             .size_own_send = bufferConfig.size_remote_send,
-            .size_remote_send = bufferConfig.size_own_send};
+            .size_remote_send = bufferConfig.size_own_send,
+            .meta_info_size = bufferConfig.meta_info_size};
 }
 
 // \begin socket operation

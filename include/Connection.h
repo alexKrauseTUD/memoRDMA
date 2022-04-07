@@ -41,9 +41,9 @@ struct receive_data {
 enum connection_status {
     active = 1,
     closing = 2,
-    reinitialize = 3,
+    // reinitialize = 3,
     mt_consume = 4,
-    next_mt_consume = 5
+    // next_mt_consume = 5
 };
 
 class Connection {
@@ -63,7 +63,7 @@ class Connection {
 
     std::map<uint64_t, receive_data> receiveMap;
 
-    std::array<uint16_t, 16> metaInfo{0};
+    std::vector<uint8_t> metaInfo;
 
     struct ibv_mr *metaInfoMR;
 
@@ -97,12 +97,16 @@ class Connection {
     int resizeReceiveBuffer(std::size_t newSize);
     int resizeSendBuffer(std::size_t newSize);
 
+    int reconfigureBuffer(buffer_config_t &bufferConfig);
+
     int pendingBufferCreation();
 
     int getNextFreeReceive();
     uint32_t getOwnSendToRemoteReceiveRatio();
     void setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote);
     uint64_t generatePackageID();
+
+    void printConnectionInfo();
 
     int throughputTest(std::string logName);
     int consumingTest(std::string logName);

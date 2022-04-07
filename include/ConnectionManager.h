@@ -16,26 +16,27 @@ class ConnectionManager {
     ConnectionManager(ConnectionManager const &) = delete;
     void operator=(ConnectionManager const &) = delete;
 
-    int openConnection(std::string connectionName, config_t &config, buffer_config_t &bufferConfig);
+    int registerConnection(config_t &config, buffer_config_t &bufferConfig);
     void printConnections();
-    int closeConnection(std::string connectionName, bool sendRemote = true);
+    int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
-    int sendData(std::string connectionName, std::string &data);
+    int sendData(std::size_t connectionId, std::string &data);
     int sendDataToAllConnections(std::string &data);
-    int addReceiveBuffer(std::string connectionName, uint8_t quantity);
-    int removeReceiveBuffer(std::string connectionName, uint8_t quantity);
-    int resizeReceiveBuffer(std::string connectionName, std::size_t newSize);
-    int resizeSendBuffer(std::string connectionName, std::size_t newSize);
-    int receiveConnection(std::string connectionName, config_t &config);
+    int addReceiveBuffer(std::size_t connectionId, uint8_t quantity);
+    int removeReceiveBuffer(std::size_t connectionId, uint8_t quantity);
+    int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize);
+    int resizeSendBuffer(std::size_t connectionId, std::size_t newSize);
 
-    int throughputTest(std::string connectionName, std::string logName);
-    int consumingTest(std::string connectionName, std::string logName);
-    int throughputTestMultiThread(std::string connectionName, std::string logName);
-    int consumingTestMultiThread(std::string connectionName, std::string logName);
+    int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    std::map<std::string, Connection *> connections;
+    int throughputTest(std::size_t connectionId, std::string logName);
+    int consumingTest(std::size_t connectionId, std::string logName);
+    int throughputTestMultiThread(std::size_t connectionId, std::string logName);
+    int consumingTestMultiThread(std::size_t connectionId, std::string logName);
 
-    int pendingBufferCreation(std::string connectionName);
+    std::map<std::size_t, Connection *> connections;
+
+    int pendingBufferCreation(std::size_t connectionId);
 
     void stop();
     bool abortSignaled() const;
@@ -49,6 +50,8 @@ class ConnectionManager {
     std::function<void(bool *)> monitor_connection;
 
     std::thread *monitorWorker;
+
+    std::size_t globalConnectionId;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION_MANAGER
