@@ -27,6 +27,14 @@ struct cm_con_data_t {
     uint8_t gid[16];  // GID
 } __attribute__((packed));
 
+struct reconfigure_data {
+    buffer_config_t buffer_config;
+    uintptr_t send_buf;
+    uint32_t send_rkey;
+    std::vector<uintptr_t> receive_buf;
+    std::vector<uint32_t> receive_rkey;
+};
+
 class Buffer {
    public:
     explicit Buffer(std::size_t _bufferSize);
@@ -55,11 +63,13 @@ class SendBuffer : public Buffer {
     void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
     void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
-    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void* writePtr, uint64_t wrID);
+    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
     //  void setCommitCode(rdma_handler_communication opcode);
 
     void loadPackage(char *writePtr, package_t *p);
-    void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void* writePtr, uint64_t wrID);
+    void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
+
+    void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp);
 
     //  std::size_t getMaxWriteSize();
 

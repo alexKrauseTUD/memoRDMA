@@ -31,7 +31,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
             // std::this_thread::sleep_for(10ms);
             for (size_t i = 1; i < metaSize / 2; ++i) {
                 switch (metaInfo[i]) {
-                    case rdma_no_op: 
+                    case rdma_no_op:
                     case rdma_ready:
                     case rdma_data_consuming: {
                         continue;
@@ -67,7 +67,7 @@ void Connection::init(bool reinitialize) {
     conStat = active;
 
     if (reinitialize) {
-        metaInfo = std::vector<uint8_t> (bufferConfig.meta_info_size);
+        metaInfo = std::vector<uint8_t>(bufferConfig.meta_info_size);
 
         destroyResources();
         config.tcp_port += 1;
@@ -628,24 +628,205 @@ int Connection::closeConnection(bool sendRemote) {
     return 0;
 }
 
-int Connection::addReceiveBuffer(unsigned int quantity = 1) {
-    std::cout << "This function adds a receive buffer to this connection but isn't implemented yet. Sorry!" << std::endl;
-    return 0;
+int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
+    std::size_t numBlocked = 0;
+    bool allBlocked = false;
+
+    while (!allBlocked) {
+        while (numBlocked < bufferConfig.num_own_receive + 1) {
+            for (std::size_t i = 0; i < bufferConfig.num_own_receive + 1; ++i) {
+                if (metaInfo[i] == rdma_ready) {
+                    setOpcode(i, rdma_blocked, true);
+                    ++numBlocked;
+                } else {
+                    continue;
+                }
+            }
+        }
+
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(10us);
+
+        allBlocked = true;
+
+        for (std::size_t i = 0; i < bufferConfig.num_own_receive + 1; ++i) {
+            allBlocked = allBlocked && metaInfo[i] == rdma_blocked;
+        }
+    }
+
+    res.own_mr.clear();
+    res.own_buffer.clear();
+
+    if (bufConfig.size_own_send != bufferConfig.size_own_send) {
+        free(ownSendBuffer->buf);
+        ibv_dereg_mr(ownSendBuffer->mr);
+        delete ownSendBuffer;
+
+        bufferConfig.size_own_send = bufConfig.size_own_send;
+
+        setupSendBuffer();
+
+        ownSendBuffer->mr = registerMemoryRegion(res.pd, ownSendBuffer->buf, ownSendBuffer->getBufferSize());
+        assert(ownSendBuffer->mr != NULL);
+    }
+
+    res.own_mr.push_back(ownSendBuffer->mr);
+    res.own_buffer.push_back(ownSendBuffer->buf);
+
+    if (bufConfig.size_own_receive != bufferConfig.size_own_receive || bufConfig.num_own_receive != bufferConfig.num_own_receive) {
+        for (auto rb : ownReceiveBuffer) {
+            free(rb->buf);
+            ibv_dereg_mr(rb->mr);
+        }
+        ownReceiveBuffer.clear();
+
+        bufferConfig.size_own_receive = bufConfig.size_own_receive;
+        bufferConfig.num_own_receive = bufConfig.num_own_receive;
+
+        setupReceiveBuffer();
+
+        for (auto rb : ownReceiveBuffer) {
+            rb->mr = registerMemoryRegion(res.pd, rb->buf, rb->getBufferSize());
+            assert(rb->mr != NULL);
+        }
+    }
+
+    for (auto rb : ownReceiveBuffer) {
+        res.own_mr.push_back(rb->mr);
+        res.own_buffer.push_back(rb->buf);
+    }
+
+    bufferConfig = bufConfig;
+
+    std::vector<uintptr_t> receive_buf;
+    std::vector<uint32_t> receive_rkey;
+
+    for (const auto &rb : ownReceiveBuffer) {
+        receive_buf.push_back((uintptr_t)rb->buf);
+        receive_rkey.push_back(rb->mr->rkey);
+    }
+
+    reconfigure_data recData = {.buffer_config = bufConfig,
+                                .send_buf = (uintptr_t)ownSendBuffer->buf,
+                                .send_rkey = (uint32_t)ownSendBuffer->mr,
+                                .receive_buf = receive_buf,
+                                .receive_rkey = receive_rkey};
+
+    int i = -1;
+    int nextFree;
+
+    while (i == -1) {
+        nextFree = getNextFreeReceive();
+    }
+
+    ownSendBuffer->sendReconfigure(recData, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp);
 }
 
-int Connection::removeReceiveBuffer(unsigned int quantity = 1) {
-    std::cout << "This function removes a receive buffer from this connection but isn't implemented yet. Sorry!" << std::endl;
-    return 0;
+int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
+    reconfigureBuffer(bufConfig);
 }
 
-int Connection::resizeReceiveBuffer(size_t newSize) {
-    std::cout << "This function resizes all receive buffer of this connection but isn't implemented yet. Sorry!" << std::endl;
-    return 0;
+int Connection::receiveReconfigureBuffer(std::size_t index) {
 }
 
-int Connection::resizeSendBuffer(size_t newSize) {
-    std::cout << "This function resizes the send buffer of this connection but isn't implemented yet. Sorry!" << std::endl;
-    return 0;
+int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own) {
+    buffer_config_t bufConfig = bufferConfig;
+    if (own) {
+        bufConfig.num_own_receive += quantity;
+        if (bufConfig.num_own_receive > (metaInfo.size() / 2) - 1) {
+            std::cout << "It is only possible to have " << (metaInfo.size() / 2) - 1 << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) - 1 << std::endl;
+            bufConfig.num_own_receive = (metaInfo.size() / 2) - 1;
+        }
+        if (bufConfig.num_own_receive < 1) {
+            std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
+            bufConfig.num_own_receive = 1;
+        }
+    } else {
+        bufConfig.num_remote_receive += quantity;
+        if (bufConfig.num_remote_receive > (metaInfo.size() / 2) - 1) {
+            std::cout << "It is only possible to have " << (metaInfo.size() / 2) - 1 << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) - 1 << std::endl;
+            bufConfig.num_remote_receive = (metaInfo.size() / 2) - 1;
+        }
+        if (bufConfig.num_remote_receive < 1) {
+            std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
+            bufConfig.num_remote_receive = 1;
+        }
+    }
+
+    return sendReconfigureBuffer(bufConfig);
+}
+
+int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own) {
+    buffer_config_t bufConfig = bufferConfig;
+    if (own) {
+        bufConfig.num_own_receive -= quantity;
+        if (bufConfig.num_own_receive > (metaInfo.size() / 2) - 1) {
+            std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
+            bufConfig.num_own_receive = 1;
+        }
+        if (bufConfig.num_own_receive < 1) {
+            std::cout << "There has to be at least 1 RB on each side! You violated this rule! Therefore, the number of RB is set to 1." << std::endl;
+            bufConfig.num_own_receive = 1;
+        }
+    } else {
+        bufConfig.num_remote_receive -= quantity;
+        if (bufConfig.num_remote_receive > (metaInfo.size() / 2) - 1) {
+            std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
+            bufConfig.num_remote_receive = 1;
+        }
+        if (bufConfig.num_remote_receive < 1) {
+            std::cout << "There has to be at least 1 RB on each side! You violated this rule! Therefore, the number of RB is set to 1." << std::endl;
+            bufConfig.num_remote_receive = 1;
+        }
+    }
+
+    return sendReconfigureBuffer(bufConfig);
+}
+
+int Connection::resizeReceiveBuffer(std::size_t newSize, bool own) {
+    buffer_config_t bufConfig = bufferConfig;
+    if (own) {
+        bufConfig.size_own_receive = newSize;
+        if (bufConfig.size_own_receive > (1ull < 30)) {
+            std::cout << "The maximal size for an RB is " << (1ull < 30) << "! You violated this rule! Therefore, the size of RB is set to " << (1ull < 30) << std::endl;
+            bufConfig.size_own_receive = (1ull < 30);
+        }
+        if (bufConfig.size_own_receive < 64) {
+            std::cout << "There has to be at least 64 Byte for each RB! You violated this rule! Therefore, the size of RB is set to 64." << std::endl;
+            bufConfig.size_own_receive = 64;
+        }
+    } else {
+        bufConfig.size_remote_receive = newSize;
+        if (bufConfig.size_remote_receive > (1ull < 30)) {
+            std::cout << "The maximal size for an RB is " << (1ull < 30) << "! You violated this rule! Therefore, the size of RB is set to " << (1ull < 30) << std::endl;
+            bufConfig.size_remote_receive = 64;
+        }
+        if (bufConfig.size_remote_receive < 64) {
+            std::cout << "There has to be at least 64 Byte for each RB! You violated this rule! Therefore, the size of RB is set to 64." << std::endl;
+            bufConfig.size_remote_receive = 64;
+        }
+    }
+
+    return sendReconfigureBuffer(bufConfig);
+}
+
+int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
+    buffer_config_t bufConfig = bufferConfig;
+    if (own) {
+        bufConfig.size_own_send = newSize;
+        if (bufConfig.size_own_send < 64) {
+            std::cout << "There has to be at least 64 Byte for an SB! You violated this rule! Therefore, the size of SB is set to 64." << std::endl;
+            bufConfig.size_own_send = 64;
+        }
+    } else {
+        bufConfig.size_remote_send = newSize;
+        if (bufConfig.size_remote_send < 64) {
+            std::cout << "There has to be at least 64 Byte for an SB! You violated this rule! Therefore, the size of SB is set to 64." << std::endl;
+            bufConfig.size_remote_send = 64;
+        }
+    }
+
+    return sendReconfigureBuffer(bufConfig);
 }
 
 int Connection::pendingBufferCreation() {
@@ -736,7 +917,7 @@ int Connection::throughputTest(std::string logName) {
     out.close();
     busy = false;
 
-    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
 
     return 0;
 }
@@ -853,7 +1034,7 @@ int Connection::consumingTest(std::string logName) {
         }
     }
 
-    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
 
     return 0;
 }
@@ -997,7 +1178,7 @@ int Connection::throughputTestMultiThread(std::string logName) {
     busy = false;
     free(ready_vec);
 
-    setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
+    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
 
     return 0;
 }
@@ -1157,10 +1338,10 @@ int Connection::consumingTestMultiThread(std::string logName) {
     }
 
     for (size_t c = 1; c <= thread_cnt; ++c) {
-        setOpcode(c + (metaInfo.size() / 2), rdma_next_mt_consume_test, true);
+        setOpcode(c + (metaInfo.size() / 2), rdma_test_finished, true);
     }
 
-    setOpcode((metaInfo.size() / 2) + 1 + thread_cnt, rdma_next_test, true);
+    // setOpcode((metaInfo.size() / 2) + 1 + thread_cnt, rdma_next_test, true);
 
     return 0;
 }
@@ -1188,7 +1369,7 @@ void Connection::consumeMultiThread() {
                     case rdma_data_finished: {
                         consume(id);
                     } break;
-                    case rdma_next_mt_consume_test: {
+                    case rdma_test_finished: {
                         setOpcode(id + 1, rdma_no_op, false);
                         abort = true;
                     } break;

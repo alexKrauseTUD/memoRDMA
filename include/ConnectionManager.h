@@ -22,10 +22,10 @@ class ConnectionManager {
     int closeAllConnections();
     int sendData(std::size_t connectionId, std::string &data);
     int sendDataToAllConnections(std::string &data);
-    int addReceiveBuffer(std::size_t connectionId, uint8_t quantity);
-    int removeReceiveBuffer(std::size_t connectionId, uint8_t quantity);
-    int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize);
-    int resizeSendBuffer(std::size_t connectionId, std::size_t newSize);
+    int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
+    int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
+    int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own);
+    int resizeSendBuffer(std::size_t connectionId, std::size_t newSize, bool own);
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 

@@ -70,7 +70,7 @@ class Connection {
     void setupSendBuffer();
     void setupReceiveBuffer();
 
-    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, size_t size);
+    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, std::size_t size);
 
     void init(bool reinitialize = false);
 
@@ -90,20 +90,22 @@ class Connection {
     int closeConnection(bool send_remote = true);
     void destroyResources();
 
-    void receiveDataFromRemote(size_t index);
+    void receiveDataFromRemote(std::size_t index);
 
-    int addReceiveBuffer(unsigned int quantity);
-    int removeReceiveBuffer(unsigned int quantity);
-    int resizeReceiveBuffer(std::size_t newSize);
-    int resizeSendBuffer(std::size_t newSize);
+    int addReceiveBuffer(std::size_t quantity, bool own);
+    int removeReceiveBuffer(std::size_t quantity, bool own);
+    int resizeReceiveBuffer(std::size_t newSize, bool own);
+    int resizeSendBuffer(std::size_t newSize, bool own);
 
-    int reconfigureBuffer(buffer_config_t &bufferConfig);
+    int reconfigureBuffer(buffer_config_t &bufConfig);
+    int sendReconfigureBuffer(buffer_config_t &bufConfig);
+    int receiveReconfigureBuffer(std::size_t index);
 
     int pendingBufferCreation();
 
     int getNextFreeReceive();
     uint32_t getOwnSendToRemoteReceiveRatio();
-    void setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote);
+    void setOpcode(std::size_t index, rdma_handler_communication opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
     void printConnectionInfo();
@@ -113,7 +115,7 @@ class Connection {
     int throughputTestMultiThread(std::string logName);
     int consumingTestMultiThread(std::string logName);
 
-    void consume(size_t index);
+    void consume(std::size_t index);
     void consumeMultiThread();
 
     std::atomic<connection_status> conStat;

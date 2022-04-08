@@ -119,7 +119,7 @@ int ConnectionManager::sendDataToAllConnections(std::string &data) {
 int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {
     // TODO: sanity check
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->reconfigureBuffer(bufferConfig);
+        return connections[connectionId]->sendReconfigureBuffer(bufferConfig);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -127,10 +127,10 @@ int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config
     return 1;
 }
 
-int ConnectionManager::addReceiveBuffer(std::size_t connectionId, uint8_t quantity = 1) {
+int ConnectionManager::addReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
     // TODO: sanity check
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->addReceiveBuffer(quantity);
+        return connections[connectionId]->addReceiveBuffer(quantity, own);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -138,10 +138,10 @@ int ConnectionManager::addReceiveBuffer(std::size_t connectionId, uint8_t quanti
     return 1;
 }
 
-int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, uint8_t quantity = 1) {
+int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
     // TODO: sanity check
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->removeReceiveBuffer(quantity);
+        return connections[connectionId]->removeReceiveBuffer(quantity, own);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -149,9 +149,9 @@ int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, uint8_t qua
     return 1;
 }
 
-int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize) {
+int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeReceiveBuffer(newSize);
+        return connections[connectionId]->resizeReceiveBuffer(newSize, own);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -159,9 +159,9 @@ int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t
     return 1;
 }
 
-int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t newSize) {
+int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeSendBuffer(newSize);
+        return connections[connectionId]->resizeSendBuffer(newSize, own);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }

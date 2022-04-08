@@ -82,3 +82,19 @@ void SendBuffer::loadPackage(char* writePtr, package_t* p) {
 void SendBuffer::sendPackage(package_t* p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) {
     post_send(p->packageSize(), IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr, wrID);
 }
+
+void SendBuffer::sendReconfigure(reconfigure_data& recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp) {
+    auto p = buf;
+    memcpy(p, &recData.buffer_config, sizeof(buffer_config_t));
+    p += sizeof(buffer_config_t);
+    memcpy(p, &recData.send_buf, sizeof(recData.send_buf));
+    p += sizeof(recData.send_buf);
+    memcpy(p, &recData.send_rkey, sizeof(recData.send_rkey));
+    p += sizeof(recData.send_rkey);
+    memcpy(p, recData.receive_buf.data(), sizeof(uintptr_t) * recData.receive_buf.size());
+    p += sizeof(uintptr_t) * recData.receive_buf.size();
+    memcpy(p, recData.receive_rkey.data(), sizeof(uintptr_t) * recData.receive_rkey.size());
+    p += sizeof(uintptr_t) * recData.receive_rkey.size();
+
+    post_send(p-buf, IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, buf, 1);
+}
