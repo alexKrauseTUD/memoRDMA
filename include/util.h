@@ -72,13 +72,13 @@ struct config_t {
 };
 
 struct buffer_config_t {
-    unsigned int num_own_receive;
-    std::size_t size_own_receive;
-    unsigned int num_remote_receive;
-    std::size_t size_remote_receive;
-    std::size_t size_own_send;
-    std::size_t size_remote_send;
-    std::size_t meta_info_size;
+    uint8_t num_own_receive;
+    uint32_t size_own_receive;
+    uint8_t num_remote_receive;
+    uint32_t size_remote_receive;
+    uint64_t size_own_send;
+    uint64_t size_remote_send;
+    uint8_t meta_info_size;
 };
 
 static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {

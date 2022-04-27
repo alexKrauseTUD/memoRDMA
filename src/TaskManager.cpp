@@ -12,33 +12,35 @@ TaskManager::TaskManager() : globalId{1} {
     setup();
 
     registerTask(new Task("executeMulti", "Execute multiple by ID with shutdown", [&]() -> void {
-        std::vector< std::size_t > taskList;
-        std::cout << "Space-separated list of tests to run: " << std::endl << "> " << std::flush;
+        std::vector<std::size_t> taskList;
+        std::cout << "Space-separated list of tests to run: " << std::endl
+                  << "> " << std::flush;
         std::string content = "";
         const char delimiter = ' ';
-        std::getline( std::cin, content );
+        std::getline(std::cin, content);
         try {
-            size_t last = 0; 
-            size_t next = 0; 
-            while ( ( next = content.find( delimiter, last ) ) != std::string::npos ) {
-                taskList.emplace_back( stol( content.substr( last, next - last ) ) );
-                last = next + 1; 
-            } 
-            taskList.emplace_back( stol( content.substr( last ) ) );
-        } catch( ... ) {
+            size_t last = 0;
+            size_t next = 0;
+            while ((next = content.find(delimiter, last)) != std::string::npos) {
+                taskList.emplace_back(stol(content.substr(last, next - last)));
+                last = next + 1;
+            }
+            taskList.emplace_back(stol(content.substr(last)));
+        } catch (...) {
             std::cout << "[Error] Invalid number(s) detected, nothing done." << std::endl;
             return;
         }
-        
-        for ( auto v : taskList ) {
+
+        for (auto v : taskList) {
             std::cout << "[Taskmanager] Executing Task [" << v << "]" << std::endl;
-            executeById( v );
-			
+            executeById(v);
+
             using namespace std::chrono_literals;
-			std::this_thread::sleep_for( 500ms );
+            std::this_thread::sleep_for(500ms);
         }
 
-        globalAbort(); }));
+        globalAbort();
+    }));
 
     globalAbort = []() -> void { std::cout << "[TaskManager] No global Abort function set." << std::endl; };
 }
@@ -99,17 +101,17 @@ void TaskManager::setup() {
         int ibPort = 1;
         int gidIndex = 0;
 
-        unsigned int numOwnReceive = 2;
-        std::size_t sizeOwnReceive = 1024 * 1024 * 2 + 32;
-        unsigned int numRemoteReceive = 4;
-        std::size_t sizeRemoteReceive = 1024 * 1024 * 2 + 32;
-        std::size_t sizeOwnSend = 1024 * 1024 * 8 + 4 * 32;
-        std::size_t sizeRemoteSend = 1024 * 1024 * 4 + 4 * 32;
+        uint8_t numOwnReceive = 2;
+        uint32_t sizeOwnReceive = 1024 * 1024 * 2 + 32;
+        uint8_t numRemoteReceive = 4;
+        uint32_t sizeRemoteReceive = 1024 * 1024 * 2 + 32;
+        uint64_t sizeOwnSend = 1024 * 1024 * 8 + 4 * 32;
+        uint64_t sizeRemoteSend = 1024 * 1024 * 4 + 4 * 32;
 
         std::size_t largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
 
         std::size_t minMetaInfoSize = 2 * (1 + largerNum);
-        std::size_t metaInfoSize = minMetaInfoSize > 16 ? minMetaInfoSize : 16;
+        uint8_t metaInfoSize = minMetaInfoSize > 16 ? minMetaInfoSize : 16;
 
         if (!useDefaultConfig) {
             std::cout << "Please enter the Server-IP!" << std::endl;
@@ -253,10 +255,10 @@ void TaskManager::setup() {
                                         .size_remote_send = sizeRemoteSend,
                                         .meta_info_size = metaInfoSize};
 
-        std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);                                
+        std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
         if (connectionId != 0) {
-            std::cout << "[Success] Connection " << connectionId  << " opened for config: " << std::endl;
+            std::cout << "[Success] Connection " << connectionId << " opened for config: " << std::endl;
         } else {
             std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
         }
@@ -305,12 +307,18 @@ void TaskManager::setup() {
                            .ib_port = 1,
                            .gid_idx = 0};
 
-        buffer_config_t bufferConfig;
-        
-        std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);                                
+        buffer_config_t bufferConfig = {.num_own_receive = 0,
+                                        .size_own_receive = 0,
+                                        .num_remote_receive = 0,
+                                        .size_remote_receive = 0,
+                                        .size_own_send = 0,
+                                        .size_remote_send = 0,
+                                        .meta_info_size = 0};
+
+        std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
         if (connectionId != 0) {
-            std::cout << "[Success] Connection " << connectionId  << " opened for config: " << std::endl;
+            std::cout << "[Success] Connection " << connectionId << " opened for config: " << std::endl;
         } else {
             std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
         }
@@ -339,7 +347,10 @@ void TaskManager::setup() {
 
     registerTask(new Task("addReceiveBuffer", "Add Receive Buffer", []() -> void {
         std::size_t connectionId;
-        unsigned int quantity;
+        std::size_t quantity;
+        bool own;
+        bool correct;
+        std::string input;
 
         std::cout << "Please enter the name of the connection you want to change!" << std::endl;
         std::cin >> connectionId;
@@ -347,12 +358,34 @@ void TaskManager::setup() {
         std::cout << "How many Receive-Buffer do you want to add?" << std::endl;
         std::cin >> quantity;
 
-        ConnectionManager::getInstance().addReceiveBuffer(connectionId, quantity);
+        do {
+            std::cin.clear();
+            std::cin.sync();
+            std::cout << "Do you want to add on the own ('o') or on the remote ('r') site?" << std::endl;
+            std::getline(std::cin, input);
+
+            if (input.compare("o") == 0 || input.compare("own") == 0) {
+                correct = true;
+                own = true;
+            } else if (input.compare("r") == 0 || input.compare("remote") == 0) {
+                correct = true;
+                own = false;
+            } else {
+                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                correct = false;
+            }
+
+        } while (!correct);
+
+        ConnectionManager::getInstance().addReceiveBuffer(connectionId, quantity, own);
     }));
 
     registerTask(new Task("removeReceiveBuffer", "Remove Receive Buffer", []() -> void {
         std::size_t connectionId;
-        unsigned int quantity;
+        std::size_t quantity;
+        bool own;
+        bool correct;
+        std::string input;
 
         std::cout << "Please enter the name of the connection you want to change!" << std::endl;
         std::cin >> connectionId;
@@ -360,12 +393,34 @@ void TaskManager::setup() {
         std::cout << "How many Receive-Buffer do you want to remove? (At least 1 Receive-Buffer will be kept.)" << std::endl;
         std::cin >> quantity;
 
-        ConnectionManager::getInstance().removeReceiveBuffer(connectionId, quantity);
+        do {
+            std::cin.clear();
+            std::cin.sync();
+            std::cout << "Do you want to remove on the own ('o') or on the remote ('r') site?" << std::endl;
+            std::getline(std::cin, input);
+
+            if (input.compare("o") == 0 || input.compare("own") == 0) {
+                correct = true;
+                own = true;
+            } else if (input.compare("r") == 0 || input.compare("remote") == 0) {
+                correct = true;
+                own = false;
+            } else {
+                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                correct = false;
+            }
+
+        } while (!correct);
+
+        ConnectionManager::getInstance().removeReceiveBuffer(connectionId, quantity, own);
     }));
 
     registerTask(new Task("resizeReceiveBuffer", "Resize Receive Buffer", []() -> void {
         std::size_t connectionId;
         std::size_t newSize;
+        bool own;
+        bool correct;
+        std::string input;
 
         std::cout << "Please enter the name of the connection you want to change!" << std::endl;
         std::cin >> connectionId;
@@ -373,12 +428,34 @@ void TaskManager::setup() {
         std::cout << "Please enter the new size for all existing Receive-Buffer." << std::endl;
         std::cin >> newSize;
 
-        ConnectionManager::getInstance().resizeReceiveBuffer(connectionId, newSize);
+        do {
+            std::cin.clear();
+            std::cin.sync();
+            std::cout << "Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl;
+            std::getline(std::cin, input);
+
+            if (input.compare("o") == 0 || input.compare("own") == 0) {
+                correct = true;
+                own = true;
+            } else if (input.compare("r") == 0 || input.compare("remote") == 0) {
+                correct = true;
+                own = false;
+            } else {
+                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                correct = false;
+            }
+
+        } while (!correct);
+
+        ConnectionManager::getInstance().resizeReceiveBuffer(connectionId, newSize, own);
     }));
 
     registerTask(new Task("resizeSendBuffer", "Resize Send Buffer", []() -> void {
         std::size_t connectionId;
         std::size_t newSize;
+        bool own;
+        bool correct;
+        std::string input;
 
         std::cout << "Please enter the name of the connection you want to change!" << std::endl;
         std::cin >> connectionId;
@@ -386,7 +463,26 @@ void TaskManager::setup() {
         std::cout << "Please enter the new size for the Send-Buffer." << std::endl;
         std::cin >> newSize;
 
-        ConnectionManager::getInstance().resizeSendBuffer(connectionId, newSize);
+        do {
+            std::cin.clear();
+            std::cin.sync();
+            std::cout << "Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl;
+            std::getline(std::cin, input);
+
+            if (input.compare("o") == 0 || input.compare("own") == 0) {
+                correct = true;
+                own = true;
+            } else if (input.compare("r") == 0 || input.compare("remote") == 0) {
+                correct = true;
+                own = false;
+            } else {
+                std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                correct = false;
+            }
+
+        } while (!correct);
+
+        ConnectionManager::getInstance().resizeSendBuffer(connectionId, newSize, own);
     }));
 
     registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
@@ -395,19 +491,19 @@ void TaskManager::setup() {
     }));
 
     registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
-        genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput);
+        genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 2);
     }));
 
     registerTask(new Task("ds_tput", "Double-sided throughput test", [this]() -> void {
-        genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput);
+        genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput, 2);
     }));
 
     registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", [this]() -> void {
-        genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput);
+        genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 2);
     }));
 
     registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", [this]() -> void {
-        genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput);
+        genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 2);
     }));
 }
 
@@ -415,50 +511,30 @@ void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
     globalAbort = fn;
 }
 
-void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc) {
+void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId) {
     using namespace std::chrono_literals;
 
-    config_t config = {.dev_name = "mlx5_0",
-                       .server_name = "141.76.47.9",
-                       .tcp_port = 20000,
-                       .client_mode = false,
-                       .ib_port = 1,
-                       .gid_idx = 0};
-
-    buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                    .size_own_receive = 640,
-                                    .num_remote_receive = 1,
-                                    .size_remote_receive = 640,
-                                    .size_own_send = 640,
-                                    .size_remote_send = 640};
-
-    size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
-
-    if (connectionId == 0) {
-        std::cout << "Something went wrong while trying to create the connection!" << std::endl;
-        return;
-    }
-
-    for (size_t num_rb = 1; num_rb < 8; ++num_rb) {
+    for (uint8_t num_rb = 1; num_rb < 8; ++num_rb) {
         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::stringstream logNameStream;
-        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << num_rb << ".log";
+        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << +num_rb << ".log";
         std::string logName = logNameStream.str();
         std::cout << "[Task] Set name: " << logName << std::endl;
 
-        for (std::size_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
+        for (uint32_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
             buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                            .size_own_receive = 64,
+                                            .size_own_receive = 640,
                                             .num_remote_receive = num_rb,
                                             .size_remote_receive = bytes + META_INFORMATION_SIZE,
                                             .size_own_send = (bytes + META_INFORMATION_SIZE) * num_rb,
-                                            .size_remote_send = 64};
+                                            .size_remote_send = 640,
+                                            .meta_info_size = 16};
 
             CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
 
-            std::cout << "[main] Opened connection with id " << connectionId << " and size for one receive: " << GetBytesReadable(bytes) << std::endl;
-            std::cout << std::endl
-                      << name << std::endl;
+            std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(bytes) << ")" << std::endl;
+            std::cout << std::endl;
+            std::cout << name << std::endl;
 
             switch (tc) {
                 case ss_tput:
@@ -478,9 +554,8 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
                     return;
             }
 
-            std::cout << std::endl
-                      << name << " ended." << std::endl;
+            std::cout << std::endl;
+            std::cout << name << " ended." << std::endl;
         }
     }
-    CHECK(ConnectionManager::getInstance().closeConnection(connectionId, true));
-};
+}

@@ -33,7 +33,7 @@ class TaskManager {
     std::size_t globalId;
     std::function<void()> globalAbort;
 
-    void genericTestFunc(std::string shortName, std::string name, test_code tc);
+    void genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId);
 };
 
 #endif  // MEMORDMA_TASK_MANAGER_H

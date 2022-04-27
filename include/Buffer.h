@@ -31,8 +31,8 @@ struct reconfigure_data {
     buffer_config_t buffer_config;
     uintptr_t send_buf;
     uint32_t send_rkey;
-    std::vector<uintptr_t> receive_buf;
-    std::vector<uint32_t> receive_rkey;
+    uint64_t receive_buf[7]{0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[7]{0, 0, 0, 0, 0, 0, 0};  // remote key
 };
 
 class Buffer {

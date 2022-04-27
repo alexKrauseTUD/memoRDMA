@@ -63,7 +63,7 @@ class Connection {
 
     std::map<uint64_t, receive_data> receiveMap;
 
-    std::vector<uint8_t> metaInfo;
+    std::array<uint8_t, 16> metaInfo{0};
 
     struct ibv_mr *metaInfoMR;
 
@@ -72,7 +72,7 @@ class Connection {
 
     struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, std::size_t size);
 
-    void init(bool reinitialize = false);
+    void init();
 
     void initTCP();
     void exchangeBufferInfo();
@@ -122,6 +122,7 @@ class Connection {
 
    private:
     std::atomic<bool> globalAbort;
+    std::atomic<bool> reconfiguring;
 
     std::function<void(std::atomic<bool> *)> check_receive;
     std::function<void(bool *)> check_regions;
@@ -130,6 +131,9 @@ class Connection {
     std::thread *readWorker;
     std::thread *creationWorker;
     std::thread *receiveDoneWorker;
+
+    static const std::size_t TEST_ITERATIONS = 1;
+    static const std::size_t MAX_DATA_SIZE = 32;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION
