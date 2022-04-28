@@ -1,12 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <RDMARegion.h>
-#include <string>
-#include <sstream>
-#include <iomanip>
-#include <stdio.h>
-
+// #include <RDMARegion.h>
 #include <assert.h>
 #include <byteswap.h>
 #include <endian.h>
@@ -22,9 +17,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <string>
 
-#define MAX_POLL_CQ_TIMEOUT 30000 // ms
+#define MAX_POLL_CQ_TIMEOUT 30000  // ms
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
@@ -36,37 +34,62 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 #error __BYTE_ORDER is neither __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
-#define ERROR(fmt, args...)                                                    \
-    { fprintf(stderr, "ERROR: %s(): " fmt, __func__, ##args); }
-#define ERR_DIE(fmt, args...)                                                  \
-    {                                                                          \
-        ERROR(fmt, ##args);                                                    \
-        exit(EXIT_FAILURE);                                                    \
+#define ERROR(fmt, args...)                                     \
+    {                                                           \
+        fprintf(stderr, "ERROR: %s(): " fmt, __func__, ##args); \
     }
-#define INFO(fmt, args...)                                                     \
-    { printf("INFO: %s(): " fmt, __func__, ##args); }
-#define WARN(fmt, args...)                                                     \
-    { printf("WARN: %s(): " fmt, __func__, ##args); }
+#define ERR_DIE(fmt, args...) \
+    {                         \
+        ERROR(fmt, ##args);   \
+        exit(EXIT_FAILURE);   \
+    }
+#define INFO(fmt, args...)                            \
+    {                                                 \
+        printf("INFO: %s(): " fmt, __func__, ##args); \
+    }
+#define WARN(fmt, args...)                            \
+    {                                                 \
+        printf("WARN: %s(): " fmt, __func__, ##args); \
+    }
 
-#define CHECK(expr)                                                            \
-    {                                                                          \
-        int rc = (expr);                                                       \
-        if (rc != 0) {                                                         \
-            perror(strerror(errno));                                           \
-            exit(EXIT_FAILURE);                                                \
-        }                                                                      \
+#define CHECK(expr)                  \
+    {                                \
+        int rc = (expr);             \
+        if (rc != 0) {               \
+            perror(strerror(errno)); \
+            exit(EXIT_FAILURE);      \
+        }                            \
     }
 
 // structure of test parameters
 struct config_t {
-    const char *dev_name; // IB device name
-    char *server_name;    // server hostname
-    uint32_t tcp_port;    // server TCP port
-    bool client_mode;     // Don't run an event loop
-    int ib_port;          // local IB port to work with
-    int gid_idx;          // GID index to use
+    std::string dev_name;     // IB device name
+    std::string server_name;  // server hostname
+    uint32_t tcp_port;        // server TCP port
+    bool client_mode;         // Don't run an event loop
+    int ib_port;              // local IB port to work with
+    int gid_idx;              // GID index to use
 };
 
+struct buffer_config_t {
+    uint8_t num_own_receive;
+    uint32_t size_own_receive;
+    uint8_t num_remote_receive;
+    uint32_t size_remote_receive;
+    uint64_t size_own_send;
+    uint64_t size_remote_send;
+    uint8_t meta_info_size;
+};
+
+static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
+    return {.num_own_receive = bufferConfig.num_remote_receive,
+            .size_own_receive = bufferConfig.size_remote_receive,
+            .num_remote_receive = bufferConfig.num_own_receive,
+            .size_remote_receive = bufferConfig.size_own_receive,
+            .size_own_send = bufferConfig.size_remote_send,
+            .size_remote_send = bufferConfig.size_own_send,
+            .meta_info_size = bufferConfig.meta_info_size};
+}
 
 // \begin socket operation
 //
@@ -78,7 +101,7 @@ struct config_t {
 // Connect a socket. If servername is specified a client connection will be
 // initiated to the indicated server and port. Otherwise listen on the indicated
 // port for an incoming connection.
-static int sock_connect(const char *server_name, int port) {
+static int sock_connect(std::string client_name, int port) {
     struct addrinfo *resolved_addr = NULL;
     struct addrinfo *iterator;
     char service[6];
@@ -101,27 +124,82 @@ static int sock_connect(const char *server_name, int port) {
                              .ai_socktype = SOCK_STREAM,
                              .ai_protocol = 0};
 
-    // resolve DNS address, user sockfd as temp storage
-    sprintf(service, "%d", port);
-    CHECK(getaddrinfo(server_name, service, &hints, &resolved_addr));
+    if (client_name.empty()) {
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port + k);
 
-    for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
-        sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
-        assert(sockfd >= 0);
+            CHECK(getaddrinfo(NULL, service, &hints, &resolved_addr));
 
-        if (server_name == NULL) {
-            // Server mode: setup listening socket and accept a connection
-            listenfd = sockfd;
-            CHECK(bind(listenfd, iterator->ai_addr, iterator->ai_addrlen));
-            CHECK(listen(listenfd, 1));
-            sockfd = accept(listenfd, NULL, 0);
-        } else {
-            // Client mode: initial connection to remote
-            CHECK(connect(sockfd, iterator->ai_addr, iterator->ai_addrlen));
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Client mode: setup listening socket and accept a connection
+                listenfd = sockfd;
+                err = bind(listenfd, iterator->ai_addr, iterator->ai_addrlen);
+                if (err == 0) {
+                    err = listen(listenfd, 1);
+                    if (err == 0) {
+                        INFO("Waiting on port %d for TCP connection\n", port + k);
+                        sockfd = accept(listenfd, NULL, 0);
+                    }
+                }
+            }
+
+            if (err == 0) {
+                return sockfd;
+            }
+        }
+    } else {
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port + k);
+
+            CHECK(getaddrinfo(client_name.c_str(), service, &hints, &resolved_addr));
+
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Server mode: initial connection to remote
+                err = connect(sockfd, iterator->ai_addr, iterator->ai_addrlen);
+            }
+
+            if (err == 0) {
+                INFO("Connecting on port %d for TCP connection\n", port + k);
+                return sockfd;
+            }
         }
     }
 
-    return sockfd;
+    return -1;
+}
+
+static void sock_close(int &sockfd) {
+    CHECK(close(sockfd));
+}
+
+static int receive_tcp(int sockfd, int xfer_size, char *remote_data) {
+    int read_bytes = 0;
+
+    read_bytes = read(sockfd, remote_data, xfer_size);
+    assert(read_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
+}
+
+static int send_tcp(int sockfd, int xfer_size, char *local_data) {
+    int write_bytes = 0;
+
+    write_bytes = write(sockfd, local_data, xfer_size);
+    assert(write_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
 }
 
 // Sync data across a socket. The indicated local data will be sent to the
@@ -146,15 +224,17 @@ static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *rem
 }
 // \end socket operation
 
-static void print_config(struct config_t& config) {
+static void print_config(struct config_t &config) {
     {
-        INFO("Device name:          %s\n", config.dev_name);
+        INFO("Device name:          %s\n", config.dev_name.c_str());
         INFO("IB port:              %u\n", config.ib_port);
     }
-    if (config.server_name) {
-        INFO("IP:                   %s\n", config.server_name);
+    if (!config.server_name.empty()) {
+        INFO("IP:                   %s\n", config.server_name.c_str());
     }
-    { INFO("TCP port:             %u\n", config.tcp_port); }
+    {
+        INFO("TCP port:             %u\n", config.tcp_port);
+    }
     if (config.gid_idx >= 0) {
         INFO("GID index:            %u\n", config.gid_idx);
     }
@@ -165,70 +245,67 @@ static void print_usage(const char *progname) {
     printf("%s          start a server and wait for connection\n", progname);
     printf("%s <host>   connect to server at <host>\n\n", progname);
     printf("Options:\n");
-    printf("-p, --port <port>           listen on / connect to port <port> "
-           "(default 20000)\n");
-    printf("-d, --ib-dev <dev>          use IB device <dev> (default first "
-           "device found)\n");
-    printf("-i, --ib-port <port>        use port <port> of IB device (default "
-           "1)\n");
-    printf("-g, --gid_idx <gid index>   gid index to be used in GRH (default "
-           "not used)\n");
+    printf(
+        "-p, --port <port>           listen on / connect to port <port> "
+        "(default 20000)\n");
+    printf(
+        "-d, --ib-dev <dev>          use IB device <dev> (default first "
+        "device found)\n");
+    printf(
+        "-i, --ib-port <port>        use port <port> of IB device (default "
+        "1)\n");
+    printf(
+        "-g, --gid_idx <gid index>   gid index to be used in GRH (default "
+        "not used)\n");
     printf("-h, --help                  this message\n");
 }
 
-static double BtoMB( uint64_t byte ) {
-	return static_cast<double>(byte) / 1024 / 1024;
+static double BtoMB(uint64_t byte) {
+    return static_cast<double>(byte) / 1024 / 1024;
 }
 
 // https://stackoverflow.com/a/11124118
-// Returns the human-readable file size for an arbitrary, 64-bit file size 
+// Returns the human-readable file size for an arbitrary, 64-bit file size
 // The default format is "0.### XB", e.g. "4.2 KB" or "1.434 GB"
-static std::string GetBytesReadable (std::size_t i) {
+static std::string GetBytesReadable(std::size_t i) {
     // Determine the suffix and readable value
     std::string suffix;
     double readable;
-    if (i >= 0x1000000000000000) // Exabyte
+    if (i >= 0x1000000000000000)  // Exabyte
     {
         suffix = "EB";
         readable = (i >> 50);
-    }
-    else if (i >= 0x4000000000000) // Petabyte
+    } else if (i >= 0x4000000000000)  // Petabyte
     {
         suffix = "PB";
         readable = (i >> 40);
-    }
-    else if (i >= 0x10000000000) // Terabyte
+    } else if (i >= 0x10000000000)  // Terabyte
     {
         suffix = "TB";
         readable = (i >> 30);
-    }
-    else if (i >= 0x40000000) // Gigabyte
+    } else if (i >= 0x40000000)  // Gigabyte
     {
         suffix = "GB";
         readable = (i >> 20);
-    }
-    else if (i >= 0x100000) // Megabyte
+    } else if (i >= 0x100000)  // Megabyte
     {
         suffix = "MB";
         readable = (i >> 10);
-    }
-    else if (i >= 0x400) // Kilobyte
+    } else if (i >= 0x400)  // Kilobyte
     {
         suffix = "KB";
         readable = i;
-    }
-    else
-    {
-        return std::to_string(i) + " B"; // Byte
+    } else {
+        return std::to_string(i) + " B";  // Byte
     }
 
     // Divide by 1024 to get fractional value
     readable = (readable / 1024);
     std::stringstream stream;
     stream << std::fixed << std::setprecision(2) << readable << suffix;
-    
+
     // Return formatted number with suffix
     return stream.str();
 }
 
-#endif // UTILS_H
+#endif  // UTILS_H

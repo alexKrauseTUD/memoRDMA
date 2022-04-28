@@ -3,27 +3,37 @@
 
 #include <map>
 #include <string>
+
 #include "Task.h"
 
-class TaskManager {
-    public:
-        TaskManager();
-        ~TaskManager();
-
-        void registerTask( Task* task );
-        void printAll();
-
-        void executeById( std::size_t id );
-        void executeByIdent( std::string name );
-
-        void setup();
-
-        void setGlobalAbortFunction( std::function<void()> fn );
-
-    private:
-        std::map< std::size_t, Task* > tasks;
-        std::size_t globalId;
-        std::function< void() > globalAbort;
+enum test_code {
+    ss_tput = 1,
+    ds_tput = 2,
+    mt_ss_tput = 3,
+    mt_ds_tput = 4,
 };
 
-#endif // MEMORDMA_TASK_MANAGER_H
+class TaskManager {
+   public:
+    TaskManager();
+    ~TaskManager();
+
+    void registerTask(Task* task);
+    void printAll();
+
+    void executeById(std::size_t id);
+    void executeByIdent(std::string name);
+
+    void setup();
+
+    void setGlobalAbortFunction(std::function<void()> fn);
+
+   private:
+    std::map<std::size_t, Task*> tasks;
+    std::size_t globalId;
+    std::function<void()> globalAbort;
+
+    void genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId);
+};
+
+#endif  // MEMORDMA_TASK_MANAGER_H
