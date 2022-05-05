@@ -514,14 +514,14 @@ void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
 void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId) {
     using namespace std::chrono_literals;
 
-    for (uint8_t num_rb = 1; num_rb < 8; ++num_rb) {
+    for (uint8_t num_rb = 8; num_rb <= 8; ++num_rb) {
         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::stringstream logNameStream;
         logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << +num_rb << ".log";
         std::string logName = logNameStream.str();
         std::cout << "[Task] Set name: " << logName << std::endl;
 
-        for (uint32_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
+        for (uint64_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
             buffer_config_t bufferConfig = {.num_own_receive = 1,
                                             .size_own_receive = 640,
                                             .num_remote_receive = num_rb,

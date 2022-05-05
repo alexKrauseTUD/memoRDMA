@@ -29,7 +29,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
 
         while (!*abort) {
             // std::this_thread::sleep_for(10ms);
-            for (size_t i = 1; i < metaSize / 2; ++i) {
+            for (size_t i = 0; i < metaSize / 2; ++i) {
                 switch (metaInfo[i]) {
                     case rdma_no_op:
                     case rdma_ready:
@@ -37,17 +37,17 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
                         continue;
                     }; break;
                     case rdma_data_finished: {
-                        receiveDataFromRemote(i - 1);
+                        receiveDataFromRemote(i);
                     }; break;
                     case rdma_consume_test: {
-                        consume(i - 1);
+                        consume(i);
                     } break;
                     case rdma_mt_consume_test: {
                         metaInfo[i] = rdma_no_op;
                         conStat = mt_consume;
                     } break;
                     case rdma_reconfigure: {
-                        receiveReconfigureBuffer(i - 1);
+                        receiveReconfigureBuffer(i);
                     } break;
                     case rdma_shutdown: {
                         conStat = closing;
@@ -77,7 +77,7 @@ void Connection::init() {
 
     sock_close(res.sock);
 
-    for (size_t rbi = 0; rbi <= bufferConfig.num_own_receive; ++rbi) {
+    for (size_t rbi = 0; rbi < bufferConfig.num_own_receive; ++rbi) {
         setOpcode(rbi, rdma_ready, true);
     }
 
@@ -93,17 +93,17 @@ void Connection::destroyResources() {
     }
 
     printf("Freeing...");
-    ibv_destroy_qp(res.qp);
-    for (auto rb : res.own_buffer) {
-        free(rb);
-    }
     for (auto mr : res.own_mr) {
         ibv_dereg_mr(mr);
     }
-    ownReceiveBuffer.clear();
+    for (auto rb : res.own_buffer) {
+        free(rb);
+    }
     if (metaInfoMR) {
         ibv_dereg_mr(metaInfoMR);
     }
+    ibv_destroy_qp(res.qp);
+    ownReceiveBuffer.clear();
     receiveMap.clear();
     ibv_destroy_cq(res.cq);
     ibv_dealloc_pd(res.pd);
@@ -125,13 +125,13 @@ void Connection::printConnectionInfo() {
 
 void Connection::setupSendBuffer() {
     ownSendBuffer = new SendBuffer(bufferConfig.size_own_send);
-    setOpcode(0, rdma_ready, false);
+    ownSendBuffer->metaInfo = rdma_ready;
 }
 
 void Connection::setupReceiveBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
         ownReceiveBuffer.push_back(new ReceiveBuffer(bufferConfig.size_own_receive));
-        setOpcode(i + 1, rdma_ready, false);
+        setOpcode(i, rdma_ready, false);
     }
 }
 
@@ -322,8 +322,8 @@ struct ibv_qp *Connection::createQueuePair(struct ibv_pd *pd, struct ibv_cq *cq)
     queue_pair_init_attr.sq_sig_all = 1;          // if not set 0, all work requests submitted to SQ will always generate a Work Completion.
     queue_pair_init_attr.send_cq = cq;            // completion queue can be shared or you can use distinct completion queues.
     queue_pair_init_attr.recv_cq = cq;            // completion queue can be shared or you can use distinct completion queues.
-    queue_pair_init_attr.cap.max_send_wr = 0x10;  // increase if you want to keep more send work requests in the SQ.
-    queue_pair_init_attr.cap.max_recv_wr = 0x10;  // increase if you want to keep more receive work requests in the RQ.
+    queue_pair_init_attr.cap.max_send_wr = 0xFF;  // increase if you want to keep more send work requests in the SQ.
+    queue_pair_init_attr.cap.max_recv_wr = 0xFF;  // increase if you want to keep more receive work requests in the RQ.
     queue_pair_init_attr.cap.max_send_sge = 1;    // increase if you allow send work requests to have multiple scatter gather entry (SGE).
     queue_pair_init_attr.cap.max_recv_sge = 1;    // increase if you allow receive work requests to have multiple scatter gather entry (SGE).
 
@@ -445,14 +445,14 @@ die:
 }
 
 int Connection::sendData(std::string &data) {
-    if (metaInfo[0] == rdma_no_op) {
+    if (ownSendBuffer->metaInfo == rdma_no_op) {
         std::cout << "There is no buffer for sending initialized!" << std::endl;
         return false;
     }
 
     busy = true;
 
-    while (metaInfo[0] != rdma_ready) {
+    while (ownSendBuffer->metaInfo != rdma_ready) {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(100ns);
         continue;
@@ -460,7 +460,7 @@ int Connection::sendData(std::string &data) {
 
     uint64_t packageID = generatePackageID();
 
-    setOpcode(0, rdma_sending, false);
+    ownSendBuffer->metaInfo = rdma_sending;
 
     const char *dataCString = data.c_str();
 
@@ -492,7 +492,7 @@ int Connection::sendData(std::string &data) {
                 continue;
             }
 
-            setOpcode(metaInfo.size() / 2 + 1 + nextFree, rdma_data_receiving, false);
+            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_receiving, false);
 
             currentSize = dataSize - alreadySentSize <= bufferConfig.size_remote_receive - META_INFORMATION_SIZE ? dataSize - alreadySentSize : bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
             ownSendBuffer->loadData(dataCString + alreadySentSize, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
@@ -502,13 +502,13 @@ int Connection::sendData(std::string &data) {
 
             alreadySentSize += currentSize;
 
-            setOpcode(metaInfo.size() / 2 + 1 + nextFree, rdma_data_finished, true);
+            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_finished, true);
 
             if (alreadySentSize == dataSize) break;
         }
     }
 
-    setOpcode(0, rdma_ready, true);
+    ownSendBuffer->metaInfo = rdma_ready;
 
     busy = false;
     return 0;
@@ -520,8 +520,8 @@ uint64_t Connection::generatePackageID() {
 
 int Connection::getNextFreeReceive() {
     size_t metaSize = metaInfo.size();
-    for (size_t i = (metaSize / 2) + 1; i < metaSize; ++i) {
-        if (metaInfo[i] == rdma_ready) return i - (metaSize / 2) - 1;
+    for (size_t i = (metaSize / 2); i < metaSize; ++i) {
+        if (metaInfo[i] == rdma_ready) return i - (metaSize / 2);
     }
 
     return -1;
@@ -571,7 +571,7 @@ void Connection::setOpcode(size_t index, rdma_handler_communication opcode, bool
 }
 
 void Connection::receiveDataFromRemote(size_t index) {
-    setOpcode(index + 1, rdma_data_consuming, false);
+    setOpcode(index, rdma_data_consuming, false);
 
     char *ptr = ownReceiveBuffer[index]->buf;
     size_t bufferPayloadSize = ownReceiveBuffer[index]->getMaxPayloadSize();
@@ -605,13 +605,13 @@ void Connection::receiveDataFromRemote(size_t index) {
         receiveMap[dataId].endTime = std::chrono::high_resolution_clock::now();
     }
 
-    setOpcode(index + 1, rdma_ready, true);
+    setOpcode(index, rdma_ready, true);
 }
 
 int Connection::closeConnection(bool sendRemote) {
     globalAbort = true;
 
-    setOpcode((metaInfo.size() / 2) + 1, rdma_shutdown, sendRemote);
+    setOpcode(metaInfo.size() / 2, rdma_shutdown, sendRemote);
 
     destroyResources();
 
@@ -623,8 +623,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     bool allBlocked = false;
 
     while (!allBlocked) {
-        while (numBlocked <= bufferConfig.num_own_receive) {
-            for (std::size_t i = 0; i <= bufferConfig.num_own_receive; ++i) {
+        while (numBlocked < bufferConfig.num_own_receive) {
+            for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
                 if (metaInfo[i] == rdma_ready || metaInfo[i] == rdma_reconfigure) {
                     setOpcode(i, rdma_blocked, true);
                     ++numBlocked;
@@ -634,14 +634,18 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             }
         }
 
+        if (ownSendBuffer->metaInfo == rdma_ready) ownSendBuffer->metaInfo = rdma_blocked;
+
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(10us);
 
         allBlocked = true;
 
-        for (std::size_t i = 0; i <= bufferConfig.num_own_receive; ++i) {
+        for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
             allBlocked = allBlocked && metaInfo[i] == rdma_blocked;
         }
+
+        allBlocked = allBlocked && ownSendBuffer->metaInfo == rdma_blocked;
     }
 
     res.own_mr.clear();
@@ -697,11 +701,13 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     }
 
     for (uint8_t i = 0; i < metaInfo.size()/2; ++i) {
-        if (i <= bufferConfig.num_own_receive)
+        if (i < bufferConfig.num_own_receive)
             setOpcode(i, rdma_ready, true);
         else
             setOpcode(i, rdma_no_op, true);
     }
+
+    ownSendBuffer->metaInfo = rdma_ready;
 
     int nextFree = -1;
 
@@ -712,7 +718,7 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     ownSendBuffer->sendReconfigure(recData, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp);
     poll_completion();
 
-    setOpcode((metaInfo.size() / 2) + 1 + nextFree, rdma_reconfigure, true);
+    setOpcode((metaInfo.size() / 2) + nextFree, rdma_reconfigure, true);
 
     std::cout << "Reconfigured Buffers to: " << std::endl;
     printConnectionInfo();
@@ -736,7 +742,7 @@ int Connection::receiveReconfigureBuffer(std::size_t index) {
 
     res.remote_buffer.clear();
     res.remote_rkeys.clear();
-    for (uint8_t i = 0; i < 7; ++i) {
+    for (uint8_t i = 0; i < metaInfo.size() / 2; ++i) {
         if (recData->receive_buf[i] == 0) continue;
 
         res.remote_buffer.push_back(recData->receive_buf[i]);
@@ -746,7 +752,8 @@ int Connection::receiveReconfigureBuffer(std::size_t index) {
     if (recData->buffer_config.num_own_receive == bufferConfig.num_own_receive && recData->buffer_config.size_own_receive == bufferConfig.size_own_receive && recData->buffer_config.size_own_send == bufferConfig.size_own_send) {
         bufferConfig = recData->buffer_config;
         reconfiguring = false;
-        setOpcode(index + 1, rdma_ready, true);
+        setOpcode(index , rdma_ready, true);
+        ownSendBuffer->metaInfo = rdma_ready;
         return 0;
     }
 
@@ -759,9 +766,9 @@ int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own = true) {
     buffer_config_t bufConfig = bufferConfig;
     if (own) {
         bufConfig.num_own_receive += quantity;
-        if (bufConfig.num_own_receive > (metaInfo.size() / 2) - 1) {
-            std::cout << "It is only possible to have " << (metaInfo.size() / 2) - 1 << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) - 1 << std::endl;
-            bufConfig.num_own_receive = (metaInfo.size() / 2) - 1;
+        if (bufConfig.num_own_receive > (metaInfo.size() / 2)) {
+            std::cout << "It is only possible to have " << (metaInfo.size() / 2) << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) << std::endl;
+            bufConfig.num_own_receive = (metaInfo.size() / 2);
         }
         if (bufConfig.num_own_receive < 1) {
             std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
@@ -769,9 +776,9 @@ int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own = true) {
         }
     } else {
         bufConfig.num_remote_receive += quantity;
-        if (bufConfig.num_remote_receive > (metaInfo.size() / 2) - 1) {
-            std::cout << "It is only possible to have " << (metaInfo.size() / 2) - 1 << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) - 1 << std::endl;
-            bufConfig.num_remote_receive = (metaInfo.size() / 2) - 1;
+        if (bufConfig.num_remote_receive > (metaInfo.size() / 2)) {
+            std::cout << "It is only possible to have " << (metaInfo.size() / 2) << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfo.size() / 2) << std::endl;
+            bufConfig.num_remote_receive = (metaInfo.size() / 2);
         }
         if (bufConfig.num_remote_receive < 1) {
             std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
@@ -786,7 +793,7 @@ int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own = true) {
     buffer_config_t bufConfig = bufferConfig;
     if (own) {
         bufConfig.num_own_receive -= quantity;
-        if (bufConfig.num_own_receive > (metaInfo.size() / 2) - 1) {
+        if (bufConfig.num_own_receive > (metaInfo.size() / 2)) {
             std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
             bufConfig.num_own_receive = 1;
         }
@@ -796,7 +803,7 @@ int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own = true) {
         }
     } else {
         bufConfig.num_remote_receive -= quantity;
-        if (bufConfig.num_remote_receive > (metaInfo.size() / 2) - 1) {
+        if (bufConfig.num_remote_receive > (metaInfo.size() / 2)) {
             std::cout << "Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl;
             bufConfig.num_remote_receive = 1;
         }
@@ -858,13 +865,9 @@ int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
 int Connection::pendingBufferCreation() {
     std::cout << "This function tells whether a buffer creation is pending for this connection but isn't implemented yet. Sorry!" << std::endl;
     return 0;
-
-    // const std::lock_guard< std::mutex > lock( poolMutex );
-    // return !pool.empty();
 }
 
 Connection::~Connection() {
-    // stop();
     closeConnection();
 }
 
@@ -891,7 +894,7 @@ int Connection::throughputTest(std::string logName) {
             uint64_t remainingSize = elementCount * sizeof(uint64_t);
             uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
             uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
-            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << std::endl;
             std::cout << "[ThroughputTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
             uint64_t *copy = d.data;
             size_t maxPackNum;
@@ -948,8 +951,6 @@ int Connection::throughputTest(std::string logName) {
     out.close();
     busy = false;
 
-    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
-
     return 0;
 }
 
@@ -964,7 +965,7 @@ int Connection::consumingTest(std::string logName) {
     bool allDone = false;
     while (!allDone) {
         allDone = true;
-        for (size_t c = 1; c <= bufferConfig.num_remote_receive; ++c) {
+        for (size_t c = 0; c < bufferConfig.num_remote_receive; ++c) {
             allDone &= (metaInfo[c + (metaInfo.size() / 2)] == rdma_ready);
         }
     }
@@ -984,7 +985,7 @@ int Connection::consumingTest(std::string logName) {
             uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
             uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
             uint64_t packageID = generatePackageID();
-            std::cout << "[ConsumeTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+            std::cout << "[ConsumeTest] Max Payload is: " << maxPayloadSize << std::endl;
             std::cout << "[ConsumeTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
             uint64_t *copy = d.data;
             int nextFree;
@@ -1014,11 +1015,11 @@ int Connection::consumingTest(std::string logName) {
                         nextFree = getNextFreeReceive();
                     } while (nextFree == -1);
 
-                    setOpcode((metaInfo.size() / 2) + 1 + nextFree, rdma_sending, false);
+                    setOpcode((metaInfo.size() / 2) + nextFree, rdma_sending, false);
                     ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf + (rbi * bufferConfig.size_remote_receive), 0);
                     poll_completion();
 
-                    setOpcode((metaInfo.size() / 2) + 1 + nextFree, rdma_consume_test, true);
+                    setOpcode((metaInfo.size() / 2) + nextFree, rdma_consume_test, true);
 
                     remainingSize -= maxDataToWrite;
                     package.advancePayloadPtr(maxDataToWrite);
@@ -1029,13 +1030,13 @@ int Connection::consumingTest(std::string logName) {
                 nextFree = getNextFreeReceive();
             } while (nextFree == -1);
 
-            setOpcode((metaInfo.size() / 2) + 1 + nextFree, rdma_sending, false);
+            setOpcode((metaInfo.size() / 2) + nextFree, rdma_sending, false);
             package.setCurrentPackageNumber(packNum);
             package.setCurrentPackageSize(remainingSize);
             ownSendBuffer->loadPackage(ownSendBuffer->buf, &package);
             ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf, 0);
             poll_completion();
-            setOpcode((metaInfo.size() / 2) + 1 + nextFree, rdma_consume_test, true);
+            setOpcode((metaInfo.size() / 2) + nextFree, rdma_consume_test, true);
 
             auto e_ts = std::chrono::high_resolution_clock::now();
             auto transfertime_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(e_ts - s_ts).count();
@@ -1065,18 +1066,16 @@ int Connection::consumingTest(std::string logName) {
     allDone = false;
     while (!allDone) {
         allDone = true;
-        for (size_t c = 1; c <= bufferConfig.num_remote_receive; ++c) {
+        for (size_t c = 0; c < bufferConfig.num_remote_receive; ++c) {
             allDone &= (metaInfo[c + (metaInfo.size() / 2)] == rdma_ready);
         }
     }
-
-    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
 
     return 0;
 }
 
 void Connection::consume(size_t index) {
-    setOpcode(index + 1, rdma_data_consuming, false);
+    setOpcode(index, rdma_data_consuming, false);
 
     char *ptr = ownReceiveBuffer[index]->buf;
     size_t bufferPayloadSize = ownReceiveBuffer[index]->getMaxPayloadSize();
@@ -1093,7 +1092,7 @@ void Connection::consume(size_t index) {
 
     ownReceiveBuffer[index]->clearBuffer();
 
-    setOpcode(index + 1, rdma_ready, true);
+    setOpcode(index, rdma_ready, true);
     free(localPtr);
 }
 
@@ -1138,7 +1137,7 @@ int Connection::throughputTestMultiThread(std::string logName) {
             uint64_t remainingSize = elementCount * sizeof(uint64_t);
             uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
             uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
-            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << std::endl;
             std::cout << "[ThroughputTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
             uint64_t *copy = d.data;
             size_t maxPackNum;
@@ -1219,8 +1218,6 @@ int Connection::throughputTestMultiThread(std::string logName) {
     busy = false;
     free(ready_vec);
 
-    // setOpcode((metaInfo.size() / 2) + 1, rdma_next_test, true);
-
     return 0;
 }
 
@@ -1232,14 +1229,14 @@ int Connection::consumingTestMultiThread(std::string logName) {
 
     ownSendBuffer->clearBuffer();
 
-    while (metaInfo[1 + (metaInfo.size() / 2)] != rdma_ready) {
+    while (metaInfo[(metaInfo.size() / 2)] != rdma_ready) {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(10ms);
     }
 
-    setOpcode(1 + (metaInfo.size() / 2), rdma_mt_consume_test, true);
+    setOpcode(metaInfo.size() / 2, rdma_mt_consume_test, true);
 
-    while (metaInfo[1 + (metaInfo.size() / 2)] != rdma_ready) {
+    while (metaInfo[(metaInfo.size() / 2)] != rdma_ready) {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(10ms);
     }
@@ -1259,7 +1256,7 @@ int Connection::consumingTestMultiThread(std::string logName) {
             packageSent = false;
             while (!packageSent) {
                 for (size_t id = tid; id < bufferConfig.num_remote_receive; id += thrdcnt) {
-                    size_t remoteIndex = id + 1 + (metaInfo.size() / 2);
+                    size_t remoteIndex = id + (metaInfo.size() / 2);
                     if (metaInfo[remoteIndex] == rdma_ready) {
                         setOpcode(remoteIndex, rdma_sending, false);
                         ownSendBuffer->loadPackage(ownSendBuffer->buf + (tid * bufferConfig.size_remote_receive), pack);
@@ -1293,7 +1290,7 @@ int Connection::consumingTestMultiThread(std::string logName) {
             uint64_t remainingSize = elementCount * sizeof(uint64_t);
             uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize();
             uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);
-            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << " but we use " << maxDataToWrite << std::endl;
+            std::cout << "[ThroughputTest] Max Payload is: " << maxPayloadSize << std::endl;
             std::cout << "[ThroughputTest] Generating " << remainingSize << " Byte of data and send them over." << std::endl;
             uint64_t *copy = d.data;
             size_t maxPackNum;
@@ -1378,16 +1375,14 @@ int Connection::consumingTestMultiThread(std::string logName) {
     bool allDone = false;
     while (!allDone) {
         allDone = true;
-        for (size_t c = 1; c <= bufferConfig.num_remote_receive; ++c) {
+        for (size_t c = 0; c < bufferConfig.num_remote_receive; ++c) {
             allDone &= (metaInfo[c + (metaInfo.size() / 2)] == rdma_ready);
         }
     }
 
-    for (size_t c = 1; c <= thread_cnt; ++c) {
+    for (size_t c = 0; c < thread_cnt; ++c) {
         setOpcode(c + (metaInfo.size() / 2), rdma_test_finished, true);
     }
-
-    // setOpcode((metaInfo.size() / 2) + 1 + thread_cnt, rdma_next_test, true);
 
     return 0;
 }
@@ -1411,12 +1406,12 @@ void Connection::consumeMultiThread() {
 
         while (!abort) {
             for (size_t id = index; id < bufferConfig.num_own_receive; id += thrdcnt) {
-                switch (metaInfo[id + 1]) {
+                switch (metaInfo[id]) {
                     case rdma_data_finished: {
                         consume(id);
                     } break;
                     case rdma_test_finished: {
-                        setOpcode(id + 1, rdma_ready, true);
+                        setOpcode(id, rdma_ready, true);
                         abort = true;
                     } break;
                     default:
@@ -1430,7 +1425,7 @@ void Connection::consumeMultiThread() {
 
     for (size_t tid = 0; tid < thread_cnt; ++tid) {
         pool.emplace_back(new std::thread(mtConsume, tid, thread_cnt));
-        setOpcode(tid + 1, rdma_ready, true);
+        setOpcode(tid, rdma_ready, true);
     }
 
     std::for_each(pool.begin(), pool.end(), [](std::thread *t) { t->join(); delete t; });
