@@ -125,15 +125,11 @@ class Connection {
     std::atomic<bool> reconfiguring;
 
     std::function<void(std::atomic<bool> *)> check_receive;
-    std::function<void(bool *)> check_regions;
-    std::function<void(bool *)> check_receive_done;
 
     std::thread *readWorker;
-    std::thread *creationWorker;
-    std::thread *receiveDoneWorker;
 
     static const std::size_t TEST_ITERATIONS = 1;
-    static const std::size_t MAX_DATA_SIZE = 32;
+    static const std::size_t MAX_DATA_SIZE = 30;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

@@ -2,7 +2,7 @@
 
 #include "Connection.h"
 
-ConnectionManager::ConnectionManager() : globalConnectionId{1} {
+ConnectionManager::ConnectionManager() : globalConnectionId{0} {
     monitor_connection = [this](bool *abort) -> void {
         using namespace std::chrono_literals;
 

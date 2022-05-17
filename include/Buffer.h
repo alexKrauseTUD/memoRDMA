@@ -19,8 +19,8 @@ struct cm_con_data_t {
     uint64_t send_buf;
     uint32_t send_rkey;
     uint32_t receive_num;
-    uint64_t receive_buf[7]{0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[7]{0, 0, 0, 0, 0, 0, 0};  // remote key
+    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
     buffer_config_t buffer_config;
     uint32_t qp_num;  // QP number
     uint16_t lid;     // LID of the IB port
@@ -31,8 +31,8 @@ struct reconfigure_data {
     buffer_config_t buffer_config;
     uintptr_t send_buf;
     uint32_t send_rkey;
-    uint64_t receive_buf[7]{0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[7]{0, 0, 0, 0, 0, 0, 0};  // remote key
+    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
 };
 
 class Buffer {
@@ -58,20 +58,19 @@ class Buffer {
 
 class SendBuffer : public Buffer {
    public:
+    uint8_t metaInfo;
+
     explicit SendBuffer(std::size_t _bufferSize);
 
     void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
     void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
     int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
-    //  void setCommitCode(rdma_handler_communication opcode);
 
     void loadPackage(char *writePtr, package_t *p);
     void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
-    void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp);
-
-    //  std::size_t getMaxWriteSize();
+    void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
 
     void print() const;
 
