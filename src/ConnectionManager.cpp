@@ -43,6 +43,27 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
     return globalConnectionId;
 }
 
+bool ConnectionManager::registerCallback(uint8_t code, CallbackFunction cb) {
+    if (callbacks.contains(code)) {
+        return false;
+    }
+    callbacks.insert({code, cb});
+
+    return true;
+}
+
+bool ConnectionManager::hasCallback(uint8_t code) const {
+    return callbacks.contains(code);
+}
+
+CallbackFunction ConnectionManager::getCallback(uint8_t code) const {
+    if (callbacks.contains(code)) {
+        return callbacks.at(code);
+    } else {
+        return CallbackFunction();
+    }
+}
+
 void ConnectionManager::printConnections() {
     for (auto const &[name, con] : connections) {
         std::cout << "Connection ID:\t\t" << name << std::endl;
@@ -98,7 +119,7 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
-int ConnectionManager::sendData(std::size_t connectionId, char* data, std::size_t dataSize) {
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize) {
     if (connections.contains(connectionId)) {
         return connections[connectionId]->sendData(data, dataSize);
     } else {
@@ -124,6 +145,17 @@ int ConnectionManager::sendDataToAllConnections(std::string &data) {
     }
 
     return success;
+}
+
+int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
+    for (auto const &[name, con] : connections) {
+        auto nextFree = con->getNextFreeReceive();
+        con->setOpcode(con->metaInfo.size() / 2 + nextFree, code, false);
+    }
+
+    std::cout << "Sent opcode " << (uint64_t) code << " to all connections." << std::endl;
+
+    return 0;
 }
 
 int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {

@@ -11,6 +11,7 @@
 #include <future>
 #include <thread>
 #include <vector>
+#include <ConnectionManager.h>
 
 #include "DataProvider.h"
 #include "util.h"
@@ -30,6 +31,10 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
         while (!*abort) {
             // std::this_thread::sleep_for(10ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
+                if ( ConnectionManager::getInstance().hasCallback( metaInfo[i] ) ) {
+                    auto cb = ConnectionManager::getInstance().getCallback( metaInfo[i] );
+                    cb( ownReceiveBuffer[i]->buf );
+                }
                 switch (metaInfo[i]) {
                     case rdma_no_op:
                     case rdma_ready:
@@ -558,7 +563,7 @@ int Connection::sendData(char* data, std::size_t dataSize) {
                 continue;
             }
 
-            setOpcode(metaInfo.size() / 2 + nextFree, rdma_give_column, false);
+            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_receiving, false);
 
             currentSize = dataSize - alreadySentSize <= bufferConfig.size_remote_receive - META_INFORMATION_SIZE ? dataSize - alreadySentSize : bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
             ownSendBuffer->loadData(data + alreadySentSize, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
@@ -597,7 +602,7 @@ uint32_t Connection::getOwnSendToRemoteReceiveRatio() {
     return std::floor(ownSendBuffer->getBufferSize() / bufferConfig.size_remote_receive);
 }
 
-void Connection::setOpcode(size_t index, rdma_handler_communication opcode, bool sendToRemote) {
+void Connection::setOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
     metaInfo[index] = opcode;
 
     if (sendToRemote) {

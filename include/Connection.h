@@ -106,7 +106,7 @@ class Connection {
 
     int getNextFreeReceive();
     uint32_t getOwnSendToRemoteReceiveRatio();
-    void setOpcode(std::size_t index, rdma_handler_communication opcode, bool sendToRemote);
+    void setOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
     void printConnectionInfo();

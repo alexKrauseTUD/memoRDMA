@@ -490,6 +490,11 @@ void TaskManager::setup() {
         ConnectionManager::getInstance().sendDataToAllConnections(dummy);
     }));
 
+    registerTask(new Task("customOpcode", "Send Custom opcode to all Connections", []() -> void {
+        std::string dummy = "This is a dummy message.";
+        ConnectionManager::getInstance().sendDataToAllConnections(dummy);
+    }));
+
     registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
         genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 1);
     }));
