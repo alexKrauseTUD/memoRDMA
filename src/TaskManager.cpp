@@ -497,7 +497,7 @@ void TaskManager::setup() {
         std::cout << "Opcode? [0,255]" << std::endl;
         std::cin >> input;
 
-        val = std::clamp( input, 0, UINT8_MAX );
+        val = (uint8_t) std::clamp( input, (uint64_t)0, (uint64_t)UINT8_MAX );
 
         ConnectionManager::getInstance().sendCustomOpcodeToAllConnections(val);
         std::cout << "Custom opcode sent." << std::endl;
