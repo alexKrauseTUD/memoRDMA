@@ -13,6 +13,14 @@ enum test_code {
     mt_ds_tput = 4,
 };
 
+
+enum init_task_type {
+    connection_handling = 1,
+    buffer_handling = 1 << 1,
+    dummy_tests = 1 << 2,
+    performance_tests = 1 << 3
+};
+
 class TaskManager {
    private:
     TaskManager();
@@ -33,7 +41,7 @@ class TaskManager {
     void executeById(std::size_t id);
     void executeByIdent(std::string name);
 
-    void setup();
+    void setup( size_t init_flags );
 
     void setGlobalAbortFunction(std::function<void()> fn);
 
