@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 
     while (!abort) {
         op = "-1";
-        tm.printAll();
+        TaskManager::getInstance().printAll();
         std::cout << "Type \"exit\" to terminate." << std::endl;
         // std::cin >> op;
         std::getline(std::cin, op, '\n');
