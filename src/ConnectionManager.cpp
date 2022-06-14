@@ -38,7 +38,7 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig)));
+    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig, globalConnectionId)));
 
     return globalConnectionId;
 }
@@ -119,9 +119,9 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
-int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize) {
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, uint8_t opcode) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->sendData(data, dataSize);
+        return connections[connectionId]->sendData(data, dataSize, opcode);
     } else {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }

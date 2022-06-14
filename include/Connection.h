@@ -48,11 +48,12 @@ enum connection_status {
 
 class Connection {
    public:
-    explicit Connection(config_t _config, buffer_config_t _bufferConfig);
+    explicit Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
     ~Connection();
 
     config_t config;
     buffer_config_t bufferConfig;
+    uint32_t localConId;
     resources res;
 
     bool busy;
@@ -86,7 +87,7 @@ class Connection {
     int poll_completion();
 
     int sendData(std::string &data);
-    int sendData(char* data, std::size_t dataSize);
+    int sendData(char* data, std::size_t dataSize, uint8_t opcode);
     int sendData(package_t *p);
     int closeConnection(bool send_remote = true);
     void destroyResources();

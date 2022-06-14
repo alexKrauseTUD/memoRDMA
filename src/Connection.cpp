@@ -1,5 +1,6 @@
 #include "Connection.h"
 
+#include <ConnectionManager.h>
 #include <stdlib.h>
 
 #include <algorithm>
@@ -11,15 +12,15 @@
 #include <future>
 #include <thread>
 #include <vector>
-#include <ConnectionManager.h>
 
 #include "DataProvider.h"
 #include "util.h"
 
-Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : globalAbort(false) {
+Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalAbort(false) {
     conStat = active;
     config = _config;
     bufferConfig = _bufferConfig;
+    localConId = _localConId;
     res.sock = -1;
 
     check_receive = [this](std::atomic<bool> *abort) -> void {
@@ -31,11 +32,12 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
         while (!*abort) {
             std::this_thread::sleep_for(1000ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
-                if ( ConnectionManager::getInstance().hasCallback( metaInfo[i] ) ) {
-                    std::cout << "[Connection] Invoking custom callback for code " << (size_t) metaInfo[i] << std::endl;
-                    auto cb = ConnectionManager::getInstance().getCallback( metaInfo[i] );
-                    cb( ownReceiveBuffer[i]->buf );
+                if (ConnectionManager::getInstance().hasCallback(metaInfo[i])) {
+                    std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
+                    auto cb = ConnectionManager::getInstance().getCallback(metaInfo[i]);
+                    cb(localConId, ownReceiveBuffer[i]->buf);
                     ownReceiveBuffer[i]->clearBuffer();
+                    metaInfo[i] = rdma_ready;
                 }
                 switch (metaInfo[i]) {
                     case rdma_no_op:
@@ -521,7 +523,7 @@ int Connection::sendData(std::string &data) {
     return 0;
 }
 
-int Connection::sendData(char* data, std::size_t dataSize) {
+int Connection::sendData(char *data, std::size_t dataSize, uint8_t opcode) {
     if (ownSendBuffer->metaInfo == rdma_no_op) {
         std::cout << "There is no buffer for sending initialized!" << std::endl;
         return false;
@@ -575,7 +577,7 @@ int Connection::sendData(char* data, std::size_t dataSize) {
 
             alreadySentSize += currentSize;
 
-            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_finished, true);
+            setOpcode(metaInfo.size() / 2 + nextFree, opcode, true);
 
             if (alreadySentSize == dataSize) break;
         }
@@ -773,7 +775,7 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         ++pos;
     }
 
-    for (uint8_t i = 0; i < metaInfo.size()/2; ++i) {
+    for (uint8_t i = 0; i < metaInfo.size() / 2; ++i) {
         if (i < bufferConfig.num_own_receive)
             setOpcode(i, rdma_ready, true);
         else
@@ -825,7 +827,7 @@ int Connection::receiveReconfigureBuffer(std::size_t index) {
     if (recData->buffer_config.num_own_receive == bufferConfig.num_own_receive && recData->buffer_config.size_own_receive == bufferConfig.size_own_receive && recData->buffer_config.size_own_send == bufferConfig.size_own_send) {
         bufferConfig = recData->buffer_config;
         reconfiguring = false;
-        setOpcode(index , rdma_ready, true);
+        setOpcode(index, rdma_ready, true);
         ownSendBuffer->metaInfo = rdma_ready;
         return 0;
     }
