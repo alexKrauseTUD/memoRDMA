@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 
 #include "Buffer.h"
 #include "Connection.h"
@@ -491,8 +492,15 @@ void TaskManager::setup() {
     }));
 
     registerTask(new Task("customOpcode", "Send Custom opcode to all Connections", []() -> void {
-        std::string dummy = "This is a dummy message.";
-        ConnectionManager::getInstance().sendDataToAllConnections(dummy);
+        uint8_t val;
+        uint64_t input;
+        std::cout << "Opcode? [0,255]" << std::endl;
+        std::cin >> input;
+
+        val = std::clamp( input, 0, UINT8_MAX );
+
+        ConnectionManager::getInstance().sendCustomOpcodeToAllConnections(val);
+        std::cout << "Custom opcode sent." << std::endl;
     }));
 
     registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
