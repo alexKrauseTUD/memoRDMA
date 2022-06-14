@@ -129,6 +129,16 @@ int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_
     return 1;
 }
 
+void ConnectionManager::sendOpCode(std::size_t connectionId, uint8_t opcode) {
+    if (connections.contains(connectionId)) {
+        auto con = connections[connectionId];
+        auto nextFree = con->getNextFreeReceive();
+        con->setOpcode(con->metaInfo.size() / 2 + nextFree, opcode, true);
+    } else {
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+}
+
 // TODO: How about a pointer to the data;; Generic datatype?
 int ConnectionManager::sendDataToAllConnections(std::string &data) {
     int success = 0;
@@ -153,7 +163,7 @@ int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
         con->setOpcode(con->metaInfo.size() / 2 + nextFree, code, true);
     }
 
-    std::cout << "Sent opcode " << (uint64_t) code << " to all connections." << std::endl;
+    std::cout << "Sent opcode " << (uint64_t)code << " to all connections." << std::endl;
 
     return 0;
 }

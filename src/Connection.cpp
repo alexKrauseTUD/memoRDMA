@@ -34,10 +34,16 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             for (size_t i = 0; i < metaSize / 2; ++i) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfo[i])) {
                     std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
+                    
+                    // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfo[i]);
                     cb(localConId, ownReceiveBuffer[i]->buf);
+                    
+                    // Cleanup, whatever they didn't use is lost
                     ownReceiveBuffer[i]->clearBuffer();
                     metaInfo[i] = rdma_ready;
+                    
+                    continue;
                 }
                 switch (metaInfo[i]) {
                     case rdma_no_op:

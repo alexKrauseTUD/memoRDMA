@@ -27,6 +27,7 @@ class ConnectionManager {
     int closeAllConnections();
     int sendData(std::size_t connectionId, std::string &data);
     int sendData(std::size_t connectionId, char* data, std::size_t dataSize, uint8_t opcode);
+    void sendOpCode(std::size_t connectionId, uint8_t opcode);
     int sendDataToAllConnections(std::string &data);
     int sendCustomOpcodeToAllConnections( uint8_t code );
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
