@@ -98,6 +98,16 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
+int ConnectionManager::sendData(std::size_t connectionId, char* data, std::size_t dataSize) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->sendData(data, dataSize);
+    } else {
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
 // TODO: How about a pointer to the data;; Generic datatype?
 int ConnectionManager::sendDataToAllConnections(std::string &data) {
     int success = 0;
@@ -220,9 +230,12 @@ int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::s
 }
 
 void ConnectionManager::stop() {
-    closeAllConnections();
-    globalAbort = true;
-    monitorWorker->join();
+    if (!stopped) {
+        closeAllConnections();
+        globalAbort = true;
+        monitorWorker->join();
+        stopped = true;
+    }
 }
 
 bool ConnectionManager::abortSignaled() const {

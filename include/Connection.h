@@ -86,6 +86,7 @@ class Connection {
     int poll_completion();
 
     int sendData(std::string &data);
+    int sendData(char* data, std::size_t dataSize);
     int sendData(package_t *p);
     int closeConnection(bool send_remote = true);
     void destroyResources();

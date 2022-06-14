@@ -514,6 +514,72 @@ int Connection::sendData(std::string &data) {
     return 0;
 }
 
+int Connection::sendData(char* data, std::size_t dataSize) {
+    if (ownSendBuffer->metaInfo == rdma_no_op) {
+        std::cout << "There is no buffer for sending initialized!" << std::endl;
+        return false;
+    }
+
+    busy = true;
+
+    while (ownSendBuffer->metaInfo != rdma_ready) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(100ns);
+        continue;
+    }
+
+    uint64_t packageID = generatePackageID();
+    ownSendBuffer->metaInfo = rdma_sending;
+
+    uint32_t ownSendToRemoteReceiveRatio = getOwnSendToRemoteReceiveRatio();
+    size_t sendPackages = std::ceil(dataSize / (ownSendBuffer->getBufferSize() - (META_INFORMATION_SIZE * ownSendToRemoteReceiveRatio)));
+    sendPackages = sendPackages > 0 ? sendPackages : 1;
+    size_t alreadySentSize = 0;
+    uint64_t currentSize = 0;
+    int nextFree;
+
+    for (size_t i = 0; i < sendPackages; ++i) {
+        ownSendBuffer->clearBuffer();
+        for (size_t k = 0; k < ownSendToRemoteReceiveRatio; ++k) {
+            int c = 0;
+            nextFree = getNextFreeReceive();
+
+            while (nextFree == -1) {
+                ++c;
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(100ns);
+                nextFree = getNextFreeReceive();
+                if (c >= 100) {
+                    std::cout << "There was no free remote receive buffer found for a longer period!" << std::endl;
+                    busy = false;
+                    return 1;
+                }
+
+                continue;
+            }
+
+            setOpcode(metaInfo.size() / 2 + nextFree, rdma_give_column, false);
+
+            currentSize = dataSize - alreadySentSize <= bufferConfig.size_remote_receive - META_INFORMATION_SIZE ? dataSize - alreadySentSize : bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
+            ownSendBuffer->loadData(data + alreadySentSize, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
+            ownSendBuffer->post_send(currentSize + META_INFORMATION_SIZE, IBV_WR_RDMA_WRITE, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), 0);
+
+            poll_completion();
+
+            alreadySentSize += currentSize;
+
+            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_finished, true);
+
+            if (alreadySentSize == dataSize) break;
+        }
+    }
+
+    ownSendBuffer->metaInfo = rdma_ready;
+
+    busy = false;
+    return 0;
+}
+
 uint64_t Connection::generatePackageID() {
     return std::rand();
 }

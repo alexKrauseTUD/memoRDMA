@@ -21,6 +21,7 @@ class ConnectionManager {
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
     int sendData(std::size_t connectionId, std::string &data);
+    int sendData(std::size_t connectionId, char* data, std::size_t dataSize);
     int sendDataToAllConnections(std::string &data);
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
@@ -46,6 +47,7 @@ class ConnectionManager {
     ConnectionManager();
 
     bool globalAbort;
+    bool stopped = false;
 
     std::function<void(bool *)> monitor_connection;
 

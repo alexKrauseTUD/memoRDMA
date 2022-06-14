@@ -14,11 +14,20 @@ enum test_code {
 };
 
 class TaskManager {
-   public:
+   private:
     TaskManager();
+
+   public:
+    static TaskManager &getInstance() {
+        static TaskManager instance;
+        return instance;
+    }
     ~TaskManager();
 
-    void registerTask(Task* task);
+    TaskManager(TaskManager const &) = delete;
+    void operator=(TaskManager const &) = delete;
+
+    void registerTask(Task *task);
     void printAll();
 
     void executeById(std::size_t id);
@@ -29,7 +38,7 @@ class TaskManager {
     void setGlobalAbortFunction(std::function<void()> fn);
 
    private:
-    std::map<std::size_t, Task*> tasks;
+    std::map<std::size_t, Task *> tasks;
     std::size_t globalId;
     std::function<void()> globalAbort;
 

@@ -13,6 +13,7 @@ enum rdma_handler_communication {
     rdma_test_finished          =  8,
     rdma_blocked                =  9,
     rdma_reconfigure            = 10,
+    rdma_give_column,
     // rdma_create_region          =  2,
     // rdma_receive_region         =  3,
     // rdma_delete_region          =  4,
@@ -28,7 +29,7 @@ enum rdma_handler_communication {
     // rdma_mt_tput_test           = 14,
     // rdma_mt_consume_test        = 15,
     // rdma_next_mt_consume_test   = 16,
-    rdma_shutdown               = 17
+    rdma_shutdown
 };
 
 enum data_types {
