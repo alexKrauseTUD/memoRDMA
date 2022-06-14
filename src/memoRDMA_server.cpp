@@ -74,8 +74,7 @@ int main(int argc, char *argv[]) {
         abort = true;
     };
 
-    TaskManager tm;
-    tm.setGlobalAbortFunction(globalExit);
+    TaskManager::getInstance().setGlobalAbortFunction(globalExit);
 
     std::string content;
     std::string op;
@@ -107,7 +106,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
             if (converted) {
-                tm.executeById(id);
+                TaskManager::getInstance().executeById(id);
             }
         }
     }
