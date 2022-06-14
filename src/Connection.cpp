@@ -29,8 +29,9 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig) : global
         size_t metaSize = metaInfo.size();
 
         while (!*abort) {
-            // std::this_thread::sleep_for(10ms);
+            std::this_thread::sleep_for(1000ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
+                std::cout << "Opcode in buffer " << i << ": " << (uint64_t) metaInfo[i] << std::endl;
                 if ( ConnectionManager::getInstance().hasCallback( metaInfo[i] ) ) {
                     auto cb = ConnectionManager::getInstance().getCallback( metaInfo[i] );
                     cb( ownReceiveBuffer[i]->buf );

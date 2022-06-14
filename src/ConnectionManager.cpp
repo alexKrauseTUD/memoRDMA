@@ -150,7 +150,7 @@ int ConnectionManager::sendDataToAllConnections(std::string &data) {
 int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
     for (auto const &[name, con] : connections) {
         auto nextFree = con->getNextFreeReceive();
-        con->setOpcode(con->metaInfo.size() / 2 + nextFree, code, false);
+        con->setOpcode(con->metaInfo.size() / 2 + nextFree, code, true);
     }
 
     std::cout << "Sent opcode " << (uint64_t) code << " to all connections." << std::endl;
