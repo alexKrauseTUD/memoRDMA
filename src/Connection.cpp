@@ -30,19 +30,19 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         size_t metaSize = metaInfo.size();
 
         while (!*abort) {
-            std::this_thread::sleep_for(1000ms);
+            // std::this_thread::sleep_for(1000ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfo[i])) {
                     std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
-                    
+
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfo[i]);
-                    cb(localConId, ownReceiveBuffer[i]->buf);
-                    
+                    cb(localConId, ownReceiveBuffer[i]);
+
                     // Cleanup, whatever they didn't use is lost
+                    setOpcode(i, rdma_ready, true);
                     ownReceiveBuffer[i]->clearBuffer();
-                    metaInfo[i] = rdma_ready;
-                    
+
                     continue;
                 }
                 switch (metaInfo[i]) {
@@ -529,7 +529,7 @@ int Connection::sendData(std::string &data) {
     return 0;
 }
 
-int Connection::sendData(char *data, std::size_t dataSize, uint8_t opcode) {
+int Connection::sendData(char *data, std::size_t dataSize, char* appMetaData, size_t appMetaDataSize, uint8_t opcode) {
     if (ownSendBuffer->metaInfo == rdma_no_op) {
         std::cout << "There is no buffer for sending initialized!" << std::endl;
         return false;
@@ -543,51 +543,110 @@ int Connection::sendData(char *data, std::size_t dataSize, uint8_t opcode) {
         continue;
     }
 
-    uint64_t packageID = generatePackageID();
-    ownSendBuffer->metaInfo = rdma_sending;
-
-    uint32_t ownSendToRemoteReceiveRatio = getOwnSendToRemoteReceiveRatio();
-    size_t sendPackages = std::ceil(dataSize / (ownSendBuffer->getBufferSize() - (META_INFORMATION_SIZE * ownSendToRemoteReceiveRatio)));
-    sendPackages = sendPackages > 0 ? sendPackages : 1;
-    size_t alreadySentSize = 0;
-    uint64_t currentSize = 0;
+    uint64_t remainingSize = dataSize; // Whats left to write
+    uint64_t maxPayloadSize = bufferConfig.size_remote_receive - package_t::metaDataSize(); // As much as we can fit into the RB including metadata
+    uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t); // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
+    uint64_t packageID = generatePackageID(); // Some randomized identifier
+    size_t maxPackNum;
     int nextFree;
 
-    for (size_t i = 0; i < sendPackages; ++i) {
+    ownSendBuffer->metaInfo = rdma_sending;
+
+    size_t packageCounter = 1;
+    package_t package(packageID, dataSize, packageCounter, type_package, dataSize, 0, data);
+
+    // Send packages until we can fit the last one in the buffer
+    while (remainingSize > maxPayloadSize) {
         ownSendBuffer->clearBuffer();
-        for (size_t k = 0; k < ownSendToRemoteReceiveRatio; ++k) {
-            int c = 0;
-            nextFree = getNextFreeReceive();
-
-            while (nextFree == -1) {
-                ++c;
-                using namespace std::chrono_literals;
-                std::this_thread::sleep_for(100ns);
-                nextFree = getNextFreeReceive();
-                if (c >= 100) {
-                    std::cout << "There was no free remote receive buffer found for a longer period!" << std::endl;
-                    busy = false;
-                    return 1;
-                }
-
-                continue;
+        maxPackNum = bufferConfig.num_remote_receive;
+        for (size_t pack = 1; pack <= bufferConfig.num_remote_receive; ++pack) {
+            if (remainingSize < maxPayloadSize * pack) {
+                maxPackNum = pack - 1;
+                break;
             }
+        }
+        for (size_t rbi = 0; rbi < maxPackNum; ++rbi) {
+            package.setCurrentPackageNumber(packageCounter);
+            ownSendBuffer->loadPackage(ownSendBuffer->buf + (rbi * bufferConfig.size_remote_receive), &package);
+            ++packageCounter;
+        }
+        for (size_t rbi = 0; rbi < maxPackNum; ++rbi) {
+            if (remainingSize <= maxPayloadSize) break;
+            do {
+                nextFree = getNextFreeReceive();
+            } while (nextFree == -1);
 
-            setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_receiving, false);
-
-            currentSize = dataSize - alreadySentSize <= bufferConfig.size_remote_receive - META_INFORMATION_SIZE ? dataSize - alreadySentSize : bufferConfig.size_remote_receive - META_INFORMATION_SIZE;
-            ownSendBuffer->loadData(data + alreadySentSize, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), dataSize, currentSize, i * ownSendToRemoteReceiveRatio + k, type_string, packageID);
-            ownSendBuffer->post_send(currentSize + META_INFORMATION_SIZE, IBV_WR_RDMA_WRITE, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf + (k * bufferConfig.size_remote_receive), 0);
-
+            setOpcode((metaInfo.size() / 2) + nextFree, rdma_sending, false);
+            ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf + (rbi * bufferConfig.size_remote_receive), 0);
             poll_completion();
 
-            alreadySentSize += currentSize;
+            setOpcode((metaInfo.size() / 2) + nextFree, opcode, true);
 
-            setOpcode(metaInfo.size() / 2 + nextFree, opcode, true);
-
-            if (alreadySentSize == dataSize) break;
+            remainingSize -= maxDataToWrite;
+            package.advancePayloadPtr(maxDataToWrite);
         }
     }
+
+    // Wait for a buffer to become ready for receiving the last package
+    do {
+        nextFree = getNextFreeReceive();
+    } while (nextFree == -1);
+
+    // Send the last package
+    setOpcode((metaInfo.size() / 2) + nextFree, rdma_sending, false);
+    package.setCurrentPackageNumber(packageCounter);
+    package.setCurrentPackageSize(remainingSize);
+    ownSendBuffer->loadPackage(ownSendBuffer->buf, &package);
+    ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf, 0);
+    poll_completion();
+    setOpcode((metaInfo.size() / 2) + nextFree, opcode, true);
+
+    // uint32_t ownSendToRemoteReceiveRatio = getOwnSendToRemoteReceiveRatio();
+    // size_t sendPackages = std::ceil(dataSize / (ownSendBuffer->getBufferSize() - (META_INFORMATION_SIZE * ownSendToRemoteReceiveRatio)));
+    // sendPackages = sendPackages > 0 ? sendPackages : 1;
+    // size_t alreadySentSize = 0;
+    // uint64_t currentSize = 0;
+
+    // for (size_t i = 0; i < sendPackages; ++i) {
+    //     ownSendBuffer->clearBuffer();
+    //     for (size_t k = 0; k < ownSendToRemoteReceiveRatio; ++k) {
+    //         int c = 0;
+    //         nextFree = getNextFreeReceive();
+
+    //         while (nextFree == -1) {
+    //             ++c;
+    //             using namespace std::chrono_literals;
+    //             std::this_thread::sleep_for(100ns);
+    //             nextFree = getNextFreeReceive();
+    //             if (c >= 100) {
+    //                 std::cout << "There was no free remote receive buffer found for a longer period!" << std::endl;
+    //                 busy = false;
+    //                 return 1;
+    //             }
+
+    //             continue;
+    //         }
+
+    //         // Reserve buffer locally so noone else tries to use it
+    //         setOpcode(metaInfo.size() / 2 + nextFree, rdma_data_receiving, false);
+
+    //         // Load data into the send buffer
+    //         ownSendBuffer->loadPackage(ownSendBuffer->buf, &package);
+    //         //
+    //         ownSendBuffer->sendPackage(&package, res.remote_buffer[nextFree], res.remote_rkeys[nextFree], res.qp, ownSendBuffer->buf, 0);
+
+    //         package.setCurrentPackageNumber(++packageCounter);
+    //         package.advancePayloadPtr();
+
+    //         poll_completion();
+
+    //         alreadySentSize += package.get_header().current_payload_size;
+
+    //         setOpcode(metaInfo.size() / 2 + nextFree, opcode, true);
+
+    //         if (alreadySentSize == dataSize) break;
+    //     }
+    // }
 
     ownSendBuffer->metaInfo = rdma_ready;
 
@@ -980,7 +1039,7 @@ int Connection::throughputTest(std::string logName) {
             uint64_t *copy = d.data;
             size_t maxPackNum;
 
-            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, copy);
+            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, 0, copy);
             auto s_ts = std::chrono::high_resolution_clock::now();
 
             while (remainingSize > maxPayloadSize) {
@@ -1073,7 +1132,7 @@ int Connection::consumingTest(std::string logName) {
             size_t packNum = 0;
             size_t maxPackNum;
 
-            package_t package(packageID, maxDataToWrite, 1, type_package, wholePackSize, copy);
+            package_t package(packageID, maxDataToWrite, 1, type_package, wholePackSize, 0, copy);
             auto s_ts = std::chrono::high_resolution_clock::now();
 
             while (remainingSize > maxPayloadSize) {
@@ -1224,7 +1283,7 @@ int Connection::throughputTestMultiThread(std::string logName) {
             size_t maxPackNum;
             work_queue.resize(core_cnt);
 
-            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, copy);
+            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, 0, copy);
 
             while (remainingSize > 0) {
                 maxPackNum = bufferConfig.num_remote_receive;
@@ -1377,7 +1436,7 @@ int Connection::consumingTestMultiThread(std::string logName) {
             size_t maxPackNum;
             work_queue.resize(thread_cnt);
 
-            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, copy);
+            package_t package(packageID, maxDataToWrite, 1, type_package, remainingSize, 0, copy);
 
             while (remainingSize > 0) {
                 maxPackNum = thread_cnt;

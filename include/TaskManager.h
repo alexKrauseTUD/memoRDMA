@@ -36,6 +36,8 @@ class TaskManager {
     void operator=(TaskManager const &) = delete;
 
     void registerTask(Task *task);
+    void unregisterTask( std::string ident );
+    bool hasTask( std::string ident ) const;
     void printAll();
 
     void executeById(std::size_t id);

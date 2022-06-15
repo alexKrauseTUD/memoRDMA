@@ -5,7 +5,7 @@
 
 #include "Connection.h"
 
-typedef std::function<void(size_t, char*)> CallbackFunction;
+typedef std::function<void(size_t, ReceiveBuffer*)> CallbackFunction;
 
 class ConnectionManager {
    public:
@@ -26,7 +26,7 @@ class ConnectionManager {
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
     int sendData(std::size_t connectionId, std::string &data);
-    int sendData(std::size_t connectionId, char* data, std::size_t dataSize, uint8_t opcode);
+    int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode);
     void sendOpCode(std::size_t connectionId, uint8_t opcode);
     int sendDataToAllConnections(std::string &data);
     int sendCustomOpcodeToAllConnections( uint8_t code );

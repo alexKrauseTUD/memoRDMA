@@ -12,9 +12,9 @@
 TaskManager::TaskManager() : globalId{1} {
     size_t init_flags = 0;
     init_flags |= connection_handling;
-    // init_flags |= buffer_handling;
-    // init_flags |= dummy_tests;
-    // init_flags |= performance_tests;
+    init_flags |= buffer_handling;
+    init_flags |= dummy_tests;
+    init_flags |= performance_tests;
     
     setup( init_flags );
 
@@ -60,6 +60,24 @@ TaskManager::~TaskManager() {
 
 void TaskManager::registerTask(Task *task) {
     tasks.insert({globalId++, task});
+}
+
+void TaskManager::unregisterTask( std::string ident ) {
+    for ( auto task : tasks ) {
+        if ( task.second->ident.compare( ident ) == 0 ) {
+            tasks.erase( task.first );
+            std::cout << "[TaskManager] Removed Task " << ident << std::endl;
+        }
+    }
+}
+
+bool TaskManager::hasTask( std::string ident ) const {
+    for ( auto task : tasks ) {
+        if ( task.second->ident.compare( ident ) == 0 ) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void TaskManager::printAll() {

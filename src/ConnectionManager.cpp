@@ -119,9 +119,9 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
-int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, uint8_t opcode) {
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->sendData(data, dataSize, opcode);
+        return connections[connectionId]->sendData(data, dataSize, customMetaData, customMetaDataSize, opcode);
     } else {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }

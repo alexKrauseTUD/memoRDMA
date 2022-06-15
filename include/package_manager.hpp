@@ -23,23 +23,27 @@ class package_t {
         payload_size_t package_number;
         payload_size_t data_type;
         payload_size_t total_data_size;       // this encodes the to-be-expected size of the total data received (in multiple packages).
+        payload_size_t payload_offset;       // this allows custom meta data to be stored between the header and the actual payload
 
         header_t() : id{0},
                      current_payload_size{0},
                      package_number{0},
                      data_type{0},
-                     total_data_size{0} {}
+                     total_data_size{0},
+                     payload_offset{0} {}
 
         explicit header_t(
             payload_size_t _id,
             payload_size_t _payload_size,
             payload_size_t _package_number,
             payload_size_t _data_type,
-            payload_size_t _total_data_size) : id{_id},
+            payload_size_t _total_data_size,
+            payload_size_t _payload_offset) : id{_id},
                                                current_payload_size{_payload_size},
                                                package_number{_package_number},
                                                data_type{_data_type},
-                                               total_data_size{_total_data_size} {}
+                                               total_data_size{_total_data_size},
+                                               payload_offset{_payload_offset} {}
     };
 
     [[nodiscard]] auto& get_header() const {
@@ -70,7 +74,8 @@ class package_t {
         payload_size_t package_number,
         payload_size_t data_type,
         payload_size_t total_size,
-        payload_t* _payload) : header{id, current_size, package_number, data_type, total_size},
+        payload_size_t payload_offset,
+        payload_t* _payload) : header{id, current_size, package_number, data_type, total_size, payload_offset},
                                payload{_payload} {
     }
 
@@ -86,7 +91,7 @@ class package_t {
     // }
 
     package_t* deep_copy() const {
-        return new package_t( header.id, header.current_payload_size, header.package_number, (uint64_t)header.data_type, header.total_data_size, payload );
+        return new package_t( header.id, header.current_payload_size, header.package_number, (uint64_t)header.data_type, header.total_data_size, header.payload_offset, payload );
     }
 
     void setCurrentPackageSize(const std::size_t bytes) {
