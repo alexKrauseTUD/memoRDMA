@@ -47,10 +47,9 @@ class Buffer {
 
     char *bufferPtr();
 
-    void clearCode();
     void clearBuffer();
 
-    int poll_completion();
+    int post_request(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
    private:
     int resources_destroy();
@@ -63,9 +62,6 @@ class SendBuffer : public Buffer {
     explicit SendBuffer(std::size_t _bufferSize);
 
     void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID);
-    void sendData(std::string s, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
-    void sendData(uint64_t *data, uint64_t totalSize, uint64_t currentSize, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
-    int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
     void loadPackage(char *writePtr, package_t *p);
     void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
@@ -81,15 +77,7 @@ class ReceiveBuffer : public Buffer {
    public:
     explicit ReceiveBuffer(std::size_t _bufferSize);
 
-    void consumeData();
-
     std::size_t getMaxPayloadSize();
-
-    int modify_qp_to_init(struct config_t &config, struct ibv_qp *qp);
-    int modify_qp_to_rtr(struct config_t &config, struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
-    int modify_qp_to_rts(struct ibv_qp *qp);
-
-    int post_receive();
 
    private:
 };

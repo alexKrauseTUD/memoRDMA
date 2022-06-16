@@ -15,8 +15,8 @@ ConnectionManager::ConnectionManager() : globalConnectionId{0} {
                     case closing: {
                         closeConnection(name, false);
                     } break;
-                    case mt_consume: {
-                        con->consumeMultiThread();
+                    case multi_thread: {
+                        con->workMultiThread();
                     } break;
                     default:
                         break;
@@ -179,9 +179,9 @@ int ConnectionManager::pendingBufferCreation(std::size_t connectionId) {
     return 1;
 }
 
-int ConnectionManager::throughputTest(std::size_t connectionId, std::string logName) {
+int ConnectionManager::throughputTest(std::size_t connectionId, std::string logName, strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputTest(logName);
+        return connections[connectionId]->throughputTest(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -189,9 +189,9 @@ int ConnectionManager::throughputTest(std::size_t connectionId, std::string logN
     return 1;
 }
 
-int ConnectionManager::consumingTest(std::size_t connectionId, std::string logName) {
+int ConnectionManager::consumingTest(std::size_t connectionId, std::string logName, strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingTest(logName);
+        return connections[connectionId]->consumingTest(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -199,9 +199,9 @@ int ConnectionManager::consumingTest(std::size_t connectionId, std::string logNa
     return 1;
 }
 
-int ConnectionManager::throughputTestMultiThread(std::size_t connectionId, std::string logName) {
+int ConnectionManager::throughputTestMultiThread(std::size_t connectionId, std::string logName, strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputTestMultiThread(logName);
+        return connections[connectionId]->throughputTestMultiThread(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -209,9 +209,9 @@ int ConnectionManager::throughputTestMultiThread(std::size_t connectionId, std::
     return 1;
 }
 
-int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::string logName) {
+int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::string logName, strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingTestMultiThread(logName);
+        return connections[connectionId]->consumingTestMultiThread(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }

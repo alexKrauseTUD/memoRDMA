@@ -5,12 +5,13 @@
 #include <string>
 
 #include "Task.h"
+#include "common.h"
 
 enum test_code {
-    ss_tput = 1,
-    ds_tput = 2,
-    mt_ss_tput = 3,
-    mt_ds_tput = 4,
+    ss_tput =      1,
+    ds_tput =      2,
+    mt_ss_tput =   3,
+    mt_ds_tput =   4
 };
 
 class TaskManager {
@@ -33,7 +34,7 @@ class TaskManager {
     std::size_t globalId;
     std::function<void()> globalAbort;
 
-    void genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId);
+    void genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId, strategies strat);
 };
 
 #endif  // MEMORDMA_TASK_MANAGER_H
