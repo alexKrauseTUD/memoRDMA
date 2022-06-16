@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <random>
 
 #include "Buffer.h"
 #include "util.h"
@@ -33,15 +34,15 @@ struct resources {
 struct receive_data {
     bool done;
     uint64_t *localPtr;
-    data_types dt;
+    DataTypes dt;
     uint64_t size;
     std::chrono::_V2::system_clock::time_point endTime;
 };
 
-enum connection_status {
-    active = 1,
-    closing = 2,
-    multi_thread = 3
+enum class ConnectionStatus {
+    active,
+    closing,
+    multi_thread
 };
 
 typedef std::chrono::_V2::system_clock::time_point timePoint;
@@ -84,15 +85,15 @@ class Connection {
 
     void printConnectionInfo();
 
-    int throughputTest(std::string logName, strategies strat);
-    int consumingTest(std::string logName, strategies strat);
-    int throughputTestMultiThread(std::string logName, strategies strat);
-    int consumingTestMultiThread(std::string logName, strategies strat);
+    int throughputTest(std::string logName, Strategies strat);
+    int consumingTest(std::string logName, Strategies strat);
+    int throughputTestMultiThread(std::string logName, Strategies strat);
+    int consumingTestMultiThread(std::string logName, Strategies strat);
 
     void consume(std::size_t index);
     void workMultiThread();
 
-    std::atomic<connection_status> conStat;
+    std::atomic<ConnectionStatus> conStat;
 
    private:
     std::map<uint64_t, receive_data> receiveMap;
@@ -137,6 +138,8 @@ class Connection {
     std::function<void(std::atomic<bool> *)> check_receive;
 
     std::thread *readWorker;
+
+    std::mt19937_64 randGen;
 
     static const std::size_t TEST_ITERATIONS = 10;
     static const std::size_t MAX_DATA_SIZE = 32;

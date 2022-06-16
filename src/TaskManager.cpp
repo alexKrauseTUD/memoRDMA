@@ -491,35 +491,35 @@ void TaskManager::setup() {
     }));
 
     registerTask(new Task("ss_tput_push", "Single-sided throughput test PUSH", [this]() -> void {
-        genericTestFunc("ss_tput_push", "Single-sided throughput test PUSH", ss_tput, 1, push);
+        genericTestFunc("ss_tput_push", "Single-sided throughput test PUSH", ss_tput, 1, Strategies::push);
     }));
 
     registerTask(new Task("ds_tput_push", "Double-sided throughput test PUSH", [this]() -> void {
-        genericTestFunc("ds_tput_push", "Double-sided throughput test PUSH", ds_tput, 1, push);
+        genericTestFunc("ds_tput_push", "Double-sided throughput test PUSH", ds_tput, 1, Strategies::push);
     }));
 
     registerTask(new Task("mt_ss_tput_push", "Multi-threaded single-sided throughput test PUSH", [this]() -> void {
-        genericTestFunc("mt_ss_tput_push", "Multi-threaded single-sided throughput test PUSH", mt_ss_tput, 1, push);
+        genericTestFunc("mt_ss_tput_push", "Multi-threaded single-sided throughput test PUSH", mt_ss_tput, 1, Strategies::push);
     }));
 
     registerTask(new Task("mt_ds_tput_push", "Multi-threaded double-sided throughput test PUSH", [this]() -> void {
-        genericTestFunc("mt_ds_tput_push", "Multi-threaded double-sided throughput test PUSH", mt_ds_tput, 1, push);
+        genericTestFunc("mt_ds_tput_push", "Multi-threaded double-sided throughput test PUSH", mt_ds_tput, 1, Strategies::push);
     }));
 
     registerTask(new Task("ss_tput_pull", "Single-sided throughput test PULL", [this]() -> void {
-        genericTestFunc("ss_tput_pull", "Single-sided throughput test PULL", ss_tput, 1, pull);
+        genericTestFunc("ss_tput_pull", "Single-sided throughput test PULL", ss_tput, 1, Strategies::pull);
     }));
 
     registerTask(new Task("ds_tput_pull", "Double-sided throughput test PULL", [this]() -> void {
-        genericTestFunc("ds_tput_pull", "Double-sided throughput test PULL", ds_tput, 1, pull);
+        genericTestFunc("ds_tput_pull", "Double-sided throughput test PULL", ds_tput, 1, Strategies::pull);
     }));
 
     registerTask(new Task("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", [this]() -> void {
-        genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, pull);
+        genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, Strategies::pull);
     }));
 
     registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
-        genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, pull);
+        genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
     }));
 }
 
@@ -527,13 +527,13 @@ void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
     globalAbort = fn;
 }
 
-void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId, strategies strat) {
+void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId, Strategies strat) {
     using namespace std::chrono_literals;
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::stringstream logNameStream;
-        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
+        logNameStream << "logs/" << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
         std::string logName = logNameStream.str();
         std::cout << "[Task] Set name: " << logName << std::endl;
 

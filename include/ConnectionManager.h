@@ -29,10 +29,10 @@ class ConnectionManager {
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    int throughputTest(std::size_t connectionId, std::string logName, strategies strat);
-    int consumingTest(std::size_t connectionId, std::string logName, strategies strat);
-    int throughputTestMultiThread(std::size_t connectionId, std::string logName, strategies strat);
-    int consumingTestMultiThread(std::size_t connectionId, std::string logName, strategies strat);
+    int throughputTest(std::size_t connectionId, std::string logName, Strategies strat);
+    int consumingTest(std::size_t connectionId, std::string logName, Strategies strat);
+    int throughputTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
+    int consumingTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
 
     std::map<std::size_t, Connection *> connections;
 
