@@ -68,6 +68,7 @@ class SendBuffer : public Buffer {
     int post_send(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
     void loadPackage(char *writePtr, package_t *p);
+    void loadAppMetaData(char *writePtr, package_t *p, char *meta);
     void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
     void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
