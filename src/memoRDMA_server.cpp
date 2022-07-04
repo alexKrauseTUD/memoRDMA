@@ -74,15 +74,14 @@ int main(int argc, char *argv[]) {
         abort = true;
     };
 
-    TaskManager tm;
-    tm.setGlobalAbortFunction(globalExit);
+    TaskManager::getInstance().setGlobalAbortFunction(globalExit);
 
     std::string content;
     std::string op;
 
     while (!abort) {
         op = "-1";
-        tm.printAll();
+        TaskManager::getInstance().printAll();
         std::cout << "Type \"exit\" to terminate." << std::endl;
         // std::cin >> op;
         std::getline(std::cin, op, '\n');
@@ -107,7 +106,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
             if (converted) {
-                tm.executeById(id);
+                TaskManager::getInstance().executeById(id);
             }
         }
     }

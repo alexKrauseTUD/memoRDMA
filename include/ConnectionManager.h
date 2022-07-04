@@ -5,6 +5,8 @@
 
 #include "Connection.h"
 
+typedef std::function<void(size_t, ReceiveBuffer*)> CallbackFunction;
+
 class ConnectionManager {
    public:
     static ConnectionManager &getInstance() {
@@ -17,11 +19,17 @@ class ConnectionManager {
     void operator=(ConnectionManager const &) = delete;
 
     int registerConnection(config_t &config, buffer_config_t &bufferConfig);
+    bool registerCallback( uint8_t code, CallbackFunction cb );
+    bool hasCallback( uint8_t code ) const;
+    CallbackFunction getCallback( uint8_t code ) const;
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
     int sendData(std::size_t connectionId, std::string &data);
+    int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode);
+    void sendOpCode(std::size_t connectionId, uint8_t opcode);
     int sendDataToAllConnections(std::string &data);
+    int sendCustomOpcodeToAllConnections( uint8_t code );
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own);
@@ -46,12 +54,15 @@ class ConnectionManager {
     ConnectionManager();
 
     bool globalAbort;
+    bool stopped = false;
 
     std::function<void(bool *)> monitor_connection;
 
     std::thread *monitorWorker;
 
     std::size_t globalConnectionId;
+
+    std::map< uint8_t, CallbackFunction > callbacks;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION_MANAGER

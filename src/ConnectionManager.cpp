@@ -38,9 +38,30 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig)));
+    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig, globalConnectionId)));
 
     return globalConnectionId;
+}
+
+bool ConnectionManager::registerCallback(uint8_t code, CallbackFunction cb) {
+    if (callbacks.contains(code)) {
+        return false;
+    }
+    callbacks.insert({code, cb});
+
+    return true;
+}
+
+bool ConnectionManager::hasCallback(uint8_t code) const {
+    return callbacks.contains(code);
+}
+
+CallbackFunction ConnectionManager::getCallback(uint8_t code) const {
+    if (callbacks.contains(code)) {
+        return callbacks.at(code);
+    } else {
+        return CallbackFunction();
+    }
 }
 
 void ConnectionManager::printConnections() {
@@ -98,6 +119,26 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->sendData(data, dataSize, customMetaData, customMetaDataSize, opcode);
+    } else {
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+
+    return 1;
+}
+
+void ConnectionManager::sendOpCode(std::size_t connectionId, uint8_t opcode) {
+    if (connections.contains(connectionId)) {
+        auto con = connections[connectionId];
+        auto nextFree = con->getNextFreeReceive();
+        con->setOpcode(con->metaInfo.size() / 2 + nextFree, opcode, true);
+    } else {
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
+    }
+}
+
 // TODO: How about a pointer to the data;; Generic datatype?
 int ConnectionManager::sendDataToAllConnections(std::string &data) {
     int success = 0;
@@ -114,6 +155,17 @@ int ConnectionManager::sendDataToAllConnections(std::string &data) {
     }
 
     return success;
+}
+
+int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
+    for (auto const &[name, con] : connections) {
+        auto nextFree = con->getNextFreeReceive();
+        con->setOpcode(con->metaInfo.size() / 2 + nextFree, code, true);
+    }
+
+    std::cout << "Sent opcode " << (uint64_t)code << " to all connections." << std::endl;
+
+    return 0;
 }
 
 int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {
@@ -220,9 +272,12 @@ int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::s
 }
 
 void ConnectionManager::stop() {
-    closeAllConnections();
-    globalAbort = true;
-    monitorWorker->join();
+    if (!stopped) {
+        closeAllConnections();
+        globalAbort = true;
+        monitorWorker->join();
+        stopped = true;
+    }
 }
 
 bool ConnectionManager::abortSignaled() const {

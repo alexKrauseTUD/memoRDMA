@@ -76,7 +76,11 @@ void SendBuffer::loadData(const char* data, char* writePtr, uint64_t totalSize, 
 
 void SendBuffer::loadPackage(char* writePtr, package_t* p) {
     memcpy(writePtr, &p->get_header(), sizeof(package_t::header_t));
-    memcpy(writePtr + sizeof(package_t::header_t), p->get_payload(), p->get_header().current_payload_size);
+    memcpy(writePtr + p->metaDataSize() + p->get_header().payload_start, p->get_payload(), p->get_header().current_payload_size);
+}
+
+void SendBuffer::loadAppMetaData(char *writePtr, package_t* p, char *meta) {
+    memcpy(writePtr + sizeof(package_t::header_t), meta, p->get_header().payload_start);
 }
 
 void SendBuffer::sendPackage(package_t* p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) {
