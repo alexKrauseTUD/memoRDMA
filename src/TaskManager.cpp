@@ -15,8 +15,8 @@ TaskManager::TaskManager() : globalId{1} {
     init_flags |= buffer_handling;
     init_flags |= dummy_tests;
     init_flags |= performance_tests;
-    
-    setup( init_flags );
+
+    setup(init_flags);
 
     registerTask(new Task("executeMulti", "Execute multiple by ID with shutdown", [&]() -> void {
         std::vector<std::size_t> taskList;
@@ -62,18 +62,18 @@ void TaskManager::registerTask(Task *task) {
     tasks.insert({globalId++, task});
 }
 
-void TaskManager::unregisterTask( std::string ident ) {
-    for ( auto task : tasks ) {
-        if ( task.second->ident.compare( ident ) == 0 ) {
-            tasks.erase( task.first );
+void TaskManager::unregisterTask(std::string ident) {
+    for (auto task : tasks) {
+        if (task.second->ident.compare(ident) == 0) {
+            tasks.erase(task.first);
             std::cout << "[TaskManager] Removed Task " << ident << std::endl;
         }
     }
 }
 
-bool TaskManager::hasTask( std::string ident ) const {
-    for ( auto task : tasks ) {
-        if ( task.second->ident.compare( ident ) == 0 ) {
+bool TaskManager::hasTask(std::string ident) const {
+    for (auto task : tasks) {
+        if (task.second->ident.compare(ident) == 0) {
             return true;
         }
     }
@@ -535,19 +535,35 @@ void TaskManager::setup(size_t init_flags) {
 
     if (init_flags & performance_tests) {
         registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
-            genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 1);
+            genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 1, Strategies::push);
         }));
 
         registerTask(new Task("ds_tput", "Double-sided throughput test", [this]() -> void {
-            genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput, 1);
+            genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput, 1, Strategies::push);
         }));
 
         registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", [this]() -> void {
-            genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 1);
+            genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 1, Strategies::push);
         }));
 
         registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", [this]() -> void {
-            genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 1);
+            genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 1, Strategies::push);
+        }));
+
+        registerTask(new Task("ss_tput_pull", "Single-sided throughput test PULL", [this]() -> void {
+            genericTestFunc("ss_tput_pull", "Single-sided throughput test PULL", ss_tput, 1, Strategies::pull);
+        }));
+
+        registerTask(new Task("ds_tput_pull", "Double-sided throughput test PULL", [this]() -> void {
+            genericTestFunc("ds_tput_pull", "Double-sided throughput test PULL", ds_tput, 1, Strategies::pull);
+        }));
+
+        registerTask(new Task("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", [this]() -> void {
+            genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, Strategies::pull);
+        }));
+
+        registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
+            genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
         }));
     }
 }
@@ -556,13 +572,13 @@ void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
     globalAbort = fn;
 }
 
-void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId) {
+void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId, Strategies strat) {
     using namespace std::chrono_literals;
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::stringstream logNameStream;
-        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << +num_rb << ".log";
+        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
         std::string logName = logNameStream.str();
         std::cout << "[Task] Set name: " << logName << std::endl;
 
@@ -570,8 +586,8 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
             buffer_config_t bufferConfig = {.num_own_receive = 1,
                                             .size_own_receive = 640,
                                             .num_remote_receive = num_rb,
-                                            .size_remote_receive = bytes + META_INFORMATION_SIZE,
-                                            .size_own_send = (bytes + META_INFORMATION_SIZE) * num_rb,
+                                            .size_remote_receive = bytes + package_t::metaDataSize(),
+                                            .size_own_send = (bytes + package_t::metaDataSize()) * num_rb,
                                             .size_remote_send = 640,
                                             .meta_info_size = 16};
 
@@ -583,16 +599,16 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
 
             switch (tc) {
                 case ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName));
+                    CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
                     break;
                 case ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName));
+                    CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
                     break;
                 case mt_ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTestMultiThread(connectionId, logName));
+                    CHECK(ConnectionManager::getInstance().throughputTestMultiThread(connectionId, logName, strat));
                     break;
                 case mt_ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTestMultiThread(connectionId, logName));
+                    CHECK(ConnectionManager::getInstance().consumingTestMultiThread(connectionId, logName, strat));
                     break;
                 default:
                     std::cout << "A non-valid test_code was provided!";
