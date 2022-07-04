@@ -533,7 +533,7 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
         auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::stringstream logNameStream;
-        logNameStream << "logs/" << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
+        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
         std::string logName = logNameStream.str();
         std::cout << "[Task] Set name: " << logName << std::endl;
 
