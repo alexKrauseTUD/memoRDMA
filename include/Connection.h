@@ -146,8 +146,8 @@ class Connection {
 
     std::mt19937_64 randGen;
 
-    static const std::size_t TEST_ITERATIONS = 1;
-    static const std::size_t MAX_DATA_SIZE = 20;
+    static const std::size_t TEST_ITERATIONS = 10;
+    static const std::size_t MAX_DATA_SIZE = 32;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION
