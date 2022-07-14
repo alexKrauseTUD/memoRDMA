@@ -24,10 +24,14 @@ struct resources {
     struct ibv_pd *pd;                    // PD handle
     struct ibv_cq *cq;                    // CQ handle
     struct ibv_qp *qp;                    // QP handle
-    std::vector<struct ibv_mr *> own_mr;  // MR handle for buf
-    std::vector<char *> own_buffer;       // memory buffer pointer, used for RDMA send ops
-    std::vector<uint64_t> remote_buffer;  // memory buffer pointer, used for RDMA send ops
-    std::vector<uint32_t> remote_rkeys;
+    std::vector<struct ibv_mr *> own_receive_mr;  // MR handle for buf
+    std::vector<char *> own_receive_buffer;       // memory buffer pointer, used for RDMA send ops
+    std::vector<uint64_t> remote_receive_buffer;  // memory buffer pointer, used for RDMA send ops
+    std::vector<uint32_t> remote_receive_rkeys;
+    std::vector<struct ibv_mr *> own_send_mr;  // MR handle for buf
+    std::vector<char *> own_send_buffer;       // memory buffer pointer, used for RDMA send ops
+    std::vector<uint64_t> remote_send_buffer;  // memory buffer pointer, used for RDMA send ops
+    std::vector<uint32_t> remote_send_rkeys;
     int sock;  // TCP socket file descriptor
 };
 
@@ -59,22 +63,21 @@ class Connection {
 
     bool busy;
 
-    SendBuffer *ownSendBuffer = NULL;
-
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
+    std::vector<SendBuffer *> ownSendBuffer;
 
     void init();
 
-    int sendData(std::string &data);
-    int sendData(package_t *p);
-    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
+    // int sendData(std::string &data);
+    // int sendData(package_t *p);
+    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat);
 
     int sendOpcode(uint8_t opcode, bool sendToRemote);
 
     int closeConnection(bool send_remote = true);
     void destroyResources();
 
-    void receiveDataFromRemote(std::size_t index);
+    void receiveDataFromRemote(size_t index, bool consu,  Strategies strat);
     void pullDataFromRemote(std::size_t index, bool consume);
 
     int addReceiveBuffer(std::size_t quantity, bool own);
@@ -98,14 +101,16 @@ class Connection {
     void consume(std::size_t index);
     void workMultiThread();
 
-    std::atomic<ConnectionStatus> conStat;
+    // std::atomic<ConnectionStatus> conStat;
 
    private:
     std::map<uint64_t, receive_data> receiveMap;
 
-    std::array<uint8_t, 16> metaInfo{0};
+    std::array<uint8_t, 16> metaInfoReceive{0};
+    std::array<uint8_t, 16> metaInfoSend{0};
 
-    struct ibv_mr *metaInfoMR;
+    struct ibv_mr *metaInfoReceiveMR;
+    struct ibv_mr *metaInfoSendMR;
 
     void setupSendBuffer();
     void setupReceiveBuffer();
@@ -123,9 +128,13 @@ class Connection {
     int poll_completion();
 
     int getNextFreeReceive();
+    int getNextFreeSend();
     uint32_t getOwnSendToRemoteReceiveRatio();
-    void setOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
+    void setReceiveOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
+    void setSendOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
+
+    int __sendData(size_t index, Strategies strat);
 
     std::tuple<timePoint, timePoint> throughputTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
     std::tuple<timePoint, timePoint> consumingTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
@@ -140,11 +149,13 @@ class Connection {
     std::atomic<bool> globalAbort;
     std::atomic<bool> reconfiguring;
 
-    std::function<void(std::atomic<bool> *)> check_receive;
-
-    std::thread *readWorker;
+    std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
+    std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
 
     std::mt19937_64 randGen;
+
+    std::vector<std::thread *> readWorkerPool;
+    std::vector<std::thread *> sendWorkerPool;
 
     static const std::size_t TEST_ITERATIONS = 10;
     static const std::size_t MAX_DATA_SIZE = 32;

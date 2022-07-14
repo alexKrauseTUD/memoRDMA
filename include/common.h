@@ -17,6 +17,8 @@ enum rdma_handler_communication: uint8_t {
     rdma_pull_read,
     rdma_pull_consume,
     rdma_give_column,
+    rdma_ready_to_push,
+    rdma_ready_to_pull,
     rdma_shutdown
 };
 

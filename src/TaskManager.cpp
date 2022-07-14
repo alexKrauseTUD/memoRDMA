@@ -515,10 +515,10 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & dummy_tests) {
-        registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
-            std::string dummy = "This is a dummy message.";
-            ConnectionManager::getInstance().sendDataToAllConnections(dummy);
-        }));
+        // registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
+        //     std::string dummy = "This is a dummy message.";
+        //     ConnectionManager::getInstance().sendDataToAllConnections(dummy);
+        // }));
 
         registerTask(new Task("customOpcode", "Send Custom opcode to all Connections", []() -> void {
             uint8_t val;
@@ -576,47 +576,57 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
     using namespace std::chrono_literals;
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
-        auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::stringstream logNameStream;
-        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
-        std::string logName = logNameStream.str();
-        std::cout << "[Task] Set name: " << logName << std::endl;
+        for (uint8_t num_sb = 1; num_sb <= num_rb; ++num_sb) {
+            auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::stringstream logNameStream;
+            logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
+            std::string logName = logNameStream.str();
+            std::cout << "[Task] Set name: " << logName << std::endl;
 
-        for (uint64_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
-            buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                            .size_own_receive = 640,
-                                            .num_remote_receive = num_rb,
-                                            .size_remote_receive = bytes + package_t::metaDataSize(),
-                                            .size_own_send = (bytes + package_t::metaDataSize()) * num_rb,
-                                            .size_remote_send = 640,
-                                            .meta_info_size = 16};
+            for (uint8_t thrds = 1; thrds <= num_sb; ++thrds) {
+                for (uint64_t size_rb = 1ull << 15; size_rb < 1ull << 30; size_rb <<= 1) {
+                    buffer_config_t bufferConfig = {.num_own_send_threads = thrds,
+                                                    .num_own_receive_threads = 1,
+                                                    .num_remote_send_threads = 1,
+                                                    .num_remote_receive_threads = thrds,
+                                                    .num_own_receive = 1,
+                                                    .size_own_receive = 640,
+                                                    .num_remote_receive = num_rb,
+                                                    .size_remote_receive = size_rb + package_t::metaDataSize(),
+                                                    .num_own_send = num_sb,
+                                                    .size_own_send = size_rb + package_t::metaDataSize(),
+                                                    .num_remote_send = 1,
+                                                    .size_remote_send = 640,
+                                                    .meta_info_size = 16};
 
-            CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
+                    CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
 
-            std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(bytes) << ")" << std::endl;
-            std::cout << std::endl;
-            std::cout << name << std::endl;
+                    std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(size_rb) << ")" << std::endl;
+                    std::cout << std::endl;
+                    std::cout << name << std::endl;
 
-            switch (tc) {
-                case ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
-                    break;
-                case ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
-                    break;
-                case mt_ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTestMultiThread(connectionId, logName, strat));
-                    break;
-                case mt_ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTestMultiThread(connectionId, logName, strat));
-                    break;
-                default:
-                    std::cout << "A non-valid test_code was provided!";
-                    return;
+                    switch (tc) {
+                        case ss_tput:
+                            CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
+                            break;
+                        case ds_tput:
+                            CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
+                            break;
+                        case mt_ss_tput:
+                            CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
+                            break;
+                        case mt_ds_tput:
+                            CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
+                            break;
+                        default:
+                            std::cout << "A non-valid test_code was provided!";
+                            return;
+                    }
+
+                    std::cout << std::endl;
+                    std::cout << name << " ended." << std::endl;
+                }
             }
-
-            std::cout << std::endl;
-            std::cout << name << " ended." << std::endl;
         }
     }
 }

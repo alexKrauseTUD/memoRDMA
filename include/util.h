@@ -72,21 +72,33 @@ struct config_t {
 };
 
 struct buffer_config_t {
+    uint8_t num_own_send_threads;
+    uint8_t num_own_receive_threads;
+    uint8_t num_remote_send_threads;
+    uint8_t num_remote_receive_threads;
     uint8_t num_own_receive;
     uint32_t size_own_receive;
     uint8_t num_remote_receive;
     uint32_t size_remote_receive;
+    uint8_t num_own_send;
     uint64_t size_own_send;
+    uint8_t num_remote_send;
     uint64_t size_remote_send;
     uint8_t meta_info_size;
 };
 
 static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
-    return {.num_own_receive = bufferConfig.num_remote_receive,
+    return {.num_own_send_threads = bufferConfig.num_remote_send_threads,
+            .num_own_receive_threads = bufferConfig.num_remote_receive_threads,
+            .num_remote_send_threads = bufferConfig.num_own_send_threads,
+            .num_remote_receive_threads = bufferConfig.num_own_receive_threads,
+            .num_own_receive = bufferConfig.num_remote_receive,
             .size_own_receive = bufferConfig.size_remote_receive,
             .num_remote_receive = bufferConfig.num_own_receive,
             .size_remote_receive = bufferConfig.size_own_receive,
+            .num_own_send = bufferConfig.num_remote_send,
             .size_own_send = bufferConfig.size_remote_send,
+            .num_remote_send = bufferConfig.num_own_send,
             .size_remote_send = bufferConfig.size_own_send,
             .meta_info_size = bufferConfig.meta_info_size};
 }
