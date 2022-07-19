@@ -3,6 +3,27 @@
 #include "Connection.h"
 
 ConnectionManager::ConnectionManager() : globalConnectionId{0} {
+    monitor_connection = [this](bool *abort) -> void {
+        using namespace std::chrono_literals;
+
+        std::cout << "Starting monitoring thread for connections!" << std::flush;
+
+        while (!*abort) {
+            std::this_thread::sleep_for(1s);
+            for (auto const &[name, con] : connections) {
+                switch (con->conStat) {
+                    case ConnectionStatus::reconfigure: {
+                        con->receiveReconfigureBuffer();
+                    } break;
+                    default:
+                        break;
+                }
+            }
+        }
+        std::cout << "[monitor_connection] Ending through global abort." << std::endl;
+    };
+
+    monitorWorker = new std::thread(monitor_connection, &globalAbort);
 }
 
 ConnectionManager::~ConnectionManager() {

@@ -17,8 +17,8 @@
 #include "DataProvider.h"
 #include "util.h"
 
-Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalAbort(false) {
-    // conStat = ConnectionStatus::active;
+Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
+    conStat = ConnectionStatus::active;
     config = _config;
     bufferConfig = _bufferConfig;
     localConId = _localConId;
@@ -62,7 +62,9 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         receiveDataFromRemote(i, true, Strategies::pull);
                     } break;
                     case rdma_reconfigure: {
-                        receiveReconfigureBuffer(i);
+                        setReceiveOpcode(i, rdma_reconfiguring, false);
+                        conStat = ConnectionStatus::reconfigure;
+                        // receiveReconfigureBuffer(i);
                     } break;
                     case rdma_shutdown: {
                         closeConnection(false);
@@ -111,25 +113,6 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                     case rdma_ready_to_pull: {
                         __sendData(i, Strategies::pull);
                     }; break;
-                    // // case rdma_consume_test: {
-                    // //     consume(i);
-                    // // } break;
-                    // // case rdma_multi_thread: {
-                    // //     metaInfoSend[i] = rdma_no_op;
-                    // //     conStat = ConnectionStatus::multi_thread;
-                    // // } break;
-                    // case rdma_pull_read: {
-                    //     pullDataFromRemote(i, false);
-                    // } break;
-                    // case rdma_pull_consume: {
-                    //     pullDataFromRemote(i, true);
-                    // } break;
-                    // case rdma_reconfigure: {
-                    //     receiveReconfigureBuffer(i);
-                    // } break;
-                    // case rdma_shutdown: {
-                    //     closeConnection(false);
-                    // }; break;
                     default: {
                         continue;
                     }; break;
@@ -144,7 +127,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 }
 
 void Connection::init() {
-    globalAbort = false;
+    // globalAbort = false;
     // conStat = ConnectionStatus::active;
 
     metaInfoReceive = std::array<uint8_t, 16>{0};
@@ -164,21 +147,23 @@ void Connection::init() {
     }
 
     for (size_t tid = 0; tid < bufferConfig.num_own_receive_threads; ++tid) {
-        readWorkerPool.emplace_back(new std::thread(check_receive, &globalAbort, tid, bufferConfig.num_own_receive_threads));
+        readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufferConfig.num_own_receive_threads));
     }
 
     for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
-        sendWorkerPool.emplace_back(new std::thread(check_send, &globalAbort, tid, bufferConfig.num_own_send_threads));
+        sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
     }
 }
 
 void Connection::destroyResources() {
-    globalAbort = true;
+    globalReceiveAbort = true;
     std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
     readWorkerPool.clear();
+    globalReceiveAbort = false;
+    globalSendAbort = true;
     std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
     sendWorkerPool.clear();
-    globalAbort = false;
+    globalSendAbort = false;
 
     printf("Freeing...");
     for (auto mr : res.own_receive_mr) {
@@ -217,17 +202,17 @@ void Connection::printConnectionInfo() {
               << "\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
               << "\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
               << "\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
-              << "\tOwn Number Send Threads:\t\t" << bufferConfig.num_own_send_threads << "\n"
-              << "\tOwn Number Receive Threads:\t\t" << bufferConfig.num_own_receive_threads << "\n"
-              << "\tRemote Number Send Threads:\t\t" << bufferConfig.num_remote_send_threads << "\n"
-              << "\tRemote Number Receive Threads:\t\t" << bufferConfig.num_remote_receive_threads << "\n"
+              << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
+              << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
+              << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
+              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
               << std::endl;
 }
 
 void Connection::setupSendBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         ownSendBuffer.push_back(new SendBuffer(bufferConfig.size_own_send));
-        setReceiveOpcode(i, rdma_ready, false);
+        setSendOpcode(i, rdma_ready, false);
     }
 }
 
@@ -591,7 +576,6 @@ int Connection::sendData(char *data, std::size_t dataSize, char *appMetaData, si
     maxPayloadSize = remainingSize > maxPayloadSize ? maxPayloadSize : remainingSize;
     uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);  // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
     uint64_t packageID = generatePackageID();                                          // Some randomized identifier
-    size_t maxPackNum;
 
     size_t packageCounter = 0;
     package_t package(packageID, maxDataToWrite, packageCounter, 0, type_package, dataSize, appMetaDataSize, data);
@@ -643,7 +627,7 @@ int Connection::__sendData(size_t index, Strategies strat) {
                     poll_completion();
                     setSendOpcode(index, rdma_ready, false);
                 }
-                setReceiveOpcode(i, sb->sendOpcode, !sb->sendOpcode == rdma_ready);     // do not send opcode if rdma_ready -> throughput test
+                setReceiveOpcode(i, sb->sendOpcode, !sb->sendOpcode == rdma_ready);  // do not send opcode if rdma_ready -> throughput test
 
                 dataSent = true;
                 break;
@@ -679,7 +663,7 @@ int Connection::getNextFreeReceive() {
 }
 
 int Connection::getNextFreeSend() {
-    for (size_t i = 0; i < metaInfoSend.size() / 2; ++i) {
+    for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         if (metaInfoSend[i] == rdma_ready) return i;
     }
 
@@ -799,7 +783,8 @@ void Connection::receiveDataFromRemote(size_t index, bool consu, Strategies stra
 }
 
 int Connection::closeConnection(bool sendRemote) {
-    globalAbort = true;
+    globalReceiveAbort = true;
+    globalSendAbort = true;
 
     setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
 
@@ -816,7 +801,7 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     while (!allBlocked) {
         while (numBlockedRec < bufferConfig.num_own_receive) {
             for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
-                if (metaInfoReceive[i] == rdma_ready || metaInfoReceive[i] == rdma_reconfigure) {
+                if (metaInfoReceive[i] == rdma_ready || metaInfoReceive[i] == rdma_reconfiguring) {
                     setReceiveOpcode(i, rdma_blocked, true);
                     ++numBlockedRec;
                 } else {
@@ -899,25 +884,29 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     }
 
     if (bufConfig.num_own_receive_threads != bufferConfig.num_own_receive_threads) {
-        globalAbort = true;
+        globalReceiveAbort = true;
         std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
         readWorkerPool.clear();
-        globalAbort = false;
+        globalReceiveAbort = false;
 
         for (size_t tid = 0; tid < bufConfig.num_own_receive_threads; ++tid) {
-            readWorkerPool.emplace_back(new std::thread(check_receive, &globalAbort, tid, bufferConfig.num_own_receive_threads));
+            readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufferConfig.num_own_receive_threads));
         }
+
+        bufferConfig.num_own_receive_threads = bufConfig.num_own_receive_threads;
     }
 
     if (bufConfig.num_own_send_threads != bufferConfig.num_own_send_threads) {
-        globalAbort = true;
+        globalSendAbort = true;
         std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
         sendWorkerPool.clear();
-        globalAbort = false;
+        globalSendAbort = false;
 
         for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
-            sendWorkerPool.emplace_back(new std::thread(check_send, &globalAbort, tid, bufferConfig.num_own_send_threads));
+            sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
         }
+
+        bufferConfig.num_own_send_threads = bufConfig.num_own_send_threads;
     }
 
     bufferConfig = bufConfig;
@@ -980,8 +969,17 @@ int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
     return reconfigureBuffer(bufConfig);
 }
 
-int Connection::receiveReconfigureBuffer(std::size_t index) {
+// int Connection::receiveReconfigureBuffer(std::size_t index) {
+int Connection::receiveReconfigureBuffer() {
     reconfiguring = true;
+    size_t index = -1;
+
+    for (size_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
+        if (metaInfoReceive[i] == rdma_reconfiguring) {
+            index = i;
+            conStat = ConnectionStatus::active;
+        }
+    }
 
     char *ptr = ownReceiveBuffer[index]->buf;
 

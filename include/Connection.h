@@ -45,8 +45,7 @@ struct receive_data {
 
 enum class ConnectionStatus {
     active,
-    closing,
-    multi_thread
+    reconfigure
 };
 
 typedef std::chrono::_V2::system_clock::time_point timePoint;
@@ -60,6 +59,7 @@ class Connection {
     buffer_config_t bufferConfig;
     uint32_t localConId;
     resources res;
+    ConnectionStatus conStat;
 
     bool busy;
 
@@ -87,7 +87,8 @@ class Connection {
 
     int reconfigureBuffer(buffer_config_t &bufConfig);
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
-    int receiveReconfigureBuffer(std::size_t index);
+    int receiveReconfigureBuffer();
+    // int receiveReconfigureBuffer(std::size_t index);
 
     int pendingBufferCreation();
 
@@ -146,7 +147,8 @@ class Connection {
     std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
     std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
 
-    std::atomic<bool> globalAbort;
+    std::atomic<bool> globalReceiveAbort;
+    std::atomic<bool> globalSendAbort;
     std::atomic<bool> reconfiguring;
 
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
@@ -158,7 +160,7 @@ class Connection {
     std::vector<std::thread *> sendWorkerPool;
 
     static const std::size_t TEST_ITERATIONS = 10;
-    static const std::size_t MAX_DATA_SIZE = 32;
+    static const std::size_t MAX_DATA_SIZE = 31;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

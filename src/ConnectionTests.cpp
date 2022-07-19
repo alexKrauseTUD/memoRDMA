@@ -52,7 +52,7 @@ int Connection::throughputTest(std::string logName, Strategies strat) {
             std::cout.precision(15);
             std::cout.setf(std::ios::fixed, std::ios::floatfield);
             std::cout.setf(std::ios::showpoint);
-            out << bufferConfig.num_own_send_threads << "\t" << bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << bufferConfig.num_remote_receive_threads << "\t" << bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << BtoMB(dataSize) / (secs.count()) << std::endl
+            out << +bufferConfig.num_own_send_threads << "\t" << +bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << +bufferConfig.num_remote_receive_threads << "\t" << +bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << BtoMB(dataSize) / (secs.count()) << std::endl
                 << std::flush;
             std::cout.flags(f);
         }
