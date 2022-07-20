@@ -41,8 +41,8 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                     cb(localConId, ownReceiveBuffer[i]);
 
                     // Cleanup, whatever they didn't use is lost
-                    setOpcode(i, rdma_ready, true);
                     ownReceiveBuffer[i]->clearBuffer();
+                    setOpcode(i, rdma_ready, true);
 
                     continue;
                 }
