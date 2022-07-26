@@ -56,6 +56,7 @@ class Connection {
     buffer_config_t bufferConfig;
     uint32_t localConId;
     resources res;
+    std::mutex buffer_check_mutex;
 
     bool busy;
 

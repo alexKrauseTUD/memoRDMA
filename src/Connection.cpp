@@ -34,7 +34,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             // std::this_thread::sleep_for(1000ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfo[i])) {
-                    std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
+                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfo[i]);
@@ -629,6 +629,7 @@ uint64_t Connection::generatePackageID() {
 }
 
 int Connection::getNextFreeReceive() {
+    std::lock_guard<std::mutex> _lk(buffer_check_mutex);
     size_t metaSize = metaInfo.size();
     for (size_t i = (metaSize / 2); i < metaSize; ++i) {
         if (metaInfo[i] == rdma_ready) return i - (metaSize / 2);
@@ -642,7 +643,9 @@ uint32_t Connection::getOwnSendToRemoteReceiveRatio() {
 }
 
 void Connection::setOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
+    buffer_check_mutex.lock();
     metaInfo[index] = opcode;
+    buffer_check_mutex.unlock();
 
     if (sendToRemote) {
         size_t remoteIndex = (index + (metaInfo.size() / 2)) % metaInfo.size();
