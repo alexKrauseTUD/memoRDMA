@@ -463,6 +463,10 @@ die:
     exit(EXIT_FAILURE);
 }
 
+size_t Connection::maxBytesInPayload(const size_t customMetaDataSize) const {
+    return bufferConfig.size_remote_receive - package_t::metaDataSize() - customMetaDataSize;  // As much as we can fit into the RB including metadata
+}
+
 int Connection::sendData(std::string &data) {
     if (ownSendBuffer->metaInfo == rdma_no_op) {
         std::cout << "There is no buffer for sending initialized!" << std::endl;

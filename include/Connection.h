@@ -7,10 +7,10 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <random>
 #include <string>
 #include <thread>
 #include <vector>
-#include <random>
 
 #include "Buffer.h"
 #include "util.h"
@@ -65,6 +65,8 @@ class Connection {
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
 
     void init();
+
+    size_t maxBytesInPayload(const size_t customMetaDataSize) const;
 
     int sendData(std::string &data);
     int sendData(package_t *p);
@@ -128,15 +130,15 @@ class Connection {
     void setOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
-    std::tuple<timePoint, timePoint> throughputTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
 
-    std::tuple<timePoint, timePoint> throughputTestPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
 
     std::atomic<bool> globalAbort;
     std::atomic<bool> reconfiguring;

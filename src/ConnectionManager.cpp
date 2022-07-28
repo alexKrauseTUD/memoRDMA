@@ -43,6 +43,13 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
     return globalConnectionId;
 }
 
+Connection* ConnectionManager::getConnectionById( size_t id ) {
+    if ( connections.contains(id) ) {
+        return connections[id];
+    }
+    return nullptr;
+}
+
 bool ConnectionManager::registerCallback(uint8_t code, CallbackFunction cb) {
     if (callbacks.contains(code)) {
         return false;
