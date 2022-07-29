@@ -877,6 +877,7 @@ int Connection::receiveReconfigureBuffer(std::size_t index) {
     }
 
     reconfigureBuffer(recData->buffer_config);
+    free(recData);
 
     return 0;
 }
