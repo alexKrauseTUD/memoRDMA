@@ -118,7 +118,7 @@ void Connection::destroyResources() {
         ibv_dereg_mr(mr);
     }
     for (auto rb : res.own_buffer) {
-        free(rb);
+        delete rb;
     }
     if (metaInfoMR) {
         ibv_dereg_mr(metaInfoMR);
@@ -769,7 +769,6 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     res.own_buffer.clear();
 
     if (bufConfig.size_own_send != bufferConfig.size_own_send) {
-        free(ownSendBuffer->buf);
         ibv_dereg_mr(ownSendBuffer->mr);
         delete ownSendBuffer;
 
@@ -786,8 +785,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
     if (bufConfig.size_own_receive != bufferConfig.size_own_receive || bufConfig.num_own_receive != bufferConfig.num_own_receive) {
         for (auto rb : ownReceiveBuffer) {
-            free(rb->buf);
             ibv_dereg_mr(rb->mr);
+            delete rb;
         }
         ownReceiveBuffer.clear();
 

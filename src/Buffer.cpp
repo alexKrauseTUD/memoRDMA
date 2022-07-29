@@ -23,6 +23,7 @@ Buffer::~Buffer() {
 
 // Cleanup and deallocate all resources used
 int Buffer::resources_destroy() {
+    free(buf);
     // FIXME: ;)
     return 0;
 }
