@@ -3,11 +3,6 @@
 #include "Buffer.h"
 
 SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
-    if (bufferSize % 2 != 0) {
-        std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
-        ++bufferSize;
-    }
-    std::cout << "[Buffer] Creating new send-buffer with buffer size: " << bufferSize << std::endl;
 }
 
 void SendBuffer::loadData(const char* data, char* writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID) {
