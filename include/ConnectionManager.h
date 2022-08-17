@@ -5,7 +5,7 @@
 
 #include "Connection.h"
 
-typedef std::function<void(size_t, ReceiveBuffer*)> CallbackFunction;
+typedef std::function<void(const size_t, const ReceiveBuffer*, const std::_Bind<ResetFunction (uint64_t)>)> CallbackFunction;
 
 class ConnectionManager {
    public:

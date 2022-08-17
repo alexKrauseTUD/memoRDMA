@@ -24,7 +24,12 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     localConId = _localConId;
     res.sock = -1;
 
-    check_receive = [this](std::atomic<bool> *abort) -> void {
+    ResetFunction reset_buffer = [this](const size_t i) -> void {
+        ownReceiveBuffer[i]->clearBuffer();
+        setOpcode(i, rdma_ready, true);
+    };
+
+    check_receive = [this, reset_buffer](std::atomic<bool> *abort) -> void {
         using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
         std::cout << "Starting monitoring thread for connection!" << std::flush;
@@ -34,15 +39,11 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             // std::this_thread::sleep_for(1000ms);
             for (size_t i = 0; i < metaSize / 2; ++i) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfo[i])) {
-                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfo[i] << std::endl;
+                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)status << std::endl;
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfo[i]);
-                    cb(localConId, ownReceiveBuffer[i]);
-
-                    // Cleanup, whatever they didn't use is lost
-                    ownReceiveBuffer[i]->clearBuffer();
-                    setOpcode(i, rdma_ready, true);
+                    cb(localConId, ownReceiveBuffer[i], std::bind(reset_buffer, i));
 
                     continue;
                 }
@@ -623,7 +624,7 @@ int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
         nextFree = getNextFreeReceive();
     } while (nextFree == -1);
 
-    setOpcode(metaInfo.size() / 2 + nextFree, opcode, true);
+    setOpcode(metaInfo.size() / 2 + nextFree, opcode, sendToRemote);
 
     return 0;
 }

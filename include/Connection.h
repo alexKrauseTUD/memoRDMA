@@ -15,6 +15,8 @@
 #include "Buffer.h"
 #include "util.h"
 
+typedef std::function<void(const size_t)> ResetFunction;
+
 // structure of system resources
 struct resources {
     struct ibv_device_attr device_attr;   // device attributes

@@ -73,9 +73,9 @@ struct config_t {
 
 struct buffer_config_t {
     uint8_t num_own_receive;
-    uint32_t size_own_receive;
+    uint64_t size_own_receive;
     uint8_t num_remote_receive;
-    uint32_t size_remote_receive;
+    uint64_t size_remote_receive;
     uint64_t size_own_send;
     uint64_t size_remote_send;
     uint8_t meta_info_size;
