@@ -60,6 +60,8 @@ class Connection {
     uint32_t localConId;
     resources res;
     ConnectionStatus conStat;
+    std::mutex receive_buffer_check_mutex;
+    std::mutex send_buffer_check_mutex;
 
     bool busy;
 
@@ -67,6 +69,8 @@ class Connection {
     std::vector<SendBuffer *> ownSendBuffer;
 
     void init();
+
+    size_t maxBytesInPayload(const size_t customMetaDataSize) const;
 
     // int sendData(std::string &data);
     // int sendData(package_t *p);

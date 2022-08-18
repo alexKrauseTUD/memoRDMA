@@ -34,15 +34,15 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             // std::this_thread::sleep_for(1000ms);
             for (size_t i = tid; i < metaSize / 2; i += thrdcnt) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfoReceive[i])) {
-                    std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
+                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
                     cb(localConId, ownReceiveBuffer[i]);
 
                     // Cleanup, whatever they didn't use is lost
-                    setReceiveOpcode(i, rdma_ready, true);
                     ownReceiveBuffer[i]->clearBuffer();
+                    setReceiveOpcode(i, rdma_ready, true);
 
                     continue;
                 }
@@ -170,13 +170,13 @@ void Connection::destroyResources() {
         ibv_dereg_mr(mr);
     }
     for (auto rb : res.own_receive_buffer) {
-        free(rb);
+        delete rb;
     }
     for (auto mr : res.own_send_mr) {
         ibv_dereg_mr(mr);
     }
     for (auto rb : res.own_send_buffer) {
-        free(rb);
+        delete rb;
     }
     if (metaInfoReceiveMR) {
         ibv_dereg_mr(metaInfoReceiveMR);
@@ -566,6 +566,10 @@ die:
     exit(EXIT_FAILURE);
 }
 
+size_t Connection::maxBytesInPayload(const size_t customMetaDataSize) const {
+    return bufferConfig.size_remote_receive - package_t::metaDataSize() - customMetaDataSize;  // As much as we can fit into the RB including metadata
+}
+
 int Connection::sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat) {
     busy = true;
 
@@ -654,6 +658,7 @@ uint64_t Connection::generatePackageID() {
 }
 
 int Connection::getNextFreeReceive() {
+    std::lock_guard<std::mutex> _lk(receive_buffer_check_mutex);
     size_t metaSizeHalf = metaInfoReceive.size() / 2;
     for (size_t i = metaSizeHalf; i < metaInfoReceive.size(); ++i) {
         if (metaInfoReceive[i] == rdma_ready) return i - metaSizeHalf;
@@ -663,6 +668,7 @@ int Connection::getNextFreeReceive() {
 }
 
 int Connection::getNextFreeSend() {
+    std::lock_guard<std::mutex> _lk(send_buffer_check_mutex);
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         if (metaInfoSend[i] == rdma_ready) return i;
     }
@@ -671,7 +677,9 @@ int Connection::getNextFreeSend() {
 }
 
 void Connection::setReceiveOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
+    receive_buffer_check_mutex.lock();
     metaInfoReceive[index] = opcode;
+    receive_buffer_check_mutex.unlock();
 
     if (sendToRemote) {
         size_t remoteIndex = (index + (metaInfoReceive.size() / 2)) % metaInfoReceive.size();
@@ -710,7 +718,9 @@ void Connection::setReceiveOpcode(size_t index, uint8_t opcode, bool sendToRemot
 }
 
 void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
+    send_buffer_check_mutex.lock();
     metaInfoSend[index] = opcode;
+    send_buffer_check_mutex.unlock();
 
     if (sendToRemote) {
         size_t remoteIndex = (index + (metaInfoSend.size() / 2)) % metaInfoSend.size();
@@ -771,7 +781,7 @@ void Connection::receiveDataFromRemote(size_t index, bool consu, Strategies stra
 
         // std::cout << header->id << "\t" << header->total_data_size << "\t" << header->current_payload_size << "\t" << header->package_number << "\t" << header->data_type << std::endl;
 
-        uint64_t *localPtr = (uint64_t *)malloc(header->current_payload_size);
+        uint64_t *localPtr = reinterpret_cast<uint64_t *>(malloc(header->current_payload_size));
         memset(localPtr, 0, header->current_payload_size);
         memcpy(localPtr, ptr + package_t::metaDataSize(), header->current_payload_size);
 
@@ -840,8 +850,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         res.own_send_buffer.clear();
 
         for (auto sb : ownSendBuffer) {
-            free(sb->buf);
             ibv_dereg_mr(sb->mr);
+            delete sb;
         }
         ownSendBuffer.clear();
 
@@ -864,8 +874,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         res.own_receive_buffer.clear();
 
         for (auto rb : ownReceiveBuffer) {
-            free(rb->buf);
             ibv_dereg_mr(rb->mr);
+            delete rb;
         }
         ownReceiveBuffer.clear();
 
@@ -1013,6 +1023,7 @@ int Connection::receiveReconfigureBuffer() {
     }
 
     reconfigureBuffer(recData->buffer_config);
+    free(recData);
 
     return 0;
 }

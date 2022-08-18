@@ -7,10 +7,7 @@ Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
         std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
         ++bufferSize;
     }
-    std::cout << "[Buffer] Creating new buffer with buffer size: " << bufferSize << std::endl;
-
     // a buffer to hold the data
-    std::cout << "[Buffer] Allocating: " << bufferSize << " bytes for RDMA buffer" << std::endl;
     buf = (char*)calloc(1, bufferSize);
     assert(buf != NULL);
 
@@ -23,6 +20,7 @@ Buffer::~Buffer() {
 
 // Cleanup and deallocate all resources used
 int Buffer::resources_destroy() {
+    free(buf);
     // FIXME: ;)
     return 0;
 }
