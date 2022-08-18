@@ -24,7 +24,12 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     localConId = _localConId;
     res.sock = -1;
 
-    check_receive = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
+    ResetFunction reset_buffer = [this](const size_t i) -> void {
+        ownReceiveBuffer[i]->clearBuffer();
+        setReceiveOpcode(i, rdma_ready, true);
+    };
+
+    check_receive = [this, reset_buffer](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
         std::cout << "Starting monitoring thread for receiving on connection!" << std::flush;
@@ -38,7 +43,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
-                    cb(localConId, ownReceiveBuffer[i]);
+                    cb(localConId, ownReceiveBuffer[i], std::bind(reset_buffer, i));
 
                     // Cleanup, whatever they didn't use is lost
                     ownReceiveBuffer[i]->clearBuffer();
@@ -648,7 +653,7 @@ int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
         nextFree = getNextFreeReceive();
     } while (nextFree == -1);
 
-    setReceiveOpcode(metaInfoReceive.size() / 2 + nextFree, opcode, true);
+    setReceiveOpcode(metaInfoReceive.size() / 2 + nextFree, opcode, sendToRemote);
 
     return 0;
 }

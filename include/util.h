@@ -77,9 +77,9 @@ struct buffer_config_t {
     uint8_t num_remote_send_threads;
     uint8_t num_remote_receive_threads;
     uint8_t num_own_receive;
-    uint32_t size_own_receive;
+    uint64_t size_own_receive;
     uint8_t num_remote_receive;
-    uint32_t size_remote_receive;
+    uint64_t size_remote_receive;
     uint8_t num_own_send;
     uint64_t size_own_send;
     uint8_t num_remote_send;
