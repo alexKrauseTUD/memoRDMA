@@ -39,15 +39,11 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             // std::this_thread::sleep_for(1000ms);
             for (size_t i = tid; i < metaSize / 2; i += thrdcnt) {
                 if (ConnectionManager::getInstance().hasCallback(metaInfoReceive[i])) {
-                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
+                    std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
                     cb(localConId, ownReceiveBuffer[i], std::bind(reset_buffer, i));
-
-                    // Cleanup, whatever they didn't use is lost
-                    ownReceiveBuffer[i]->clearBuffer();
-                    setReceiveOpcode(i, rdma_ready, true);
 
                     continue;
                 }
@@ -575,27 +571,19 @@ size_t Connection::maxBytesInPayload(const size_t customMetaDataSize) const {
     return bufferConfig.size_remote_receive - package_t::metaDataSize() - customMetaDataSize;  // As much as we can fit into the RB including metadata
 }
 
-int Connection::sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat) {
-    busy = true;
-
+int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat) {
     int nextFreeSend;
 
-    uint64_t remainingSize = dataSize;                                                                                                                                                                         // Whats left to write
-    uint64_t maxPayloadSize = (bufferConfig.size_remote_receive >= bufferConfig.size_own_send ? bufferConfig.size_remote_receive : bufferConfig.size_own_send) - package_t::metaDataSize() - appMetaDataSize;  // As much as we can fit into the RB excluding metadata
-    maxPayloadSize = remainingSize > maxPayloadSize ? maxPayloadSize : remainingSize;
-    uint64_t maxDataToWrite = (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);  // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
-    uint64_t packageID = generatePackageID();                                          // Some randomized identifier
+    uint64_t remainingSize = dataSize;                                                                                                   // Whats left to write
+    uint64_t maxPayloadSize = bufferConfig.size_own_send - package_t::metaDataSize() - appMetaDataSize;                                  // As much as we can fit into the SB excluding metadata
+    uint64_t maxDataToWrite = remainingSize <= maxPayloadSize ? remainingSize : (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);  // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
+    uint64_t packageID = generatePackageID();                                                                                            // Some randomized identifier
 
     size_t packageCounter = 0;
     package_t package(packageID, maxDataToWrite, packageCounter, 0, type_package, dataSize, appMetaDataSize, data);
 
     while (remainingSize > 0) {
-        do {
-            nextFreeSend = getNextFreeSend();
-        } while (nextFreeSend == -1);
-
-        setSendOpcode(nextFreeSend, rdma_sending, false);
-        ownSendBuffer[nextFreeSend]->clearBuffer();
+        nextFreeSend = findNextFreeSendAndBlock();
 
         package.setCurrentPackageNumber(packageCounter++);
 
@@ -618,31 +606,48 @@ int Connection::sendData(char *data, std::size_t dataSize, char *appMetaData, si
         remainingSize -= maxDataToWrite;
     }
 
-    busy = false;
     return 0;
 }
 
+int Connection::findNextFreeReceiveAndBlock() {
+    std::unique_lock<std::mutex> lk(receive_buffer_lock_mutex);
+    int nextFreeRec;
+
+    do {
+        nextFreeRec = getNextFreeReceive();
+    } while (nextFreeRec == -1);
+
+    setReceiveOpcode(nextFreeRec, rdma_data_consuming, false);
+    ownReceiveBuffer[nextFreeRec]->clearBuffer();
+
+    return nextFreeRec;
+}
+
+
+int Connection::findNextFreeSendAndBlock() {
+    std::unique_lock<std::mutex> lk(send_buffer_lock_mutex);
+    int nextFreeSend;
+
+    do {
+        nextFreeSend = getNextFreeSend();
+    } while (nextFreeSend == -1);
+
+    setSendOpcode(nextFreeSend, rdma_sending, false);
+    ownSendBuffer[nextFreeSend]->clearBuffer();
+
+    return nextFreeSend;
+}
+
 int Connection::__sendData(size_t index, Strategies strat) {
-    bool dataSent = false;
     auto sb = ownSendBuffer[index];
-    auto metaSizeHalf = metaInfoReceive.size() / 2;
-    auto remoteIndex = metaSizeHalf + index;
+    int nextFreeRec = findNextFreeReceiveAndBlock();
 
-    while (!dataSent) {
-        for (size_t i = remoteIndex; i < metaInfoReceive.size(); i += bufferConfig.num_own_send_threads) {
-            if (metaInfoReceive[i] == rdma_ready) {
-                if (strat == Strategies::push) {
-                    sb->sendPackage(res.remote_receive_buffer[i - metaSizeHalf], res.remote_receive_rkeys[i - metaSizeHalf], res.qp, sb->buf, 0);
-                    poll_completion();
-                    setSendOpcode(index, rdma_ready, false);
-                }
-                setReceiveOpcode(i, sb->sendOpcode, !sb->sendOpcode == rdma_ready);  // do not send opcode if rdma_ready -> throughput test
-
-                dataSent = true;
-                break;
-            }
-        }
+    if (strat == Strategies::push) {
+        sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->buf, 0);
+        poll_completion();
+        setSendOpcode(index, rdma_ready, false);
     }
+    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
 
     return 0;
 }
@@ -956,22 +961,14 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             setSendOpcode(i, rdma_no_op, true);
     }
 
-    int nextFreeRec = -1;
-
-    while (nextFreeRec == -1) {
-        nextFreeRec = getNextFreeReceive();
-    }
-
-    int nextFreeSend = -1;
-
-    while (nextFreeSend == -1) {
-        nextFreeSend = getNextFreeSend();
-    }
+    int nextFreeRec = findNextFreeReceiveAndBlock();
+    int nextFreeSend = findNextFreeSendAndBlock();
 
     ownSendBuffer[nextFreeSend]->sendReconfigure(recData, res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp);
     poll_completion();
 
     setReceiveOpcode((metaInfoReceive.size() / 2) + nextFreeRec, rdma_reconfigure, true);
+    setSendOpcode(nextFreeSend, rdma_ready, false);
 
     std::cout << "Reconfigured Buffers to: " << std::endl;
     printConnectionInfo();

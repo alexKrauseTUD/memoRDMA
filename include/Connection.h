@@ -64,6 +64,8 @@ class Connection {
     ConnectionStatus conStat;
     std::mutex receive_buffer_check_mutex;
     std::mutex send_buffer_check_mutex;
+    std::mutex receive_buffer_lock_mutex;
+    std::mutex send_buffer_lock_mutex;
 
     bool busy;
 
@@ -136,6 +138,8 @@ class Connection {
 
     int getNextFreeReceive();
     int getNextFreeSend();
+    int findNextFreeReceiveAndBlock();
+    int findNextFreeSendAndBlock();
     uint32_t getOwnSendToRemoteReceiveRatio();
     void setReceiveOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
     void setSendOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
