@@ -572,7 +572,6 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 
     while (remainingSize > 0) {
         nextFreeSend = findNextFreeSendAndBlock();
-        std::cout << "Writing to SB " << nextFreeSend << std::endl;
         auto sb = ownSendBuffer[nextFreeSend];
 
         if (remainingSize < maxDataToWrite) {
@@ -609,7 +608,7 @@ int Connection::findNextFreeReceiveAndBlock() {
         nextFreeRec = getNextFreeReceive();
     }
 
-    setReceiveOpcode(nextFreeRec, rdma_working, false);
+    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), rdma_working, false);
 
     return nextFreeRec;
 }
