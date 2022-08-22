@@ -85,8 +85,8 @@ class Connection {
     int closeConnection(bool send_remote = true);
     void destroyResources();
 
-    void receiveDataFromRemote(size_t index, bool consu, Strategies strat);
-    void pullDataFromRemote(std::size_t index, bool consume);
+    void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
+    void pullDataFromRemote(const size_t index, bool consume);
 
     int addReceiveBuffer(std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t quantity, bool own);
@@ -107,7 +107,7 @@ class Connection {
     int throughputTestMultiThread(std::string logName, Strategies strat);
     int consumingTestMultiThread(std::string logName, Strategies strat);
 
-    void consume(std::size_t index);
+    void consume(const size_t index);
     void workMultiThread();
 
     // std::atomic<ConnectionStatus> conStat;
@@ -141,11 +141,11 @@ class Connection {
     int findNextFreeReceiveAndBlock();
     int findNextFreeSendAndBlock();
     uint32_t getOwnSendToRemoteReceiveRatio();
-    void setReceiveOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
-    void setSendOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
+    void setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
+    void setSendOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
-    int __sendData(size_t index, Strategies strat);
+    int __sendData(const size_t index, Strategies strat);
 
     std::tuple<timePoint, timePoint> throughputTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
     std::tuple<timePoint, timePoint> consumingTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
@@ -163,6 +163,7 @@ class Connection {
 
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
+    ResetFunction reset_buffer;
 
     std::mt19937_64 randGen;
 

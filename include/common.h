@@ -4,7 +4,7 @@
 enum rdma_handler_communication: uint8_t {
     rdma_no_op,
     rdma_ready,
-    rdma_sending,
+    rdma_working,
     rdma_data_finished,
     rdma_data_receiving,
     rdma_data_consuming,

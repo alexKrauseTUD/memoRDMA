@@ -24,22 +24,23 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     localConId = _localConId;
     res.sock = -1;
 
-    ResetFunction reset_buffer = [this](const size_t i) -> void {
+    reset_buffer = [this](const size_t i) -> void {
         ownReceiveBuffer[i]->clearBuffer();
         setReceiveOpcode(i, rdma_ready, true);
     };
 
-    check_receive = [this, reset_buffer](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
-        using namespace std::chrono_literals;
+    check_receive = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
+        // using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
-        std::cout << "Starting monitoring thread for receiving on connection!" << std::flush;
-        size_t metaSize = metaInfoReceive.size();
+        std::cout << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
+        size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
             // std::this_thread::sleep_for(1000ms);
-            for (size_t i = tid; i < metaSize / 2; i += thrdcnt) {
+            for (size_t i = tid; i < metaSizeHalf; i += thrdcnt) {
+                // std::cout << i << std::endl;
                 if (ConnectionManager::getInstance().hasCallback(metaInfoReceive[i])) {
-                    std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
+                    // std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl;
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
@@ -50,7 +51,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                 switch (metaInfoReceive[i]) {
                     case rdma_no_op:
                     case rdma_ready:
-                    case rdma_data_consuming: {
+                    case rdma_working: {
                         continue;
                     }; break;
                     case rdma_data_finished: {
@@ -77,35 +78,22 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                 std::cout.flags(f);
             }
         }
-        std::cout << "[check_receive] Ending through global abort." << std::endl;
+        std::cout << "[check_receive] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
     check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
-        std::cout << "Starting monitoring thread for sending on connection!" << std::flush;
-        size_t metaSize = metaInfoSend.size();
+        std::cout << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
+        size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
-            // std::this_thread::sleep_for(1000ms);
-
-            for (size_t i = tid; i < metaSize / 2; i += thrdcnt) {
-                // if (ConnectionManager::getInstance().hasCallback(metaInfoSend[i])) {
-                //     std::cout << "[Connection] Invoking custom callback for code " << (size_t)metaInfoSend[i] << std::endl;
-
-                //     // Handle the call
-                //     auto cb = ConnectionManager::getInstance().getCallback(metaInfoSend[i]);
-                //     cb(localConId, ownSendBuffer[i]);
-
-                //     // Cleanup, whatever they didn't use is lost
-                //     setReceiveOpcode(i, rdma_ready, true);
-                //     ownSendBuffer[i]->clearBuffer();
-
-                //     continue;
-                // }
+            // std::this_thread::sleep_for(100ms);
+            for (size_t i = tid; i < metaSizeHalf; i += thrdcnt) {
                 switch (metaInfoSend[i]) {
                     case rdma_no_op:
-                    case rdma_ready: {
+                    case rdma_ready:
+                    case rdma_working: {
                         continue;
                     }; break;
                     case rdma_ready_to_push: {
@@ -121,7 +109,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                 std::cout.flags(f);
             }
         }
-        std::cout << "[check_send] Ending through global abort." << std::endl;
+        std::cout << "[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
     init();
@@ -584,16 +572,20 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 
     while (remainingSize > 0) {
         nextFreeSend = findNextFreeSendAndBlock();
+        std::cout << "Writing to SB " << nextFreeSend << std::endl;
+        auto sb = ownSendBuffer[nextFreeSend];
+
+        if (remainingSize < maxDataToWrite) {
+            maxDataToWrite = remainingSize;
+            package.setCurrentPackageSize(remainingSize);
+        }
 
         package.setCurrentPackageNumber(packageCounter++);
 
-        ownSendBuffer[nextFreeSend]->loadPackage(ownSendBuffer[nextFreeSend]->buf, &package);
+        sb->loadPackage(sb->buf, &package);
+        sb->loadAppMetaData(sb->buf, &package, appMetaData);
 
-        if (appMetaDataSize > 0) {
-            ownSendBuffer[nextFreeSend]->loadAppMetaData(ownSendBuffer[nextFreeSend]->buf, &package, appMetaData);
-        }
-
-        ownSendBuffer[nextFreeSend]->sendOpcode = opcode;
+        sb->sendOpcode = opcode;
 
         package.advancePayloadPtr(maxDataToWrite);
 
@@ -610,55 +602,53 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 }
 
 int Connection::findNextFreeReceiveAndBlock() {
-    std::unique_lock<std::mutex> lk(receive_buffer_lock_mutex);
-    int nextFreeRec;
+    int nextFreeRec = -1;
 
-    do {
+    std::lock_guard<std::mutex> lk(receive_buffer_lock_mutex);
+    while (nextFreeRec == -1) {
         nextFreeRec = getNextFreeReceive();
-    } while (nextFreeRec == -1);
+    }
 
-    setReceiveOpcode(nextFreeRec, rdma_data_consuming, false);
-    ownReceiveBuffer[nextFreeRec]->clearBuffer();
+    setReceiveOpcode(nextFreeRec, rdma_working, false);
 
     return nextFreeRec;
 }
 
-
 int Connection::findNextFreeSendAndBlock() {
-    std::unique_lock<std::mutex> lk(send_buffer_lock_mutex);
-    int nextFreeSend;
+    int nextFreeSend = -1;
 
-    do {
+    std::lock_guard<std::mutex> lk(send_buffer_lock_mutex);
+    while (nextFreeSend == -1) {
         nextFreeSend = getNextFreeSend();
-    } while (nextFreeSend == -1);
+    }
 
-    setSendOpcode(nextFreeSend, rdma_sending, false);
-    ownSendBuffer[nextFreeSend]->clearBuffer();
+    setSendOpcode(nextFreeSend, rdma_working, false);
+    // ownSendBuffer[nextFreeSend]->clearBuffer();
 
     return nextFreeSend;
 }
 
-int Connection::__sendData(size_t index, Strategies strat) {
+int Connection::__sendData(const size_t index, Strategies strat) {
     auto sb = ownSendBuffer[index];
     int nextFreeRec = findNextFreeReceiveAndBlock();
 
     if (strat == Strategies::push) {
         sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->buf, 0);
         poll_completion();
+    }
+
+    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
+
+    if (strat == Strategies::push) {
+        sb->clearBuffer();
         setSendOpcode(index, rdma_ready, false);
     }
-    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
 
     return 0;
 }
 
 int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
-    int nextFree;
-    do {
-        nextFree = getNextFreeReceive();
-    } while (nextFree == -1);
-
-    setReceiveOpcode(metaInfoReceive.size() / 2 + nextFree, opcode, sendToRemote);
+    setReceiveOpcode(metaInfoReceive.size() / 2 + findNextFreeReceiveAndBlock(), opcode, sendToRemote);
 
     return 0;
 }
@@ -686,10 +676,9 @@ int Connection::getNextFreeSend() {
     return -1;
 }
 
-void Connection::setReceiveOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
-    receive_buffer_check_mutex.lock();
+void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote) {
+    std::lock_guard<std::mutex> lk(receive_buffer_check_mutex);
     metaInfoReceive[index] = opcode;
-    receive_buffer_check_mutex.unlock();
 
     if (sendToRemote) {
         size_t remoteIndex = (index + (metaInfoReceive.size() / 2)) % metaInfoReceive.size();
@@ -728,9 +717,8 @@ void Connection::setReceiveOpcode(size_t index, uint8_t opcode, bool sendToRemot
 }
 
 void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
-    send_buffer_check_mutex.lock();
+    std::lock_guard<std::mutex> lk(send_buffer_check_mutex);
     metaInfoSend[index] = opcode;
-    send_buffer_check_mutex.unlock();
 
     if (sendToRemote) {
         size_t remoteIndex = (index + (metaInfoSend.size() / 2)) % metaInfoSend.size();
@@ -768,8 +756,8 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
     }
 }
 
-void Connection::receiveDataFromRemote(size_t index, bool consu, Strategies strat) {
-    setReceiveOpcode(index, rdma_data_consuming, false);
+void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategies strat) {
+    setReceiveOpcode(index, rdma_working, false);
 
     if (strat == Strategies::pull) {
         size_t sbIndex = index;
@@ -910,7 +898,7 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         globalReceiveAbort = false;
 
         for (size_t tid = 0; tid < bufConfig.num_own_receive_threads; ++tid) {
-            readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufferConfig.num_own_receive_threads));
+            readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufConfig.num_own_receive_threads));
         }
 
         bufferConfig.num_own_receive_threads = bufConfig.num_own_receive_threads;
@@ -922,8 +910,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         sendWorkerPool.clear();
         globalSendAbort = false;
 
-        for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
-            sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
+        for (size_t tid = 0; tid < bufConfig.num_own_send_threads; ++tid) {
+            sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufConfig.num_own_send_threads));
         }
 
         bufferConfig.num_own_send_threads = bufConfig.num_own_send_threads;

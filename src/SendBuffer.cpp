@@ -25,8 +25,8 @@ void SendBuffer::loadAppMetaData(char *writePtr, package_t* p, char *meta) {
 }
 
 void SendBuffer::sendPackage(uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) {
-    // package_t::header_t *header = reinterpret_cast<package_t::header_t *>(reinterpret_cast<char *>(writePtr));
     package_t::header_t *header = reinterpret_cast<package_t::header_t *>(writePtr);
+    // std::cout << header->package_number << std::endl;
     auto packageSize = sizeof(package_t::header_t) + header->current_payload_size + header->payload_start;
     post_request(packageSize, IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr, wrID);
 }

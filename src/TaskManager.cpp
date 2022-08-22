@@ -128,11 +128,11 @@ void TaskManager::setup(size_t init_flags) {
             int gidIndex = 0;
 
             uint8_t numOwnReceive = 2;
-            uint32_t sizeOwnReceive = 1024 * 1024 * 2 + 32;
-            uint8_t numRemoteReceive = 4;
-            uint32_t sizeRemoteReceive = 1024 * 1024 * 2 + 32;
-            uint64_t sizeOwnSend = 1024 * 1024 * 8 + 4 * 32;
-            uint64_t sizeRemoteSend = 1024 * 1024 * 4 + 4 * 32;
+            uint32_t sizeOwnReceive = 1024 * 512;
+            uint8_t numRemoteReceive = 2;
+            uint32_t sizeRemoteReceive = 1024 * 512;
+            uint64_t sizeOwnSend = 1024 * 512;
+            uint64_t sizeRemoteSend = 1024 * 512;
 
             std::size_t largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
 
@@ -274,19 +274,19 @@ void TaskManager::setup(size_t init_flags) {
                                .gid_idx = gidIndex};
 
             // TODO: configurability hardcoded
-            buffer_config_t bufferConfig = {.num_own_send_threads = 1,
-                                            .num_own_receive_threads = 1,
-                                            .num_remote_send_threads = 1,
-                                            .num_remote_receive_threads = 1,
+            buffer_config_t bufferConfig = {.num_own_send_threads = 2,
+                                            .num_own_receive_threads = 2,
+                                            .num_remote_send_threads = 2,
+                                            .num_remote_receive_threads = 2,
                                             .num_own_receive = numOwnReceive,
                                             .size_own_receive = sizeOwnReceive,
                                             .num_remote_receive = numRemoteReceive,
                                             .size_remote_receive = sizeRemoteReceive,
-                                            .num_own_send = 1,
+                                            .num_own_send = numRemoteReceive,
                                             .size_own_send = sizeRemoteReceive,
-                                            .num_remote_send = 1,
+                                            .num_remote_send = numOwnReceive,
                                             .size_remote_send = sizeOwnReceive,
-                                            .meta_info_size = metaInfoSize};
+                                            .meta_info_size = 16};
 
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 

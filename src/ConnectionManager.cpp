@@ -64,6 +64,7 @@ CallbackFunction ConnectionManager::getCallback(uint8_t code) const {
     if (callbacks.contains(code)) {
         return callbacks.at(code);
     } else {
+        std::cout << "There was no callback found for " << +code << std::endl;
         return CallbackFunction();
     }
 }
