@@ -890,6 +890,8 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         }
     }
 
+    cpu_set_t cpuset;
+
     if (bufConfig.num_own_receive_threads != bufferConfig.num_own_receive_threads) {
         globalReceiveAbort = true;
         std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
@@ -898,6 +900,13 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
         for (size_t tid = 0; tid < bufConfig.num_own_receive_threads; ++tid) {
             readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufConfig.num_own_receive_threads));
+            CPU_ZERO(&cpuset);
+            CPU_SET(tid, &cpuset);
+            int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
+            if (rc != 0) {
+                std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+                exit(-10);
+            }
         }
 
         bufferConfig.num_own_receive_threads = bufConfig.num_own_receive_threads;
@@ -911,6 +920,13 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
         for (size_t tid = 0; tid < bufConfig.num_own_send_threads; ++tid) {
             sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufConfig.num_own_send_threads));
+            CPU_ZERO(&cpuset);
+            CPU_SET(tid + bufConfig.num_own_send_threads, &cpuset);
+            int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
+            if (rc != 0) {
+                std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+                exit(-10);
+            }
         }
 
         bufferConfig.num_own_send_threads = bufConfig.num_own_send_threads;
