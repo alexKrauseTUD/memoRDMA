@@ -25,7 +25,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     res.sock = -1;
 
     reset_buffer = [this](const size_t i) -> void {
-        ownReceiveBuffer[i]->clearBuffer();
+        // ownReceiveBuffer[i]->clearBuffer();
         setReceiveOpcode(i, rdma_ready, true);
     };
 
@@ -622,7 +622,6 @@ int Connection::findNextFreeSendAndBlock() {
     }
 
     setSendOpcode(nextFreeSend, rdma_working, false);
-    // ownSendBuffer[nextFreeSend]->clearBuffer();
 
     return nextFreeSend;
 }
@@ -639,7 +638,7 @@ int Connection::__sendData(const size_t index, Strategies strat) {
     setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
 
     if (strat == Strategies::push) {
-        sb->clearBuffer();
+        // sb->clearBuffer();
         setSendOpcode(index, rdma_ready, false);
     }
 
@@ -785,7 +784,7 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
         free(localPtr);
     }
 
-    ownReceiveBuffer[index]->clearBuffer();
+    // ownReceiveBuffer[index]->clearBuffer();
     setReceiveOpcode(index, rdma_ready, true);
 }
 
