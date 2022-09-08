@@ -61,6 +61,7 @@ class Connection {
     buffer_config_t bufferConfig;
     uint32_t localConId;
     resources res;
+    
     ConnectionStatus conStat;
     std::mutex receive_buffer_check_mutex;
     std::mutex send_buffer_check_mutex;

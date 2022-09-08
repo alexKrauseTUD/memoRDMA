@@ -7,6 +7,7 @@ Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
         std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
         ++bufferSize;
     }
+
     // a buffer to hold the data
     buf = (char*)calloc(1, bufferSize);
     assert(buf != NULL);

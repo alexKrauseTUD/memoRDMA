@@ -31,6 +31,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 
     check_receive = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         // using namespace std::chrono_literals;
+
         std::ios_base::fmtflags f(std::cout.flags());
         std::cout << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
@@ -164,6 +165,7 @@ void Connection::destroyResources() {
     for (auto mr : res.own_send_mr) {
         ibv_dereg_mr(mr);
     }
+
     for (auto rb : res.own_send_buffer) {
         delete rb;
     }
