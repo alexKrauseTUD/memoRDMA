@@ -65,8 +65,8 @@ class Connection {
     ConnectionStatus conStat;
     std::mutex receive_buffer_check_mutex;
     std::mutex send_buffer_check_mutex;
-    std::mutex receive_buffer_lock_mutex;
-    std::mutex send_buffer_lock_mutex;
+    std::mutex receive_buffer_block_mutex;
+    std::mutex send_buffer_block_mutex;
 
     bool busy;
 

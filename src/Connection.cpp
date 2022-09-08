@@ -10,6 +10,7 @@
 #include <fstream>
 #include <functional>
 #include <future>
+#include <shared_mutex>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -605,7 +606,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 int Connection::findNextFreeReceiveAndBlock() {
     int nextFreeRec = -1;
 
-    std::lock_guard<std::mutex> lk(receive_buffer_lock_mutex);
+    std::lock_guard<std::mutex> lk(receive_buffer_block_mutex);
     while (nextFreeRec == -1) {
         nextFreeRec = getNextFreeReceive();
     }
@@ -618,7 +619,7 @@ int Connection::findNextFreeReceiveAndBlock() {
 int Connection::findNextFreeSendAndBlock() {
     int nextFreeSend = -1;
 
-    std::lock_guard<std::mutex> lk(send_buffer_lock_mutex);
+    std::lock_guard<std::mutex> lk(send_buffer_block_mutex);
     while (nextFreeSend == -1) {
         nextFreeSend = getNextFreeSend();
     }
@@ -658,7 +659,7 @@ uint64_t Connection::generatePackageID() {
 }
 
 int Connection::getNextFreeReceive() {
-    std::lock_guard<std::mutex> _lk(receive_buffer_check_mutex);
+    std::shared_lock<std::mutex> _lk(receive_buffer_check_mutex);
     size_t metaSizeHalf = metaInfoReceive.size() / 2;
     for (size_t i = metaSizeHalf; i < metaInfoReceive.size(); ++i) {
         if (metaInfoReceive[i] == rdma_ready) return i - metaSizeHalf;
@@ -668,7 +669,7 @@ int Connection::getNextFreeReceive() {
 }
 
 int Connection::getNextFreeSend() {
-    std::lock_guard<std::mutex> _lk(send_buffer_check_mutex);
+    std::shared_lock<std::mutex> _lk(send_buffer_check_mutex);
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         if (metaInfoSend[i] == rdma_ready) return i;
     }
