@@ -3,11 +3,7 @@
 #include "Buffer.h"
 
 SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
-    if (bufferSize % 2 != 0) {
-        std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
-        ++bufferSize;
-    }
-    std::cout << "[Buffer] Creating new send-buffer with buffer size: " << bufferSize << std::endl;
+    std::cout << "[Buffer] Allocating: " << bufferSize << " bytes for RDMA Send-Buffer" << std::endl;
 }
 
 void SendBuffer::loadData(const char* data, char* writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID) {
@@ -29,8 +25,8 @@ void SendBuffer::loadAppMetaData(char *writePtr, package_t* p, char *meta) {
 }
 
 void SendBuffer::sendPackage(uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) {
-    // package_t::header_t *header = reinterpret_cast<package_t::header_t *>(reinterpret_cast<char *>(writePtr));
     package_t::header_t *header = reinterpret_cast<package_t::header_t *>(writePtr);
+    // std::cout << header->package_number << std::endl;
     auto packageSize = sizeof(package_t::header_t) + header->current_payload_size + header->payload_start;
     post_request(packageSize, IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr, wrID);
 }

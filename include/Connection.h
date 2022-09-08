@@ -7,23 +7,25 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <random>
 #include <string>
 #include <thread>
 #include <vector>
-#include <random>
 
 #include "Buffer.h"
 #include "util.h"
 
+typedef std::function<void(const size_t)> ResetFunction;
+
 // structure of system resources
 struct resources {
-    struct ibv_device_attr device_attr;   // device attributes
-    struct ibv_port_attr port_attr;       // IB port attributes
-    struct cm_con_data_t remote_props;    // values to connect to remote side
-    struct ibv_context *ib_ctx;           // device handle
-    struct ibv_pd *pd;                    // PD handle
-    struct ibv_cq *cq;                    // CQ handle
-    struct ibv_qp *qp;                    // QP handle
+    struct ibv_device_attr device_attr;           // device attributes
+    struct ibv_port_attr port_attr;               // IB port attributes
+    struct cm_con_data_t remote_props;            // values to connect to remote side
+    struct ibv_context *ib_ctx;                   // device handle
+    struct ibv_pd *pd;                            // PD handle
+    struct ibv_cq *cq;                            // CQ handle
+    struct ibv_qp *qp;                            // QP handle
     std::vector<struct ibv_mr *> own_receive_mr;  // MR handle for buf
     std::vector<char *> own_receive_buffer;       // memory buffer pointer, used for RDMA send ops
     std::vector<uint64_t> remote_receive_buffer;  // memory buffer pointer, used for RDMA send ops
@@ -60,6 +62,10 @@ class Connection {
     uint32_t localConId;
     resources res;
     ConnectionStatus conStat;
+    std::mutex receive_buffer_check_mutex;
+    std::mutex send_buffer_check_mutex;
+    std::mutex receive_buffer_lock_mutex;
+    std::mutex send_buffer_lock_mutex;
 
     bool busy;
 
@@ -67,6 +73,8 @@ class Connection {
     std::vector<SendBuffer *> ownSendBuffer;
 
     void init();
+
+    size_t maxBytesInPayload(const size_t customMetaDataSize) const;
 
     // int sendData(std::string &data);
     // int sendData(package_t *p);
@@ -77,8 +85,8 @@ class Connection {
     int closeConnection(bool send_remote = true);
     void destroyResources();
 
-    void receiveDataFromRemote(size_t index, bool consu,  Strategies strat);
-    void pullDataFromRemote(std::size_t index, bool consume);
+    void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
+    void pullDataFromRemote(const size_t index, bool consume);
 
     int addReceiveBuffer(std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t quantity, bool own);
@@ -99,7 +107,7 @@ class Connection {
     int throughputTestMultiThread(std::string logName, Strategies strat);
     int consumingTestMultiThread(std::string logName, Strategies strat);
 
-    void consume(std::size_t index);
+    void consume(const size_t index);
     void workMultiThread();
 
     // std::atomic<ConnectionStatus> conStat;
@@ -130,22 +138,24 @@ class Connection {
 
     int getNextFreeReceive();
     int getNextFreeSend();
+    int findNextFreeReceiveAndBlock();
+    int findNextFreeSendAndBlock();
     uint32_t getOwnSendToRemoteReceiveRatio();
-    void setReceiveOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
-    void setSendOpcode(std::size_t index, uint8_t opcode, bool sendToRemote);
+    void setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
+    void setSendOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
-    int __sendData(size_t index, Strategies strat);
+    int __sendData(const size_t index, Strategies strat);
 
-    std::tuple<timePoint, timePoint> throughputTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPush(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
 
-    std::tuple<timePoint, timePoint> throughputTestPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t & package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
+    std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
 
     std::atomic<bool> globalReceiveAbort;
     std::atomic<bool> globalSendAbort;
@@ -153,6 +163,7 @@ class Connection {
 
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
+    ResetFunction reset_buffer;
 
     std::mt19937_64 randGen;
 

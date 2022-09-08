@@ -5,7 +5,7 @@
 
 #include "Connection.h"
 
-typedef std::function<void(size_t, ReceiveBuffer*)> CallbackFunction;
+typedef std::function<void(const size_t, const ReceiveBuffer*, const std::_Bind<ResetFunction (uint64_t)>)> CallbackFunction;
 
 class ConnectionManager {
    public:
@@ -19,6 +19,7 @@ class ConnectionManager {
     void operator=(ConnectionManager const &) = delete;
 
     int registerConnection(config_t &config, buffer_config_t &bufferConfig);
+    Connection* getConnectionById( size_t id );
     bool registerCallback( uint8_t code, CallbackFunction cb );
     bool hasCallback( uint8_t code ) const;
     CallbackFunction getCallback( uint8_t code ) const;
@@ -42,8 +43,6 @@ class ConnectionManager {
     int throughputTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
     int consumingTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
 
-    std::map<std::size_t, Connection *> connections;
-
     int pendingBufferCreation(std::size_t connectionId);
 
     void stop();
@@ -52,6 +51,8 @@ class ConnectionManager {
    private:
     /* Singleton-required */
     ConnectionManager();
+
+    std::map<std::size_t, Connection *> connections;
 
     bool globalAbort;
     bool stopped = false;
