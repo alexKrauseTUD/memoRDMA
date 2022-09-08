@@ -10,7 +10,6 @@
 #include <fstream>
 #include <functional>
 #include <future>
-#include <shared_mutex>
 #include <thread>
 #include <tuple>
 #include <vector>
@@ -34,7 +33,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         // using namespace std::chrono_literals;
 
         std::ios_base::fmtflags f(std::cout.flags());
-        std::cout << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
+        // std::cout << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
@@ -86,7 +85,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
-        std::cout << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
+        // std::cout << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
@@ -571,7 +570,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
     uint64_t packageID = generatePackageID();                                                                                            // Some randomized identifier
 
     size_t packageCounter = 0;
-    package_t package(packageID, maxDataToWrite, packageCounter, 0, type_package, dataSize, appMetaDataSize, data);
+    package_t package(packageID, maxDataToWrite, packageCounter, 0, dataSize, appMetaDataSize, data);
 
     while (remainingSize > 0) {
         nextFreeSend = findNextFreeSendAndBlock();
@@ -659,7 +658,7 @@ uint64_t Connection::generatePackageID() {
 }
 
 int Connection::getNextFreeReceive() {
-    std::shared_lock<std::mutex> _lk(receive_buffer_check_mutex);
+    std::lock_guard<std::mutex> _lk(receive_buffer_check_mutex);
     size_t metaSizeHalf = metaInfoReceive.size() / 2;
     for (size_t i = metaSizeHalf; i < metaInfoReceive.size(); ++i) {
         if (metaInfoReceive[i] == rdma_ready) return i - metaSizeHalf;
@@ -669,7 +668,7 @@ int Connection::getNextFreeReceive() {
 }
 
 int Connection::getNextFreeSend() {
-    std::shared_lock<std::mutex> _lk(send_buffer_check_mutex);
+    std::lock_guard<std::mutex> _lk(send_buffer_check_mutex);
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         if (metaInfoSend[i] == rdma_ready) return i;
     }

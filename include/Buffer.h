@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "common.h"
-#include "package_manager.hpp"
+#include "PackageManager.hpp"
 #include "util.h"
 
 // // structure to exchange data which is needed to connect the QPs

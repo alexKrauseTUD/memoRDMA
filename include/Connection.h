@@ -40,7 +40,6 @@ struct resources {
 struct receive_data {
     bool done;
     uint64_t *localPtr;
-    DataTypes dt;
     uint64_t size;
     std::chrono::_V2::system_clock::time_point endTime;
 };

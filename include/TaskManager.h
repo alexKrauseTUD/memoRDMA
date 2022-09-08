@@ -19,7 +19,8 @@ enum init_task_type {
     connection_handling = 1,
     buffer_handling = 1 << 1,
     dummy_tests = 1 << 2,
-    performance_tests = 1 << 3
+    performance_benchmarks = 1 << 3,
+    functional_tests = 1 << 4
 };
 
 class TaskManager {

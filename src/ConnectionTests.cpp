@@ -394,7 +394,7 @@ int Connection::consumingTest(std::string logName, Strategies strat) {
 //             work_queue.resize(thread_cnt);
 //             uint64_t packageID = generatePackageID();
 
-//             package_t package(packageID, maxDataToWrite, 1, 0, type_package, remainingSize, 0, copy);
+//             package_t package(packageID, maxDataToWrite, 1, 0, remainingSize, 0, copy);
 
 //             while (remainingSize > 0) {
 //                 maxPackNum = thread_cnt;
@@ -583,7 +583,7 @@ int Connection::consumingTest(std::string logName, Strategies strat) {
 //             work_queue.resize(thread_cnt);
 //             uint64_t packageID = generatePackageID();
 
-//             package_t package(packageID, maxDataToWrite, 1, 0, type_package, remainingSize, 0, copy);
+//             package_t package(packageID, maxDataToWrite, 1, 0, remainingSize, 0, copy);
 
 //             while (remainingSize > 0) {
 //                 maxPackNum = thread_cnt;

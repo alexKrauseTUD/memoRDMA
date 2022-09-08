@@ -8,13 +8,15 @@
 #include "Connection.h"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
+#include "FunctionalTests.hpp"
 
 TaskManager::TaskManager() : globalId{1} {
     size_t init_flags = 0;
     init_flags |= connection_handling;
     init_flags |= buffer_handling;
     init_flags |= dummy_tests;
-    init_flags |= performance_tests;
+    init_flags |= performance_benchmarks;
+    init_flags |= functional_tests;
 
     setup(init_flags);
 
@@ -340,13 +342,7 @@ void TaskManager::setup(size_t init_flags) {
                                .ib_port = 1,
                                .gid_idx = 0};
 
-            buffer_config_t bufferConfig = {.num_own_receive = 0,
-                                            .size_own_receive = 0,
-                                            .num_remote_receive = 0,
-                                            .size_remote_receive = 0,
-                                            .size_own_send = 0,
-                                            .size_remote_send = 0,
-                                            .meta_info_size = 0};
+            buffer_config_t bufferConfig;
 
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
@@ -540,7 +536,7 @@ void TaskManager::setup(size_t init_flags) {
         }));
     }
 
-    if (init_flags & performance_tests) {
+    if (init_flags & performance_benchmarks) {
         registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
             genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 1, Strategies::push);
         }));
@@ -572,6 +568,12 @@ void TaskManager::setup(size_t init_flags) {
         // registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
         //     genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
         // }));
+    }
+
+    if (init_flags & functional_tests) {
+        registerTask(new Task("all_func_tests", "Execute all functional tests", [this]() -> void {
+            FunctionalTests::getInstance().executeAllTests();
+        }));
     }
 }
 

@@ -20,13 +20,9 @@ enum rdma_handler_communication: uint8_t {
     rdma_give_column,
     rdma_ready_to_push,
     rdma_ready_to_pull,
+    rdma_functional_test,
+    rdma_functional_test_ack,
     rdma_shutdown
-};
-
-enum DataTypes {
-    type_string,
-    type_int,
-    type_package
 };
 
 enum class Strategies {

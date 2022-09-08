@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <random>
 
 #include <iomanip>
 #include <iostream>
@@ -101,6 +102,18 @@ static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig) {
             .num_remote_send = bufferConfig.num_own_send,
             .size_remote_send = bufferConfig.size_own_send,
             .meta_info_size = bufferConfig.meta_info_size};
+}
+
+template <typename T>
+T *generateRandomDummyData(const uint64_t elementCount) {
+    std::default_random_engine generator;
+    std::uniform_int_distribution<T> distribution(0, 100);
+    auto data = reinterpret_cast<T *>(malloc(elementCount * sizeof(T)));
+    for (size_t i = 0; i < elementCount; ++i) {
+        data[i] = distribution(generator);
+    }
+
+    return data;
 }
 
 // \begin socket operation
