@@ -9,7 +9,6 @@ Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
     }
 
     // a buffer to hold the data
-    std::cout << "[Buffer] Allocating: " << bufferSize << " bytes for RDMA buffer" << std::endl;
     buf = (char*)calloc(1, bufferSize);
     assert(buf != NULL);
 

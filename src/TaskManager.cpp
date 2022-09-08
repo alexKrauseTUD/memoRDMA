@@ -128,11 +128,11 @@ void TaskManager::setup(size_t init_flags) {
             int gidIndex = 0;
 
             uint8_t numOwnReceive = 2;
-            uint32_t sizeOwnReceive = 1024 * 1024 * 2 + 32;
-            uint8_t numRemoteReceive = 4;
-            uint32_t sizeRemoteReceive = 1024 * 1024 * 2 + 32;
-            uint64_t sizeOwnSend = 1024 * 1024 * 8 + 4 * 32;
-            uint64_t sizeRemoteSend = 1024 * 1024 * 4 + 4 * 32;
+            uint32_t sizeOwnReceive = 1024 * 512;
+            uint8_t numRemoteReceive = 2;
+            uint32_t sizeRemoteReceive = 1024 * 512;
+            uint64_t sizeOwnSend = 1024 * 512;
+            uint64_t sizeRemoteSend = 1024 * 512;
 
             std::size_t largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
 
@@ -273,13 +273,20 @@ void TaskManager::setup(size_t init_flags) {
                                .ib_port = ibPort,
                                .gid_idx = gidIndex};
 
-            buffer_config_t bufferConfig = {.num_own_receive = numOwnReceive,
+            // TODO: configurability hardcoded
+            buffer_config_t bufferConfig = {.num_own_send_threads = 2,
+                                            .num_own_receive_threads = 2,
+                                            .num_remote_send_threads = 2,
+                                            .num_remote_receive_threads = 2,
+                                            .num_own_receive = numOwnReceive,
                                             .size_own_receive = sizeOwnReceive,
                                             .num_remote_receive = numRemoteReceive,
                                             .size_remote_receive = sizeRemoteReceive,
-                                            .size_own_send = sizeOwnSend,
-                                            .size_remote_send = sizeRemoteSend,
-                                            .meta_info_size = metaInfoSize};
+                                            .num_own_send = numRemoteReceive,
+                                            .size_own_send = sizeRemoteReceive,
+                                            .num_remote_send = numOwnReceive,
+                                            .size_remote_send = sizeOwnReceive,
+                                            .meta_info_size = 16};
 
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
@@ -515,10 +522,10 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & dummy_tests) {
-        registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
-            std::string dummy = "This is a dummy message.";
-            ConnectionManager::getInstance().sendDataToAllConnections(dummy);
-        }));
+        // registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
+        //     std::string dummy = "This is a dummy message.";
+        //     ConnectionManager::getInstance().sendDataToAllConnections(dummy);
+        // }));
 
         registerTask(new Task("customOpcode", "Send Custom opcode to all Connections", []() -> void {
             uint8_t val;
@@ -542,13 +549,13 @@ void TaskManager::setup(size_t init_flags) {
             genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput, 1, Strategies::push);
         }));
 
-        registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", [this]() -> void {
-            genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 1, Strategies::push);
-        }));
+        // registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", [this]() -> void {
+        //     genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 1, Strategies::push);
+        // }));
 
-        registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", [this]() -> void {
-            genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 1, Strategies::push);
-        }));
+        // registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", [this]() -> void {
+        //     genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 1, Strategies::push);
+        // }));
 
         registerTask(new Task("ss_tput_pull", "Single-sided throughput test PULL", [this]() -> void {
             genericTestFunc("ss_tput_pull", "Single-sided throughput test PULL", ss_tput, 1, Strategies::pull);
@@ -558,13 +565,13 @@ void TaskManager::setup(size_t init_flags) {
             genericTestFunc("ds_tput_pull", "Double-sided throughput test PULL", ds_tput, 1, Strategies::pull);
         }));
 
-        registerTask(new Task("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", [this]() -> void {
-            genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, Strategies::pull);
-        }));
+        // registerTask(new Task("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", [this]() -> void {
+        //     genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, Strategies::pull);
+        // }));
 
-        registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
-            genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
-        }));
+        // registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
+        //     genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
+        // }));
     }
 }
 
@@ -576,47 +583,57 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
     using namespace std::chrono_literals;
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
-        auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::stringstream logNameStream;
-        logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_rb << ".log";
-        std::string logName = logNameStream.str();
-        std::cout << "[Task] Set name: " << logName << std::endl;
+        for (uint8_t num_sb = 1; num_sb <= num_rb; ++num_sb) {
+            for (uint8_t thrds = 1; thrds <= num_sb; ++thrds) {
+                auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                std::stringstream logNameStream;
+                logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_sb << "_" << +num_rb << "_" << +thrds << ".log";
+                std::string logName = logNameStream.str();
+                std::cout << "[Task] Set name: " << logName << std::endl;
 
-        for (uint64_t bytes = 1ull << 10; bytes < 1ull << 30; bytes <<= 1) {
-            buffer_config_t bufferConfig = {.num_own_receive = 1,
-                                            .size_own_receive = 640,
-                                            .num_remote_receive = num_rb,
-                                            .size_remote_receive = bytes + package_t::metaDataSize(),
-                                            .size_own_send = (bytes + package_t::metaDataSize()) * num_rb,
-                                            .size_remote_send = 640,
-                                            .meta_info_size = 16};
+                for (uint64_t size_rb = 1ull << 15; size_rb < 1ull << 28; size_rb <<= 1) {
+                    buffer_config_t bufferConfig = {.num_own_send_threads = thrds,
+                                                    .num_own_receive_threads = 1,
+                                                    .num_remote_send_threads = 1,
+                                                    .num_remote_receive_threads = thrds,
+                                                    .num_own_receive = 1,
+                                                    .size_own_receive = 640,
+                                                    .num_remote_receive = num_rb,
+                                                    .size_remote_receive = size_rb + package_t::metaDataSize(),
+                                                    .num_own_send = num_sb,
+                                                    .size_own_send = size_rb + package_t::metaDataSize(),
+                                                    .num_remote_send = 1,
+                                                    .size_remote_send = 640,
+                                                    .meta_info_size = 16};
 
-            CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
+                    CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
 
-            std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(bytes) << ")" << std::endl;
-            std::cout << std::endl;
-            std::cout << name << std::endl;
+                    std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(size_rb) << ")" << std::endl;
+                    std::cout << std::endl;
+                    std::cout << name << std::endl;
 
-            switch (tc) {
-                case ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
-                    break;
-                case ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
-                    break;
-                case mt_ss_tput:
-                    CHECK(ConnectionManager::getInstance().throughputTestMultiThread(connectionId, logName, strat));
-                    break;
-                case mt_ds_tput:
-                    CHECK(ConnectionManager::getInstance().consumingTestMultiThread(connectionId, logName, strat));
-                    break;
-                default:
-                    std::cout << "A non-valid test_code was provided!";
-                    return;
+                    switch (tc) {
+                        case ss_tput:
+                            CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
+                            break;
+                        case ds_tput:
+                            CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
+                            break;
+                        // case mt_ss_tput:
+                        //     CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
+                        //     break;
+                        // case mt_ds_tput:
+                        //     CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
+                        //     break;
+                        default:
+                            std::cout << "A non-valid test_code was provided!";
+                            return;
+                    }
+
+                    std::cout << std::endl;
+                    std::cout << name << " ended." << std::endl;
+                }
             }
-
-            std::cout << std::endl;
-            std::cout << name << " ended." << std::endl;
         }
     }
 }

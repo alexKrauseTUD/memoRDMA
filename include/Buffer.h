@@ -14,13 +14,16 @@
 
 // // structure to exchange data which is needed to connect the QPs
 struct cm_con_data_t {
-    uint64_t meta_buf;
-    uint32_t meta_rkey;
-    uint64_t send_buf;
-    uint32_t send_rkey;
+    uint64_t meta_receive_buf;
+    uint32_t meta_receive_rkey;
+    uint64_t meta_send_buf;
+    uint32_t meta_send_rkey;
     uint32_t receive_num;
+    uint32_t send_num;
     uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
+    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key    
+    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
     buffer_config_t buffer_config;
     uint32_t qp_num;  // QP number
     uint16_t lid;     // LID of the IB port
@@ -29,8 +32,8 @@ struct cm_con_data_t {
 
 struct reconfigure_data {
     buffer_config_t buffer_config;
-    uintptr_t send_buf;
-    uint32_t send_rkey;
+    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
     uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
     uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
 };
@@ -57,7 +60,8 @@ class Buffer {
 
 class SendBuffer : public Buffer {
    public:
-    uint8_t metaInfo;
+
+    uint8_t sendOpcode = rdma_data_finished;        // the opcode that is sent at the end of a data sending process to indicate the end of the process
 
     explicit SendBuffer(std::size_t _bufferSize);
 
@@ -65,7 +69,7 @@ class SendBuffer : public Buffer {
 
     void loadPackage(char *writePtr, package_t *p);
     void loadAppMetaData(char *writePtr, package_t *p, char *meta);
-    void sendPackage(package_t *p, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
+    void sendPackage(uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID);
 
     void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp);
 

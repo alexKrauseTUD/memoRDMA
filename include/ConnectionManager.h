@@ -26,10 +26,10 @@ class ConnectionManager {
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
-    int sendData(std::size_t connectionId, std::string &data);
-    int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode);
+    // int sendData(std::size_t connectionId, std::string &data);
+    int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
     int sendOpCode(std::size_t connectionId, uint8_t opcode);
-    int sendDataToAllConnections(std::string &data);
+    // int sendDataToAllConnections(std::string &data);
     int sendCustomOpcodeToAllConnections( uint8_t code );
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
@@ -43,7 +43,6 @@ class ConnectionManager {
     int throughputTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
     int consumingTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
 
-
     int pendingBufferCreation(std::size_t connectionId);
 
     void stop();
@@ -54,6 +53,7 @@ class ConnectionManager {
     ConnectionManager();
 
     std::map<std::size_t, Connection *> connections;
+
     bool globalAbort;
     bool stopped = false;
 
