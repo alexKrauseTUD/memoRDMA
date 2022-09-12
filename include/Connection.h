@@ -19,19 +19,15 @@ typedef std::function<void(const size_t)> ResetFunction;
 
 // structure of system resources
 struct resources {
-    struct ibv_device_attr device_attr;           // device attributes
-    struct ibv_port_attr port_attr;               // IB port attributes
-    struct cm_con_data_t remote_props;            // values to connect to remote side
-    struct ibv_context *ib_ctx;                   // device handle
-    struct ibv_pd *pd;                            // PD handle
-    struct ibv_cq *cq;                            // CQ handle
-    struct ibv_qp *qp;                            // QP handle
-    std::vector<struct ibv_mr *> own_receive_mr;  // MR handle for buf
-    std::vector<char *> own_receive_buffer;       // memory buffer pointer, used for RDMA send ops
+    struct ibv_device_attr device_attr;  // device attributes
+    struct ibv_port_attr port_attr;      // IB port attributes
+    struct cm_con_data_t remote_props;   // values to connect to remote side
+    struct ibv_context *ib_ctx;          // device handle
+    struct ibv_pd *pd;                   // PD handle
+    struct ibv_cq *cq;                   // CQ handle
+    struct ibv_qp *qp;                   // QP handle
     std::vector<uint64_t> remote_receive_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_receive_rkeys;
-    std::vector<struct ibv_mr *> own_send_mr;  // MR handle for buf
-    std::vector<char *> own_send_buffer;       // memory buffer pointer, used for RDMA send ops
     std::vector<uint64_t> remote_send_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_send_rkeys;
     int sock;  // TCP socket file descriptor
@@ -44,11 +40,6 @@ struct receive_data {
     std::chrono::_V2::system_clock::time_point endTime;
 };
 
-enum class ConnectionStatus {
-    active,
-    reconfigure
-};
-
 typedef std::chrono::_V2::system_clock::time_point timePoint;
 
 class Connection {
@@ -56,12 +47,40 @@ class Connection {
     explicit Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
     ~Connection();
 
+    void init();
+
+    size_t maxBytesInPayload(const size_t customMetaDataSize) const;
+
+    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat);
+
+    int sendOpcode(uint8_t opcode, bool sendToRemote);
+
+    int closeConnection(bool send_remote = true);
+    void destroyResources();
+
+    void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
+
+    int addReceiveBuffer(std::size_t quantity, bool own);
+    int removeReceiveBuffer(std::size_t quantity, bool own);
+    int resizeReceiveBuffer(std::size_t newSize, bool own);
+    int resizeSendBuffer(std::size_t newSize, bool own);
+
+    int reconfigureBuffer(buffer_config_t &bufConfig);
+    int receiveReconfigureBuffer(const uint8_t index);
+
+    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void* buf, size_t bufferSize);
+
+    void printConnectionInfo() const;
+
+    int throughputTest(std::string logName, Strategies strat);
+    int consumingTest(std::string logName, Strategies strat);
+
+   private:
     config_t config;
     buffer_config_t bufferConfig;
     uint32_t localConId;
     resources res;
-    
-    ConnectionStatus conStat;
+
     std::mutex receive_buffer_check_mutex;
     std::mutex send_buffer_check_mutex;
     std::mutex receive_buffer_block_mutex;
@@ -72,49 +91,6 @@ class Connection {
     std::vector<ReceiveBuffer *> ownReceiveBuffer;
     std::vector<SendBuffer *> ownSendBuffer;
 
-    void init();
-
-    size_t maxBytesInPayload(const size_t customMetaDataSize) const;
-
-    // int sendData(std::string &data);
-    // int sendData(package_t *p);
-    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat);
-
-    int sendOpcode(uint8_t opcode, bool sendToRemote);
-
-    int closeConnection(bool send_remote = true);
-    void destroyResources();
-
-    void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
-    void pullDataFromRemote(const size_t index, bool consume);
-
-    int addReceiveBuffer(std::size_t quantity, bool own);
-    int removeReceiveBuffer(std::size_t quantity, bool own);
-    int resizeReceiveBuffer(std::size_t newSize, bool own);
-    int resizeSendBuffer(std::size_t newSize, bool own);
-
-    int reconfigureBuffer(buffer_config_t &bufConfig);
-    int sendReconfigureBuffer(buffer_config_t &bufConfig);
-    int receiveReconfigureBuffer();
-    // int receiveReconfigureBuffer(std::size_t index);
-
-    int pendingBufferCreation();
-
-    void printConnectionInfo();
-
-    int throughputTest(std::string logName, Strategies strat);
-    int consumingTest(std::string logName, Strategies strat);
-    int throughputTestMultiThread(std::string logName, Strategies strat);
-    int consumingTestMultiThread(std::string logName, Strategies strat);
-
-    void consume(const size_t index);
-    void workMultiThread();
-
-    // std::atomic<ConnectionStatus> conStat;
-
-   private:
-    std::map<uint64_t, receive_data> receiveMap;
-
     std::array<uint8_t, 16> metaInfoReceive{0};
     std::array<uint8_t, 16> metaInfoSend{0};
 
@@ -123,8 +99,6 @@ class Connection {
 
     void setupSendBuffer();
     void setupReceiveBuffer();
-
-    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buffer, std::size_t size);
 
     void initTCP();
     void exchangeBufferInfo();

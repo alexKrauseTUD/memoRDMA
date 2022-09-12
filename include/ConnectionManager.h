@@ -26,11 +26,10 @@ class ConnectionManager {
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
-    // int sendData(std::size_t connectionId, std::string &data);
     int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
     int sendOpCode(std::size_t connectionId, uint8_t opcode);
-    // int sendDataToAllConnections(std::string &data);
     int sendCustomOpcodeToAllConnections( uint8_t code );
+
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own);
@@ -40,10 +39,6 @@ class ConnectionManager {
 
     int throughputTest(std::size_t connectionId, std::string logName, Strategies strat);
     int consumingTest(std::size_t connectionId, std::string logName, Strategies strat);
-    int throughputTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
-    int consumingTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
-
-    int pendingBufferCreation(std::size_t connectionId);
 
     void stop();
     bool abortSignaled() const;
@@ -56,10 +51,6 @@ class ConnectionManager {
 
     bool globalAbort;
     bool stopped = false;
-
-    std::function<void(bool *)> monitor_connection;
-
-    std::thread *monitorWorker;
 
     std::size_t globalConnectionId;
 

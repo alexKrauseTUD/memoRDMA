@@ -3,9 +3,9 @@
 FunctionalTests::FunctionalTests() {
     CallbackFunction receiveDataTransferTest = [this](const size_t conId, const ReceiveBuffer* rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
         // Package header
-        package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->buf);
+        package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->getBufferPtr());
         // Start of Payload
-        uint64_t* data = reinterpret_cast<uint64_t*>(rcv_buffer->buf + sizeof(package_t::header_t) + head->payload_start);
+        uint64_t* data = reinterpret_cast<uint64_t*>(rcv_buffer->getBufferPtr() + sizeof(package_t::header_t) + head->payload_start);
 
         std::lock_guard<std::mutex> lg(mapMutex);
 
@@ -34,9 +34,9 @@ FunctionalTests::FunctionalTests() {
 
     CallbackFunction dataTransferTestAck = [this](const size_t conId, const ReceiveBuffer* rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
         // Package header
-        package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->buf);
+        package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->getBufferPtr());
         // Start of Payload
-        uint64_t* data = reinterpret_cast<uint64_t*>(rcv_buffer->buf + sizeof(package_t::header_t) + head->payload_start);
+        uint64_t* data = reinterpret_cast<uint64_t*>(rcv_buffer->getBufferPtr() + sizeof(package_t::header_t) + head->payload_start);
 
         ReceiveData rd = ReceiveData();
         uint64_t packageId = head->id;
@@ -68,6 +68,7 @@ uint8_t FunctionalTests::executeAllTests() {
     std::ofstream out;
     out.open(logName, std::ios_base::app);
 
+    numberProblems += bufferReconfigurationTest(out);
     numberProblems += dataTransferTest(out);
 
     out.close();
@@ -150,12 +151,92 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
                     }
                 }
             }
-
-            std::cout << std::endl;
-            std::cout << "[INFO]\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
         }
     }
+
+    std::cout << "[INFO]\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
+    out << "[INFO]\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
+    std::cout << std::endl;
+    out << std::endl;
+
     return errorCount;
+}
+
+uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
+    uint8_t errorCount = 0;
+
+    std::cout << "[INFO]\t[BufferReconfigurationTest]\tStarting Buffer Reconfiguration Test." << std::endl;
+    out << "[INFO]\t[BufferReconfigurationTest]\tStarting Buffer Reconfiguration Test." << std::endl;
+
+    for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
+        for (uint8_t num_r_threads = 1; num_r_threads <= num_rb; ++num_r_threads) {
+            for (uint8_t num_sb = 1; num_sb <= num_rb; ++num_sb) {
+                for (uint8_t num_s_threads = 1; num_s_threads <= num_sb; ++num_s_threads) {
+                    for (uint64_t bytes = 1ull << 10; bytes <= 1ull << 30; bytes <<= 1) {
+                        buffer_config_t bufferConfig = {.num_own_send_threads = num_s_threads,
+                                                        .num_own_receive_threads = num_r_threads,
+                                                        .num_remote_send_threads = num_s_threads,
+                                                        .num_remote_receive_threads = num_r_threads,
+                                                        .num_own_receive = num_rb,
+                                                        .size_own_receive = bytes,
+                                                        .num_remote_receive = num_rb,
+                                                        .size_remote_receive = bytes,
+                                                        .num_own_send = num_sb,
+                                                        .size_own_send = bytes,
+                                                        .num_remote_send = num_sb,
+                                                        .size_remote_send = bytes,
+                                                        .meta_info_size = 16};
+
+                        std::cout << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+
+                        ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
+
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(2s);
+                    }
+                }
+            }
+        }
+    }
+
+    for (uint8_t num_rb = 8; num_rb >= 1; --num_rb) {
+        for (uint8_t num_r_threads = num_rb; num_r_threads >= 1; --num_r_threads) {
+            for (uint8_t num_sb = num_rb; num_sb >= 1; --num_sb) {
+                for (uint8_t num_s_threads = num_sb; num_s_threads >= 1; --num_s_threads) {
+                    for (uint64_t bytes = 1ull << 30; bytes >= 1ull << 10; bytes >>= 1) {
+                        buffer_config_t bufferConfig = {.num_own_send_threads = num_s_threads,
+                                                        .num_own_receive_threads = num_r_threads,
+                                                        .num_remote_send_threads = num_s_threads,
+                                                        .num_remote_receive_threads = num_r_threads,
+                                                        .num_own_receive = num_rb,
+                                                        .size_own_receive = bytes,
+                                                        .num_remote_receive = num_rb,
+                                                        .size_remote_receive = bytes,
+                                                        .num_own_send = num_sb,
+                                                        .size_own_send = bytes,
+                                                        .num_remote_send = num_sb,
+                                                        .size_remote_send = bytes,
+                                                        .meta_info_size = 16};
+
+                        std::cout << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+
+                        ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
+
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(2s);
+                    }
+                }
+            }
+        }
+    }
+
+
+    std::cout << "[INFO]\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors." << std::endl;
+    out << "[INFO]\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors." << std::endl;
+    std::cout << std::endl;
+    out << std::endl;
 }
 
 FunctionalTests::~FunctionalTests() {

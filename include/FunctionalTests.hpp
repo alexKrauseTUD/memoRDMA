@@ -26,6 +26,7 @@ class FunctionalTests {
 
     uint8_t executeAllTests();
     uint8_t dataTransferTest(std::ofstream& out);
+    uint8_t bufferReconfigurationTest(std::ofstream& out);
 
    private:
     FunctionalTests();
