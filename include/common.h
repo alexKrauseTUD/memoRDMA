@@ -13,6 +13,7 @@ enum rdma_handler_communication: uint8_t {
     rdma_test_finished,
     rdma_blocked,
     rdma_reconfigure,
+    rdma_reconfigure_ack,
     rdma_reconfiguring,
     rdma_multi_thread,
     rdma_pull_read,

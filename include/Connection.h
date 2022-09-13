@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <condition_variable>
 
 #include "Buffer.h"
 #include "util.h"
@@ -65,8 +66,10 @@ class Connection {
     int resizeReceiveBuffer(std::size_t newSize, bool own);
     int resizeSendBuffer(std::size_t newSize, bool own);
 
-    int reconfigureBuffer(buffer_config_t &bufConfig);
+    reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
+    int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);
+    void ackReconfigureBuffer(size_t index);
 
     struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void* buf, size_t bufferSize);
 
@@ -81,10 +84,14 @@ class Connection {
     uint32_t localConId;
     resources res;
 
-    std::mutex receive_buffer_check_mutex;
-    std::mutex send_buffer_check_mutex;
-    std::mutex receive_buffer_block_mutex;
-    std::mutex send_buffer_block_mutex;
+    std::mutex receiveBufferCheckMutex;
+    std::mutex sendBufferCheckMutex;
+    std::mutex receiveBufferBlockMutex;
+    std::mutex sendBufferBlockMutex;
+    std::mutex reconfigureMutex;
+
+    std::condition_variable reconfigureCV;
+    bool reconfigureDone = false;
 
     bool busy;
 

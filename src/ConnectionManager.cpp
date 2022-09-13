@@ -125,7 +125,7 @@ int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
 int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {
     // TODO: sanity check
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->reconfigureBuffer(bufferConfig);
+        return connections[connectionId]->sendReconfigureBuffer(bufferConfig);
     } else {
         std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
     }

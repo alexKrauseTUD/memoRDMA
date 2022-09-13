@@ -15,11 +15,6 @@
 #include "DataProvider.h"
 
 int Connection::throughputTest(std::string logName, Strategies strat) {
-    while (reconfiguring) {
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(1ms);
-    }
-
     /* provide data to remote */
     std::size_t maxDataElements = 1ull << MAX_DATA_SIZE;
     DataProvider d;
@@ -154,11 +149,6 @@ int Connection::throughputTest(std::string logName, Strategies strat) {
 // }
 
 int Connection::consumingTest(std::string logName, Strategies strat) {
-    while (reconfiguring) {
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(1ms);
-    }
-
     bool allDone = false;
     while (!allDone) {
         allDone = true;

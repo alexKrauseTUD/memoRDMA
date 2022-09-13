@@ -116,9 +116,6 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
 
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(2s);
-
                         std::cout << "[INFO]\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
                         out << "[INFO]\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
@@ -191,9 +188,6 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
                         out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
-
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(2s);
                     }
                 }
             }
@@ -223,9 +217,6 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
                         out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
-
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(2s);
                     }
                 }
             }

@@ -73,6 +73,9 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         setReceiveOpcode(i, rdma_reconfiguring, false);
                         std::thread(recFunc, i).detach();
                     } break;
+                    case rdma_reconfigure_ack: {
+                        ackReconfigureBuffer(i);
+                    } break;
                     case rdma_shutdown: {
                         closeConnection(false);
                     }; break;
@@ -683,7 +686,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 int Connection::findNextFreeReceiveAndBlock() {
     int nextFreeRec = -1;
 
-    std::lock_guard<std::mutex> lk(receive_buffer_block_mutex);
+    std::lock_guard<std::mutex> lk(receiveBufferBlockMutex);
     // ideally this will be done with a conditional variabel and not with busy waiting.
     while (nextFreeRec == -1) {
         nextFreeRec = getNextFreeReceive();
@@ -702,7 +705,7 @@ int Connection::findNextFreeReceiveAndBlock() {
 int Connection::findNextFreeSendAndBlock() {
     int nextFreeSend = -1;
 
-    std::lock_guard<std::mutex> lk(send_buffer_block_mutex);
+    std::lock_guard<std::mutex> lk(sendBufferBlockMutex);
     // ideally this will be done with a conditional variabel and not with busy waiting.
     while (nextFreeSend == -1) {
         nextFreeSend = getNextFreeSend();
@@ -767,7 +770,7 @@ uint64_t Connection::generatePackageID() {
  * @return int The local index of the found RB (index - 16/2).
  */
 int Connection::getNextFreeReceive() {
-    std::lock_guard<std::mutex> _lk(receive_buffer_check_mutex);
+    std::lock_guard<std::mutex> _lk(receiveBufferCheckMutex);
     size_t metaSizeHalf = metaInfoReceive.size() / 2;
     for (size_t i = metaSizeHalf; i < metaInfoReceive.size(); ++i) {
         if (metaInfoReceive[i] == rdma_ready) return i - metaSizeHalf;
@@ -782,7 +785,7 @@ int Connection::getNextFreeReceive() {
  * @return int The local index of the found SB.
  */
 int Connection::getNextFreeSend() {
-    std::lock_guard<std::mutex> _lk(send_buffer_check_mutex);
+    std::lock_guard<std::mutex> _lk(sendBufferCheckMutex);
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         if (metaInfoSend[i] == rdma_ready) return i;
     }
@@ -798,7 +801,7 @@ int Connection::getNextFreeSend() {
  * @param sendToRemote Whether the opcode should be sent to remote.
  */
 void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote) {
-    std::lock_guard<std::mutex> lk(receive_buffer_check_mutex);
+    std::lock_guard<std::mutex> lk(receiveBufferCheckMutex);
     metaInfoReceive[index] = opcode;
 
     if (sendToRemote) {
@@ -845,7 +848,7 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
  * @param sendToRemote Whether the opcode should be sent to remote.
  */
 void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
-    std::lock_guard<std::mutex> lk(send_buffer_check_mutex);
+    std::lock_guard<std::mutex> lk(sendBufferCheckMutex);
     metaInfoSend[index] = opcode;
 
     if (sendToRemote) {
@@ -948,7 +951,7 @@ int Connection::closeConnection(bool sendRemote) {
  * @param bufConfig The new buffer configuration that should be applied.
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
-int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
+reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     std::size_t numBlockedRec = 0;
     std::size_t numBlockedSend = 0;
     bool allBlocked = false;
@@ -975,9 +978,6 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
                 }
             }
         }
-
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(10us);
 
         allBlocked = true;
 
@@ -1096,17 +1096,25 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             setSendOpcode(i, rdma_no_op, true);
     }
 
-    int nextFreeRec = findNextFreeReceiveAndBlock();
-    int nextFreeSend = findNextFreeSendAndBlock();
-
-    ownSendBuffer[nextFreeSend]->sendReconfigure(recData, res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp);
-    poll_completion();
-
-    setReceiveOpcode((metaInfoReceive.size() / 2) + nextFreeRec, rdma_reconfigure, true);
-    setSendOpcode(nextFreeSend, rdma_ready, false);
-
     std::cout << "Reconfigured Buffers to: " << std::endl;
     printConnectionInfo();
+
+    return recData;
+}
+
+/**
+ * @brief Reconfiguration of the local buffer setup to the (possibly) new setup. Note: trying to be as lazy as possible, there are only changes if the configuration changed.
+ *
+ * @param bufConfig The new buffer configuration that should be applied.
+ * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
+ */
+int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
+    reconfigure_data recData = reconfigureBuffer(bufConfig);
+
+    sendData(reinterpret_cast<char *>(&recData), sizeof(reconfigure_data), nullptr, 0, rdma_reconfigure, Strategies::push);
+
+    std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
+    reconfigureCV.wait(reconfigureLock);
 
     return 0;
 }
@@ -1118,11 +1126,13 @@ int Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::receiveReconfigureBuffer(const uint8_t index) {
-    char *ptr = ownReceiveBuffer[index]->getBufferPtr();
+    char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
 
-    reconfigure_data *recData = (reconfigure_data *)malloc(sizeof(reconfigure_data));
+    reconfigure_data *recData = reinterpret_cast<reconfigure_data *>(malloc(sizeof(reconfigure_data)));
     memcpy(recData, ptr, sizeof(reconfigure_data));
     recData->buffer_config = invertBufferConfig(recData->buffer_config);
+
+    setReceiveOpcode(index, rdma_ready, true);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
@@ -1142,16 +1152,52 @@ int Connection::receiveReconfigureBuffer(const uint8_t index) {
         res.remote_send_rkeys.push_back(recData->send_rkey[i]);
     }
 
-    if (recData->buffer_config.num_own_receive == bufferConfig.num_own_receive && recData->buffer_config.size_own_receive == bufferConfig.size_own_receive && recData->buffer_config.size_own_send == bufferConfig.size_own_send && recData->buffer_config.num_own_send == bufferConfig.num_own_send) {
-        bufferConfig = recData->buffer_config;
-        setReceiveOpcode(index, rdma_ready, true);
-        return 0;
-    }
+    reconfigure_data reconfData = reconfigureBuffer(recData->buffer_config);
 
-    reconfigureBuffer(recData->buffer_config);
     free(recData);
 
+    sendData(reinterpret_cast<char *>(&reconfData), sizeof(reconfigure_data), nullptr, 0, rdma_reconfigure_ack, Strategies::push);
+
     return 0;
+}
+
+/**
+ * @brief Reconfiguration of the local buffer setup to the (possibly) new setup. Note: trying to be as lazy as possible, there are only changes if the configuration changed.
+ *
+ * @param bufConfig The new buffer configuration that should be applied.
+ * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
+ */
+void Connection::ackReconfigureBuffer(size_t index) {
+    char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
+
+    reconfigure_data *recData = reinterpret_cast<reconfigure_data *>(malloc(sizeof(reconfigure_data)));
+    memcpy(recData, ptr, sizeof(reconfigure_data));
+    recData->buffer_config = invertBufferConfig(recData->buffer_config);
+
+    setReceiveOpcode(index, rdma_ready, true);
+
+    res.remote_receive_buffer.clear();
+    res.remote_receive_rkeys.clear();
+    for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
+        if (recData->receive_buf[i] == 0) continue;
+
+        res.remote_receive_buffer.push_back(recData->receive_buf[i]);
+        res.remote_receive_rkeys.push_back(recData->receive_rkey[i]);
+    }
+
+    res.remote_send_buffer.clear();
+    res.remote_send_rkeys.clear();
+    for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
+        if (recData->send_buf[i] == 0) continue;
+
+        res.remote_send_buffer.push_back(recData->send_buf[i]);
+        res.remote_send_rkeys.push_back(recData->send_rkey[i]);
+    }
+
+    std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
+    reconfigureCV.notify_all();
+
+    setReceiveOpcode(index, rdma_ready, true);
 }
 
 /**
@@ -1185,7 +1231,7 @@ int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own = true) {
         }
     }
 
-    return reconfigureBuffer(bufConfig);
+    return sendReconfigureBuffer(bufConfig);
 }
 
 /**
@@ -1219,7 +1265,7 @@ int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own = true) {
         }
     }
 
-    return reconfigureBuffer(bufConfig);
+    return sendReconfigureBuffer(bufConfig);
 }
 
 /**
@@ -1253,7 +1299,7 @@ int Connection::resizeReceiveBuffer(std::size_t newSize, bool own) {
         }
     }
 
-    return reconfigureBuffer(bufConfig);
+    return sendReconfigureBuffer(bufConfig);
 }
 
 /**
@@ -1279,7 +1325,7 @@ int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
         }
     }
 
-    return reconfigureBuffer(bufConfig);
+    return sendReconfigureBuffer(bufConfig);
 }
 
 Connection::~Connection() {
