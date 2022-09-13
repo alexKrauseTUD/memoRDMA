@@ -13,7 +13,7 @@
 TaskManager::TaskManager() : globalId{1} {
     size_t init_flags = 0;
     init_flags |= connection_handling;
-    init_flags |= buffer_handling;
+    // init_flags |= buffer_handling;
     init_flags |= dummy_tests;
     init_flags |= performance_benchmarks;
     init_flags |= functional_tests;

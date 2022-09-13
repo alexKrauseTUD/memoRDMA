@@ -31,7 +31,7 @@ class FunctionalTests {
    private:
     FunctionalTests();
 
-    const uint64_t elementCount = 200000000;
+    const uint64_t elementCount = 2000000;
     const uint64_t dataSize = elementCount * sizeof(uint64_t);
     const uint8_t parallelExecutions = 3;
 

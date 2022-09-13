@@ -31,5 +31,5 @@ void SendBuffer::sendPackage(uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* 
     package_t::header_t* header = reinterpret_cast<package_t::header_t*>(writePtr);
     auto packageSize = sizeof(package_t::header_t) + header->current_payload_size + header->payload_start;
 
-    post_request(packageSize, IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr, wrID);
+    postRequest(packageSize, IBV_WR_RDMA_WRITE, receivePtr, receiveRkey, qp, writePtr, wrID);
 }

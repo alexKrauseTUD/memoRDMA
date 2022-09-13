@@ -19,11 +19,11 @@ FunctionalTests::FunctionalTests() {
 
         auto currentElements = head->current_payload_size / sizeof(uint64_t);
 
-        reset_buffer();
-
         for (size_t i = 0; i < currentElements; ++i) {
             receiveMap[packageId].result += data[i];
         }
+
+        reset_buffer();
 
         if (receiveMap[packageId].receivedBytes == dataSize) {
             ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(&receiveMap[packageId].result), sizeof(receiveMap[packageId].result), nullptr, 0, rdma_functional_test_ack, Strategies::push);
@@ -68,7 +68,7 @@ uint8_t FunctionalTests::executeAllTests() {
     std::ofstream out;
     out.open(logName, std::ios_base::app);
 
-    numberProblems += bufferReconfigurationTest(out);
+    // numberProblems += bufferReconfigurationTest(out);
     numberProblems += dataTransferTest(out);
 
     out.close();
@@ -122,11 +122,11 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
                         for (size_t i = 0; i < 5; ++i) {
                             receiveMap.clear();
 
-                            std::unique_lock<std::mutex> resultWaitLock(resultWaitMutex);
-
                             for (size_t k = 0; k < parallelExecutions; ++k) {
                                 ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, rdma_functional_test, Strategies::push);
                             }
+
+                            std::unique_lock<std::mutex> resultWaitLock(resultWaitMutex);
 
                             resultWaitCV.wait(resultWaitLock, [&] { return resultsArrived; });
                             resultsArrived = false;

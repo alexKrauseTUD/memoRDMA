@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Should be:
+// enum class Opcodes: uint8_t {
 enum rdma_handler_communication: uint8_t {
     rdma_no_op,
     rdma_ready,

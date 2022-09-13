@@ -115,7 +115,7 @@ class Connection {
     int changeQueuePairStateToInit(struct ibv_qp *queue_pair);
     int changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
-    int poll_completion();
+    int pollCompletion();
 
     int getNextFreeReceive();
     int getNextFreeSend();

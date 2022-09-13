@@ -46,14 +46,15 @@ class Buffer {
     std::size_t getBufferSize() const;
     char *getBufferPtr() const;
     struct ibv_mr *getMrPtr() const;
+
     void clearBuffer() const;
 
     struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd);
-
-    int post_request(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID) const;
+    
+    int postRequest(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID) const;
 
    private:
-    int resources_destroy();
+    int resourcesDestroy();
 
    protected:
     char *buf;

@@ -14,7 +14,7 @@ Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
 }
 
 Buffer::~Buffer() {
-    resources_destroy();
+    resourcesDestroy();
 }
 
 /**
@@ -22,7 +22,7 @@ Buffer::~Buffer() {
  * 
  * @return int 
  */
-int Buffer::resources_destroy() {
+int Buffer::resourcesDestroy() {
     ibv_dereg_mr(mr);
     free(buf);
     // FIXME: ;)
@@ -88,7 +88,7 @@ struct ibv_mr *Buffer::registerMemoryRegion(struct ibv_pd *pd) {
  * @param wrID          The ID for the write request. This is practically uninportant for us.
  * @return int          Value indicating success (0) or failure (1). Note that this currently defaults to success. Failure is catched before.
  */
-int Buffer::post_request(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) const {
+int Buffer::postRequest(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp* qp, void* writePtr, uint64_t wrID) const {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr* bad_wr = NULL;

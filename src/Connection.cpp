@@ -575,7 +575,7 @@ int Connection::changeQueuePairStateToRTS(struct ibv_qp *qp) {
  *
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
-int Connection::poll_completion() {
+int Connection::pollCompletion() {
     struct ibv_wc wc;
     unsigned long start_time_ms;
     unsigned long curr_time_ms;
@@ -728,7 +728,7 @@ int Connection::__sendData(const size_t index, Strategies strat) {
 
     if (strat == Strategies::push) {
         sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->getBufferPtr(), 0);
-        poll_completion();
+        pollCompletion();
     }
 
     setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
@@ -835,7 +835,7 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
 
         ibv_post_send(res.qp, &sr, &bad_wr);
 
-        poll_completion();
+        pollCompletion();
     }
 }
 
@@ -882,7 +882,7 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
 
         ibv_post_send(res.qp, &sr, &bad_wr);
 
-        poll_completion();
+        pollCompletion();
     }
 }
 
@@ -897,15 +897,16 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
     setReceiveOpcode(index, rdma_working, false);
 
     if (strat == Strategies::pull) {
-        size_t sbIndex = index;
+        // Pretty sure this does not work atm -> Will fix eventually
+        int sbIndex = index;
         while (metaInfoSend[sbIndex] != rdma_ready_to_pull) {
             sbIndex -= bufferConfig.num_remote_send_threads;
 
             if (sbIndex < 0) sbIndex = index;
         }
 
-        ownReceiveBuffer[index]->post_request(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.qp, ownReceiveBuffer[index]->getBufferPtr(), 0);
-        poll_completion();
+        ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.qp, ownReceiveBuffer[index]->getBufferPtr(), 0);
+        pollCompletion();
         setSendOpcode(sbIndex, rdma_ready, true);
     }
 
@@ -923,7 +924,6 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
         free(localPtr);
     }
 
-    // ownReceiveBuffer[index]->clearBuffer();
     setReceiveOpcode(index, rdma_ready, true);
 }
 
