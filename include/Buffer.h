@@ -67,13 +67,8 @@ class SendBuffer : public Buffer {
 
     explicit SendBuffer(std::size_t _bufferSize);
 
-    void loadData(const char *data, char *writePtr, uint64_t totalSize, uint64_t currentSize, uint64_t package_number, uint64_t dataType, uint64_t packageID) const;
-
-    void loadPackage(char *writePtr, package_t *p) const;
-    void loadAppMetaData(char *writePtr, package_t *p, char *meta) const;
+    void loadPackage(char *writePtr, package_t *p, char *meta) const;
     void sendPackage(uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp, void *writePtr, uint64_t wrID) const;
-
-    void sendReconfigure(reconfigure_data &recData, uint64_t receivePtr, uint32_t receiveRkey, ibv_qp *qp) const;
 
     void print() const;
 

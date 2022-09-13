@@ -659,8 +659,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 
         package.setCurrentPackageNumber(packageCounter++);
 
-        sb->loadPackage(sb->getBufferPtr(), &package);
-        sb->loadAppMetaData(sb->getBufferPtr(), &package, appMetaData);
+        sb->loadPackage(sb->getBufferPtr(), &package, appMetaData);
 
         sb->sendOpcode = opcode;
 
