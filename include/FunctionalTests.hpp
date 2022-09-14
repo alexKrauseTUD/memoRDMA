@@ -6,6 +6,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <thread>
 
 #include "Connection.h"
 #include "ConnectionManager.h"
