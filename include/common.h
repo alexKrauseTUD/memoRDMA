@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+// Should be:
+// enum class Opcodes: uint8_t {
 enum rdma_handler_communication: uint8_t {
     rdma_no_op,
     rdma_ready,
@@ -13,6 +15,7 @@ enum rdma_handler_communication: uint8_t {
     rdma_test_finished,
     rdma_blocked,
     rdma_reconfigure,
+    rdma_reconfigure_ack,
     rdma_reconfiguring,
     rdma_multi_thread,
     rdma_pull_read,
@@ -20,13 +23,9 @@ enum rdma_handler_communication: uint8_t {
     rdma_give_column,
     rdma_ready_to_push,
     rdma_ready_to_pull,
+    rdma_functional_test,
+    rdma_functional_test_ack,
     rdma_shutdown
-};
-
-enum DataTypes {
-    type_string,
-    type_int,
-    type_package
 };
 
 enum class Strategies {

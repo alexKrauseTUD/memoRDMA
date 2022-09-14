@@ -13,6 +13,7 @@
 #include "TaskManager.h"
 #include "common.h"
 #include "util.h"
+#include "FunctionalTests.hpp"
 
 bool checkLinkUp() {
     std::array<char, 128> buffer;
@@ -75,6 +76,9 @@ int main(int argc, char *argv[]) {
     };
 
     TaskManager::getInstance().setGlobalAbortFunction(globalExit);
+
+    // This is a bit dirty solution. It is needed for registering the callbacks on SU.
+    FunctionalTests::getInstance();
 
     std::string content;
     std::string op;

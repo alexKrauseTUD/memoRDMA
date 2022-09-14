@@ -19,18 +19,17 @@ class ConnectionManager {
     void operator=(ConnectionManager const &) = delete;
 
     int registerConnection(config_t &config, buffer_config_t &bufferConfig);
-    Connection* getConnectionById( size_t id );
+    std::shared_ptr<Connection> getConnectionById( size_t id );
     bool registerCallback( uint8_t code, CallbackFunction cb );
     bool hasCallback( uint8_t code ) const;
     CallbackFunction getCallback( uint8_t code ) const;
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections();
-    // int sendData(std::size_t connectionId, std::string &data);
     int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
     int sendOpCode(std::size_t connectionId, uint8_t opcode);
-    // int sendDataToAllConnections(std::string &data);
     int sendCustomOpcodeToAllConnections( uint8_t code );
+
     int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
     int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own);
@@ -38,12 +37,8 @@ class ConnectionManager {
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    int throughputTest(std::size_t connectionId, std::string logName, Strategies strat);
-    int consumingTest(std::size_t connectionId, std::string logName, Strategies strat);
-    int throughputTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
-    int consumingTestMultiThread(std::size_t connectionId, std::string logName, Strategies strat);
-
-    int pendingBufferCreation(std::size_t connectionId);
+    int throughputBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
+    int consumingBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
 
     void stop();
     bool abortSignaled() const;
@@ -52,14 +47,10 @@ class ConnectionManager {
     /* Singleton-required */
     ConnectionManager();
 
-    std::map<std::size_t, Connection *> connections;
+    std::map<std::size_t, std::shared_ptr<Connection>> connections;
 
     bool globalAbort;
     bool stopped = false;
-
-    std::function<void(bool *)> monitor_connection;
-
-    std::thread *monitorWorker;
 
     std::size_t globalConnectionId;
 
