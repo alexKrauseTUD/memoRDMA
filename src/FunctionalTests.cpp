@@ -183,6 +183,8 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
     std::cout << std::endl;
     out << std::endl;
 
+    free(data);
+
     return errorCount;
 }
 
@@ -343,6 +345,8 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
     out << "[INFO]\t\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
     std::cout << std::endl;
     out << std::endl;
+
+    free(data);
 
     return errorCount;
 }
