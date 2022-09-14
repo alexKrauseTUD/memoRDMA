@@ -20,7 +20,7 @@ TaskManager::TaskManager() : globalId{1} {
 
     setup(init_flags);
 
-    registerTask(new Task("executeMulti", "Execute multiple by ID with shutdown", [&]() -> void {
+    registerTask(std::make_shared<Task>("executeMulti", "Execute multiple by ID with shutdown", [&]() -> void {
         std::vector<std::size_t> taskList;
         std::cout << "Space-separated list of tests to run: " << std::endl
                   << "> " << std::flush;
@@ -55,12 +55,10 @@ TaskManager::TaskManager() : globalId{1} {
 }
 
 TaskManager::~TaskManager() {
-    for (auto it = tasks.begin(); it != tasks.end(); ++it) {
-        delete it->second;
-    }
+    tasks.clear();
 }
 
-void TaskManager::registerTask(Task *task) {
+void TaskManager::registerTask(std::shared_ptr<Task> task) {
     tasks.insert({globalId++, task});
 }
 
@@ -97,7 +95,7 @@ void TaskManager::executeById(std::size_t id) {
 
 void TaskManager::setup(size_t init_flags) {
     if (init_flags & connection_handling) {
-        registerTask(new Task("openConnection", "Open Connection", []() -> void {
+        registerTask(std::make_shared<Task>("openConnection", "Open Connection", []() -> void {
             bool clientMode = false;
 
             bool correct;
@@ -302,7 +300,7 @@ void TaskManager::setup(size_t init_flags) {
             std::cout << std::endl;
         }));
 
-        registerTask(new Task("listenConnection", "Listen for Connection", []() -> void {
+        registerTask(std::make_shared<Task>("listenConnection", "Listen for Connection", []() -> void {
             bool clientMode = true;
 
             bool correct;
@@ -356,11 +354,11 @@ void TaskManager::setup(size_t init_flags) {
             std::cout << std::endl;
         }));
 
-        registerTask(new Task("printConnections", "Print Connections", []() -> void {
+        registerTask(std::make_shared<Task>("printConnections", "Print Connections", []() -> void {
             ConnectionManager::getInstance().printConnections();
         }));
 
-        registerTask(new Task("closeConnection", "Close Connection", []() -> void {
+        registerTask(std::make_shared<Task>("closeConnection", "Close Connection", []() -> void {
             std::size_t connectionId;
 
             std::cout << "Please enter the name of the connection you want to close!" << std::endl;
@@ -370,13 +368,13 @@ void TaskManager::setup(size_t init_flags) {
             ConnectionManager::getInstance().closeConnection(connectionId);
         }));
 
-        registerTask(new Task("closeAllConnections", "Close All Connections", []() -> void {
+        registerTask(std::make_shared<Task>("closeAllConnections", "Close All Connections", []() -> void {
             ConnectionManager::getInstance().closeAllConnections();
         }));
     }
 
     if (init_flags & buffer_handling) {
-        registerTask(new Task("addReceiveBuffer", "Add Receive Buffer", []() -> void {
+        registerTask(std::make_shared<Task>("addReceiveBuffer", "Add Receive Buffer", []() -> void {
             std::size_t connectionId;
             std::size_t quantity;
             bool own;
@@ -411,7 +409,7 @@ void TaskManager::setup(size_t init_flags) {
             ConnectionManager::getInstance().addReceiveBuffer(connectionId, quantity, own);
         }));
 
-        registerTask(new Task("removeReceiveBuffer", "Remove Receive Buffer", []() -> void {
+        registerTask(std::make_shared<Task>("removeReceiveBuffer", "Remove Receive Buffer", []() -> void {
             std::size_t connectionId;
             std::size_t quantity;
             bool own;
@@ -446,7 +444,7 @@ void TaskManager::setup(size_t init_flags) {
             ConnectionManager::getInstance().removeReceiveBuffer(connectionId, quantity, own);
         }));
 
-        registerTask(new Task("resizeReceiveBuffer", "Resize Receive Buffer", []() -> void {
+        registerTask(std::make_shared<Task>("resizeReceiveBuffer", "Resize Receive Buffer", []() -> void {
             std::size_t connectionId;
             std::size_t newSize;
             bool own;
@@ -481,7 +479,7 @@ void TaskManager::setup(size_t init_flags) {
             ConnectionManager::getInstance().resizeReceiveBuffer(connectionId, newSize, own);
         }));
 
-        registerTask(new Task("resizeSendBuffer", "Resize Send Buffer", []() -> void {
+        registerTask(std::make_shared<Task>("resizeSendBuffer", "Resize Send Buffer", []() -> void {
             std::size_t connectionId;
             std::size_t newSize;
             bool own;
@@ -518,12 +516,12 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & dummy_tests) {
-        // registerTask(new Task("dummyToAll", "Send Dummy to all Connections", []() -> void {
+        // registerTask(std::make_shared<Task>("dummyToAll", "Send Dummy to all Connections", []() -> void {
         //     std::string dummy = "This is a dummy message.";
         //     ConnectionManager::getInstance().sendDataToAllConnections(dummy);
         // }));
 
-        registerTask(new Task("customOpcode", "Send Custom opcode to all Connections", []() -> void {
+        registerTask(std::make_shared<Task>("customOpcode", "Send Custom opcode to all Connections", []() -> void {
             uint8_t val;
             uint64_t input;
             std::cout << "Opcode? [0,255]" << std::endl;
@@ -537,26 +535,30 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & performance_benchmarks) {
-        registerTask(new Task("ss_tput", "Single-sided throughput benchmark", [this]() -> void {
+        registerTask(std::make_shared<Task>("ss_tput", "Single-sided throughput benchmark", [this]() -> void {
             genericBenchFunc("ss_tput", "Single-sided throughput benchmark", ss_tput, 1, Strategies::push);
         }));
 
-        registerTask(new Task("ds_tput", "Double-sided throughput benchmark", [this]() -> void {
+        registerTask(std::make_shared<Task>("ds_tput", "Double-sided throughput benchmark", [this]() -> void {
             genericBenchFunc("ds_tput", "Double-sided throughput benchmark", ds_tput, 1, Strategies::push);
         }));
 
-        registerTask(new Task("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
+        registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
             genericBenchFunc("ss_tput_pull", "Single-sided throughput benchmark PULL", ss_tput, 1, Strategies::pull);
         }));
 
-        registerTask(new Task("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
+        registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
             genericBenchFunc("ds_tput_pull", "Double-sided throughput benchmark PULL", ds_tput, 1, Strategies::pull);
         }));
     }
 
     if (init_flags & functional_tests) {
-        registerTask(new Task("all_func_tests", "Execute all functional tests", [this]() -> void {
+        registerTask(std::make_shared<Task>("all_func_tests", "Execute all functional tests", [this]() -> void {
             FunctionalTests::getInstance().executeAllTests(false);
+        }));
+
+        registerTask(std::make_shared<Task>("all_func_tests_lite", "Execute all functional tests lite", [this]() -> void {
+            FunctionalTests::getInstance().executeAllTests(true);
         }));
     }
 }

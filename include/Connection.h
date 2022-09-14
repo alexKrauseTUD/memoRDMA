@@ -95,8 +95,8 @@ class Connection {
 
     bool busy;
 
-    std::vector<ReceiveBuffer *> ownReceiveBuffer;
-    std::vector<SendBuffer *> ownSendBuffer;
+    std::vector<std::unique_ptr<ReceiveBuffer>> ownReceiveBuffer;
+    std::vector<std::unique_ptr<SendBuffer>> ownSendBuffer;
 
     std::array<uint8_t, 16> metaInfoReceive{0};
     std::array<uint8_t, 16> metaInfoSend{0};
@@ -148,8 +148,8 @@ class Connection {
 
     std::mt19937_64 randGen;
 
-    std::vector<std::thread *> readWorkerPool;
-    std::vector<std::thread *> sendWorkerPool;
+    std::vector<std::unique_ptr<std::thread>> readWorkerPool;
+    std::vector<std::unique_ptr<std::thread>> sendWorkerPool;
 
     static const std::size_t TEST_ITERATIONS = 10;
     static const std::size_t MAX_DATA_SIZE = 31;

@@ -14,12 +14,12 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig, globalConnectionId)));
+    connections.insert(std::make_pair(globalConnectionId, std::make_shared<Connection>(config, bufferConfig, globalConnectionId)));
 
     return globalConnectionId;
 }
 
-Connection* ConnectionManager::getConnectionById( size_t id ) {
+std::shared_ptr<Connection> ConnectionManager::getConnectionById( size_t id ) {
     if ( connections.contains(id) ) {
         return connections[id];
     }

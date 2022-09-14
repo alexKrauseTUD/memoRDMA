@@ -3,6 +3,7 @@
 
 #include <map>
 #include <string>
+#include <memory>
 
 #include "Task.h"
 #include "common.h"
@@ -35,7 +36,7 @@ class TaskManager {
     TaskManager(TaskManager const &) = delete;
     void operator=(TaskManager const &) = delete;
 
-    void registerTask(Task *task);
+    void registerTask(std::shared_ptr<Task> task);
     void unregisterTask( std::string ident );
     bool hasTask( std::string ident ) const;
     void printAll();
@@ -48,7 +49,7 @@ class TaskManager {
     void setGlobalAbortFunction(std::function<void()> fn);
 
    private:
-    std::map<std::size_t, Task *> tasks;
+    std::map<std::size_t, std::shared_ptr<Task>> tasks;
     std::size_t globalId;
     std::function<void()> globalAbort;
 

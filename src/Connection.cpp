@@ -47,7 +47,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 
                     // Handle the call
                     auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
-                    cb(localConId, ownReceiveBuffer[i], std::bind(reset_buffer, i));
+                    cb(localConId, ownReceiveBuffer[i].get(), std::bind(reset_buffer, i));
 
                     continue;
                 }
@@ -77,7 +77,11 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         ackReconfigureBuffer(i);
                     } break;
                     case rdma_shutdown: {
-                        closeConnection(false);
+                        auto closeFunc = [this]() {
+                            closeConnection(false);
+                        };
+                        setReceiveOpcode(i, rdma_blocked, false);
+                        std::thread(closeFunc).detach();
                     }; break;
                     default: {
                         continue;
@@ -151,11 +155,11 @@ void Connection::init() {
 
     // as much threads as wanted are spawned
     for (size_t tid = 0; tid < bufferConfig.num_own_receive_threads; ++tid) {
-        readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufferConfig.num_own_receive_threads));
+        readWorkerPool.emplace_back(std::make_unique<std::thread>(check_receive, &globalReceiveAbort, tid, bufferConfig.num_own_receive_threads));
     }
 
     for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
-        sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
+        sendWorkerPool.emplace_back(std::make_unique<std::thread>(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
     }
 }
 
@@ -166,22 +170,16 @@ void Connection::init() {
 void Connection::destroyResources() {
     // end all receiving and sending threads
     globalReceiveAbort = true;
-    std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
+    std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
     readWorkerPool.clear();
     globalReceiveAbort = false;
     globalSendAbort = true;
-    std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
+    std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
     sendWorkerPool.clear();
     globalSendAbort = false;
 
     // delete RDMA buffers -> their destructors have to take care of their attributes!
-    for (auto rb : ownReceiveBuffer) {
-        delete rb;
-    }
     ownReceiveBuffer.clear();
-    for (auto sb : ownSendBuffer) {
-        delete sb;
-    }
     ownSendBuffer.clear();
 
     // deregister the meta info buffers
@@ -226,8 +224,7 @@ void Connection::printConnectionInfo() const {
  */
 void Connection::setupSendBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
-        // TODO: no new -> use smart pointer
-        ownSendBuffer.push_back(new SendBuffer(bufferConfig.size_own_send));
+        ownSendBuffer.push_back(std::make_unique<SendBuffer>(bufferConfig.size_own_send));
         setSendOpcode(i, rdma_ready, false);
     }
 }
@@ -238,8 +235,7 @@ void Connection::setupSendBuffer() {
  */
 void Connection::setupReceiveBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
-        // TODO: no new -> use smart pointer
-        ownReceiveBuffer.push_back(new ReceiveBuffer(bufferConfig.size_own_receive));
+        ownReceiveBuffer.push_back(std::make_unique<ReceiveBuffer>(bufferConfig.size_own_receive));
         setReceiveOpcode(i, rdma_ready, false);
     }
 }
@@ -394,11 +390,11 @@ void Connection::createResources() {
     /* Create a protection domain */
     struct ibv_pd *protection_domain = ibv_alloc_pd(context);
 
-    for (auto sb : ownSendBuffer) {
+    for (auto &sb : ownSendBuffer) {
         sb->registerMemoryRegion(protection_domain);
     }
 
-    for (auto rb : ownReceiveBuffer) {
+    for (auto &rb : ownReceiveBuffer) {
         rb->registerMemoryRegion(protection_domain);
     }
 
@@ -650,7 +646,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 
     while (remainingSize > 0) {
         nextFreeSend = findNextFreeSendAndBlock();
-        auto sb = ownSendBuffer[nextFreeSend];
+        auto &sb = ownSendBuffer[nextFreeSend];
 
         if (remainingSize < maxDataToWrite) {
             maxDataToWrite = remainingSize;
@@ -723,7 +719,7 @@ int Connection::findNextFreeSendAndBlock() {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::__sendData(const size_t index, Strategies strat) {
-    auto sb = ownSendBuffer[index];
+    auto &sb = ownSendBuffer[index];
     int nextFreeRec = findNextFreeReceiveAndBlock();
 
     if (strat == Strategies::push) {
@@ -934,9 +930,6 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::closeConnection(bool sendRemote) {
-    globalReceiveAbort = true;
-    globalSendAbort = true;
-
     setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
 
     destroyResources();
@@ -990,9 +983,6 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     }
 
     if (bufConfig.size_own_send != bufferConfig.size_own_send || bufConfig.num_own_send != bufferConfig.num_own_send) {
-        for (auto sb : ownSendBuffer) {
-            delete sb;
-        }
         ownSendBuffer.clear();
 
         bufferConfig.size_own_send = bufConfig.size_own_send;
@@ -1000,15 +990,12 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
         setupSendBuffer();
 
-        for (auto sb : ownSendBuffer) {
+        for (auto &sb : ownSendBuffer) {
             sb->registerMemoryRegion(res.pd);
         }
     }
 
     if (bufConfig.size_own_receive != bufferConfig.size_own_receive || bufConfig.num_own_receive != bufferConfig.num_own_receive) {
-        for (auto rb : ownReceiveBuffer) {
-            delete rb;
-        }
         ownReceiveBuffer.clear();
 
         bufferConfig.size_own_receive = bufConfig.size_own_receive;
@@ -1016,7 +1003,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
         setupReceiveBuffer();
 
-        for (auto rb : ownReceiveBuffer) {
+        for (auto &rb : ownReceiveBuffer) {
             rb->registerMemoryRegion(res.pd);
         }
     }
@@ -1025,12 +1012,12 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
     if (bufConfig.num_own_receive_threads != bufferConfig.num_own_receive_threads) {
         globalReceiveAbort = true;
-        std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
+        std::for_each(readWorkerPool.begin(), readWorkerPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
         readWorkerPool.clear();
         globalReceiveAbort = false;
 
         for (size_t tid = 0; tid < bufConfig.num_own_receive_threads; ++tid) {
-            readWorkerPool.emplace_back(new std::thread(check_receive, &globalReceiveAbort, tid, bufConfig.num_own_receive_threads));
+            readWorkerPool.emplace_back(std::make_unique<std::thread>(check_receive, &globalReceiveAbort, tid, bufConfig.num_own_receive_threads));
             CPU_ZERO(&cpuset);
             CPU_SET(tid, &cpuset);
             int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
@@ -1045,12 +1032,12 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
     if (bufConfig.num_own_send_threads != bufferConfig.num_own_send_threads) {
         globalSendAbort = true;
-        std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::thread *t) { t->join(); delete t; });
+        std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
         sendWorkerPool.clear();
         globalSendAbort = false;
 
         for (size_t tid = 0; tid < bufConfig.num_own_send_threads; ++tid) {
-            sendWorkerPool.emplace_back(new std::thread(check_send, &globalSendAbort, tid, bufConfig.num_own_send_threads));
+            sendWorkerPool.emplace_back(std::make_unique<std::thread>(check_send, &globalSendAbort, tid, bufConfig.num_own_send_threads));
             CPU_ZERO(&cpuset);
             CPU_SET(tid + bufConfig.num_own_send_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
@@ -1068,14 +1055,14 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     reconfigure_data recData = {.buffer_config = bufConfig};
 
     auto pos = 0;
-    for (const auto rb : ownReceiveBuffer) {
+    for (const auto &rb : ownReceiveBuffer) {
         recData.receive_buf[pos] = (uintptr_t)rb->getBufferPtr();
         recData.receive_rkey[pos] = rb->getMrPtr()->rkey;
         ++pos;
     }
 
     pos = 0;
-    for (const auto sb : ownSendBuffer) {
+    for (const auto &sb : ownSendBuffer) {
         recData.send_buf[pos] = (uintptr_t)sb->getBufferPtr();
         recData.send_rkey[pos] = sb->getMrPtr()->rkey;
         ++pos;
