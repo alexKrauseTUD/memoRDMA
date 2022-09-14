@@ -602,13 +602,13 @@ void TaskManager::genericBenchFunc(std::string shortName, std::string name, benc
 
                     switch (tc) {
                         case ss_tput:
-                            CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
+                            CHECK(ConnectionManager::getInstance().throughputBenchmark(connectionId, logName, strat));
                             break;
                         case ds_tput:
-                            CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
+                            CHECK(ConnectionManager::getInstance().consumingBenchmark(connectionId, logName, strat));
                             break;
                         default:
-                            std::cout << "A non-valid test_code was provided!";
+                            std::cout << "A non-valid bench_code was provided!";
                             return;
                     }
 

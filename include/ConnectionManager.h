@@ -37,8 +37,8 @@ class ConnectionManager {
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    int throughputTest(std::size_t connectionId, std::string logName, Strategies strat);
-    int consumingTest(std::size_t connectionId, std::string logName, Strategies strat);
+    int throughputBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
+    int consumingBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
 
     void stop();
     bool abortSignaled() const;

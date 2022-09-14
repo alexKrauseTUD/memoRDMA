@@ -175,9 +175,9 @@ int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t ne
     return 1;
 }
 
-int ConnectionManager::throughputTest(std::size_t connectionId, std::string logName, Strategies strat) {
+int ConnectionManager::throughputBenchmark(std::size_t connectionId, std::string logName, Strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputTest(logName, strat);
+        return connections[connectionId]->throughputBenchmark(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -185,9 +185,9 @@ int ConnectionManager::throughputTest(std::size_t connectionId, std::string logN
     return 1;
 }
 
-int ConnectionManager::consumingTest(std::size_t connectionId, std::string logName, Strategies strat) {
+int ConnectionManager::consumingBenchmark(std::size_t connectionId, std::string logName, Strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingTest(logName, strat);
+        return connections[connectionId]->consumingBenchmark(logName, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }

@@ -57,7 +57,6 @@ class Connection {
     int sendOpcode(uint8_t opcode, bool sendToRemote);
 
     int closeConnection(bool send_remote = true);
-    void destroyResources();
 
     void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
 
@@ -66,17 +65,13 @@ class Connection {
     int resizeReceiveBuffer(std::size_t newSize, bool own);
     int resizeSendBuffer(std::size_t newSize, bool own);
 
-    reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);
-    void ackReconfigureBuffer(size_t index);
-
-    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void* buf, size_t bufferSize);
 
     void printConnectionInfo() const;
 
-    int throughputTest(std::string logName, Strategies strat);
-    int consumingTest(std::string logName, Strategies strat);
+    int throughputBenchmark(std::string logName, Strategies strat);
+    int consumingBenchmark(std::string logName, Strategies strat);
 
    private:
     config_t config;
@@ -93,8 +88,6 @@ class Connection {
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
 
-    bool busy;
-
     std::vector<std::unique_ptr<ReceiveBuffer>> ownReceiveBuffer;
     std::vector<std::unique_ptr<SendBuffer>> ownSendBuffer;
 
@@ -103,6 +96,8 @@ class Connection {
 
     struct ibv_mr *metaInfoReceiveMR;
     struct ibv_mr *metaInfoSendMR;
+
+    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void* buf, size_t bufferSize);
 
     void setupSendBuffer();
     void setupReceiveBuffer();
@@ -117,34 +112,27 @@ class Connection {
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
     int pollCompletion();
 
-    int getNextFreeReceive();
-    int getNextFreeSend();
+    reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
+    void ackReconfigureBuffer(size_t index);
+
     int findNextFreeReceiveAndBlock();
     int findNextFreeSendAndBlock();
-    uint32_t getOwnSendToRemoteReceiveRatio();
+    int getNextFreeReceive();
+    int getNextFreeSend();
     void setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     void setSendOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
     int __sendData(const size_t index, Strategies strat);
 
-    std::tuple<timePoint, timePoint> throughputTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPush(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-
-    std::tuple<timePoint, timePoint> throughputTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> throughputTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-    std::tuple<timePoint, timePoint> consumingTestMultiThreadPull(package_t &package, uint64_t remainingSize, uint64_t maxPayloadSize, uint64_t maxDataToWrite);
-
     std::atomic<bool> globalReceiveAbort;
     std::atomic<bool> globalSendAbort;
-    std::atomic<bool> reconfiguring;
 
+    void destroyResources();
+
+    ResetFunction reset_buffer;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
-    ResetFunction reset_buffer;
 
     std::mt19937_64 randGen;
 
