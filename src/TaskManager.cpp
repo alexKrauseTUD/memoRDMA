@@ -537,42 +537,26 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & performance_benchmarks) {
-        registerTask(new Task("ss_tput", "Single-sided throughput test", [this]() -> void {
-            genericTestFunc("ss_tput", "Single-sided throughput test", ss_tput, 1, Strategies::push);
+        registerTask(new Task("ss_tput", "Single-sided throughput benchmark", [this]() -> void {
+            genericBenchFunc("ss_tput", "Single-sided throughput benchmark", ss_tput, 1, Strategies::push);
         }));
 
-        registerTask(new Task("ds_tput", "Double-sided throughput test", [this]() -> void {
-            genericTestFunc("ds_tput", "Double-sided throughput test", ds_tput, 1, Strategies::push);
+        registerTask(new Task("ds_tput", "Double-sided throughput benchmark", [this]() -> void {
+            genericBenchFunc("ds_tput", "Double-sided throughput benchmark", ds_tput, 1, Strategies::push);
         }));
 
-        // registerTask(new Task("mt_ss_tput", "Multi-threaded single-sided throughput test", [this]() -> void {
-        //     genericTestFunc("mt_ss_tput", "Multi-threaded single-sided throughput test", mt_ss_tput, 1, Strategies::push);
-        // }));
-
-        // registerTask(new Task("mt_ds_tput", "Multi-threaded double-sided throughput test", [this]() -> void {
-        //     genericTestFunc("mt_ds_tput", "Multi-threaded double-sided throughput test", mt_ds_tput, 1, Strategies::push);
-        // }));
-
-        registerTask(new Task("ss_tput_pull", "Single-sided throughput test PULL", [this]() -> void {
-            genericTestFunc("ss_tput_pull", "Single-sided throughput test PULL", ss_tput, 1, Strategies::pull);
+        registerTask(new Task("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
+            genericBenchFunc("ss_tput_pull", "Single-sided throughput benchmark PULL", ss_tput, 1, Strategies::pull);
         }));
 
-        registerTask(new Task("ds_tput_pull", "Double-sided throughput test PULL", [this]() -> void {
-            genericTestFunc("ds_tput_pull", "Double-sided throughput test PULL", ds_tput, 1, Strategies::pull);
+        registerTask(new Task("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
+            genericBenchFunc("ds_tput_pull", "Double-sided throughput benchmark PULL", ds_tput, 1, Strategies::pull);
         }));
-
-        // registerTask(new Task("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", [this]() -> void {
-        //     genericTestFunc("mt_ss_tput_pull", "Multi-threaded single-sided throughput test PULL", mt_ss_tput, 1, Strategies::pull);
-        // }));
-
-        // registerTask(new Task("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", [this]() -> void {
-        //     genericTestFunc("mt_ds_tput_pull", "Multi-threaded double-sided throughput test PULL", mt_ds_tput, 1, Strategies::pull);
-        // }));
     }
 
     if (init_flags & functional_tests) {
         registerTask(new Task("all_func_tests", "Execute all functional tests", [this]() -> void {
-            FunctionalTests::getInstance().executeAllTests();
+            FunctionalTests::getInstance().executeAllTests(false);
         }));
     }
 }
@@ -581,7 +565,7 @@ void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
     globalAbort = fn;
 }
 
-void TaskManager::genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId, Strategies strat) {
+void TaskManager::genericBenchFunc(std::string shortName, std::string name, bench_code tc, std::size_t connectionId, Strategies strat) {
     using namespace std::chrono_literals;
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
@@ -621,12 +605,6 @@ void TaskManager::genericTestFunc(std::string shortName, std::string name, test_
                         case ds_tput:
                             CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
                             break;
-                        // case mt_ss_tput:
-                        //     CHECK(ConnectionManager::getInstance().throughputTest(connectionId, logName, strat));
-                        //     break;
-                        // case mt_ds_tput:
-                        //     CHECK(ConnectionManager::getInstance().consumingTest(connectionId, logName, strat));
-                        //     break;
                         default:
                             std::cout << "A non-valid test_code was provided!";
                             return;
