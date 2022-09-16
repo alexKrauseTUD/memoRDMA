@@ -16,9 +16,12 @@ file(GLOB_RECURSE SOURCES ${SRC_DIR}/*.cpp)
 file(GLOB_RECURSE HEADERS ${INC_DIR}/*.h)
 
 set(SRC_SRV ${SOURCES})
-set(SRC_CLT ${SOURCES})
 
-CONFIGURE_FILE("memo.conf" ${CMAKE_BINARY_DIR}/ COPYONLY)
+if(EXISTS "${PROJECT_SOURCE_DIR}/memo.conf")
+    CONFIGURE_FILE("memo.conf" ${CMAKE_BINARY_DIR}/ COPYONLY)
+else()
+    message( "Beware! Existing Config in binary dir but none found in root dir.")
+endif()
 
 add_executable(memoRDMA_server ${SRC_SRV} ${HEADERS})
 target_compile_options(memoRDMA_server PRIVATE "${OPTIMIZE_OPTIONS}")

@@ -1,7 +1,7 @@
 
 // logger.color.console [yellow]
 // Default color for console logs
-logger.color.console = yellow
+#logger.color.console = yellow
 
 // logger.color.debug1 [blue]
 // Default color for debug1 logs
@@ -9,11 +9,11 @@ logger.color.console = yellow
 
 // logger.color.debug2 [blue]
 // Default color for debug2 logs
-logger.color.debug2 = blue
+#logger.color.debug2 = blue
 
 // logger.color.enable [0]
 // Enable color support for Logger
-logger.color.enable = 0
+#logger.color.enable = 0
 
 // logger.color.error [red]
 // Default color for error logs

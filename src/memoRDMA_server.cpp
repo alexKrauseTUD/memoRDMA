@@ -33,10 +33,9 @@ using namespace memordma;
 
 int main(int argc, char *argv[]) {
     // Init Config and stuff.
-    ConnectionManager::getInstance().configuration->writeConfiguration( "memo.conf.default", true, true, false);
     Logger::LoadConfiguration();
 
-    Logger::getInstance() << LogLevel::DEBUG2 << ConnectionManager::getInstance().configuration->getAsString("myfunnykey") << std::endl;
+    Logger::getInstance() << LogLevel::DEBUG2 << "Testing output" << std::endl;
 
     if ( !checkLinkUp() ) {
         Logger::getInstance() << LogLevel::FATAL << "Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl;
