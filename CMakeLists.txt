@@ -18,6 +18,7 @@ file(GLOB_RECURSE HEADERS ${INC_DIR}/*.h)
 set(SRC_SRV ${SOURCES})
 set(SRC_CLT ${SOURCES})
 
+CONFIGURE_FILE("memo.conf" ${CMAKE_BINARY_DIR}/ COPYONLY)
 
 add_executable(memoRDMA_server ${SRC_SRV} ${HEADERS})
 target_compile_options(memoRDMA_server PRIVATE "${OPTIMIZE_OPTIONS}")

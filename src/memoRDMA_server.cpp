@@ -14,6 +14,7 @@
 #include "common.h"
 #include "util.h"
 #include "FunctionalTests.hpp"
+#include "Logger.h"
 
 bool checkLinkUp() {
     std::array<char, 128> buffer;
@@ -28,9 +29,17 @@ bool checkLinkUp() {
     return (result.find( "State: Active" ) != std::string::npos);
 }
 
+using namespace memordma;
+
 int main(int argc, char *argv[]) {
+    // Init Config and stuff.
+    ConnectionManager::getInstance().configuration->writeConfiguration( "memo.conf.default", true, true, false);
+    Logger::LoadConfiguration();
+
+    Logger::getInstance() << LogLevel::DEBUG2 << ConnectionManager::getInstance().configuration->getAsString("myfunnykey") << std::endl;
+
     if ( !checkLinkUp() ) {
-        std::cerr << "[ERROR] Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl;
+        Logger::getInstance() << LogLevel::FATAL << "Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl;
         exit(-2);
     }
 

@@ -4,6 +4,7 @@
 #include <map>
 
 #include "Connection.h"
+#include "Configuration.h"
 
 typedef std::function<void(const size_t, const ReceiveBuffer*, const std::_Bind<ResetFunction (uint64_t)>)> CallbackFunction;
 
@@ -11,6 +12,9 @@ class ConnectionManager {
    public:
     static ConnectionManager &getInstance() {
         static ConnectionManager instance;
+        if ( instance.configuration == nullptr ) {
+            instance.configuration = new Configuration();
+        }
         return instance;
     }
     ~ConnectionManager();
@@ -42,6 +46,8 @@ class ConnectionManager {
 
     void stop();
     bool abortSignaled() const;
+
+    Configuration* configuration = nullptr;
 
    private:
     /* Singleton-required */
