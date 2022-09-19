@@ -16,10 +16,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <random>
 
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 
@@ -333,4 +333,39 @@ static std::string GetBytesReadable(std::size_t i) {
     return stream.str();
 }
 
+namespace memordma {
+// trim from start (in place)
+static inline void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+                return !std::isspace(ch);
+            }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+                return !std::isspace(ch);
+            }).base(),
+            s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s) {
+    ltrim(s);
+    rtrim(s);
+}
+
+static inline void trim_any_of(std::string &s, std::string charsToRemove) {
+    for (auto del_if : charsToRemove) {
+        s.erase(s.find_last_not_of(del_if) + 1, std::string::npos);
+        s.erase(0, std::min(s.find_first_not_of(del_if), s.size() - 1));
+    }
+}
+
+typedef std::ostream &(*manip1)(std::ostream &);
+typedef std::basic_ios<std::ostream::char_type, std::ostream::traits_type> ios_type;
+typedef ios_type &(*manip2)(ios_type &);
+typedef std::ios_base &(*manip3)(std::ios_base &);
+
+}  // namespace memordma
 #endif  // UTILS_H
