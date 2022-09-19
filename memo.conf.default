@@ -23,16 +23,20 @@
 // Default color for fatal logs
 #logger.color.fatal = red
 
-// logger.color.info [green]
+// logger.color.info [light_green]
 // Default color for info logs
-#logger.color.info = green
+#logger.color.info = light_green
+
+// logger.color.info [green]
+// Default color for success logs
+#logger.color.success = green
 
 // logger.color.warning [brown]
 // Default color for warning logs
 #logger.color.warning = brown
 
 // logger.level [DEBUG2]
-// Control log level[FATAL, ERROR, CONSOLE, WARNING, INFO, DEBUG1, DEBUG2]
+// Control log level[FATAL, ERROR, CONSOLE, WARNING, INFO, SUCCESS, DEBUG1, DEBUG2]
 #logger.level = DEBUG2
 
 // logger.timeformat [%m/%d %H:%M:%S]

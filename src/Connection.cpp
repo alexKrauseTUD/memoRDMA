@@ -15,7 +15,10 @@
 #include <vector>
 
 #include "DataProvider.h"
+#include "Logger.h"
 #include "util.h"
+
+using namespace memordma;
 
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
     config = _config;
@@ -33,8 +36,8 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     check_receive = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         // using namespace std::chrono_literals;
 
-        std::ios_base::fmtflags f(std::cout.flags());
-        // std::cout << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
+        // std::ios_base::fmtflags f(std::cout.flags());
+        Logger::getInstance() << LogLevel::INFO << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         // currently this works with (busy) waiting -> TODO: conditional variable with wait
@@ -87,25 +90,19 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         continue;
                     }; break;
                 }
-                std::cout.flags(f);
+                // std::cout.flags(f);
             }
         }
 
-        // std::this_thread::sleep_for(std::chrono::seconds(tid * 2));
-
-        // for (auto elem : metaInfoReceive) {
-        //     std::cout << +elem << ", ";
-        // }
-        // std::cout << std::endl;
-
-        std::cout << "[check_receive] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
+        Logger::getInstance() << LogLevel::INFO << "[check_receive] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
     // for the sending threads -> check whether a SB is ready to be send
     check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         // using namespace std::chrono_literals;
-        std::ios_base::fmtflags f(std::cout.flags());
-        // std::cout << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
+
+        // std::ios_base::fmtflags f(std::cout.flags());
+        Logger::getInstance() << LogLevel::INFO << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
@@ -127,18 +124,11 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         continue;
                     }; break;
                 }
-                std::cout.flags(f);
+                // std::cout.flags(f);
             }
         }
 
-        // std::this_thread::sleep_for(std::chrono::seconds(tid * 2 + 1));
-
-        // for (auto elem : metaInfoSend) {
-        //     std::cout << +elem << ", ";
-        // }
-        // std::cout << std::endl;
-
-        std::cout << "[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
+        Logger::getInstance() << LogLevel::INFO << "[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
     init();
@@ -265,20 +255,19 @@ void Connection::initTCP() {
         // @server
         res.sock = sock_connect(config.server_name, config.tcp_port);
         if (res.sock < 0) {
-            ERROR("Failed to establish TCP connection to server %s, port %d\n",
-                  config.server_name.c_str(), config.tcp_port);
+            Logger::getInstance() << LogLevel::ERROR << "Failed to establish TCP connection to server " << config.server_name.c_str() << ", port " << config.tcp_port << std::endl;
             exit(EXIT_FAILURE);
         }
     } else {
         // @client
         res.sock = sock_connect("", config.tcp_port);
         if (res.sock < 0) {
-            ERROR("Failed to establish TCP connection with client on port %d\n",
-                  config.tcp_port);
+            Logger::getInstance() << LogLevel::ERROR << "Failed to establish TCP connection with client on port " << +config.tcp_port << std::endl;
             exit(EXIT_FAILURE);
         }
     }
-    INFO("TCP connection was established\n");
+    Logger::getInstance() << LogLevel::INFO << "TCP connection was established!" << std::endl;
+    ;
 }
 
 /**
@@ -530,7 +519,7 @@ int Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t de
     memset(&rtr_attr, 0, sizeof(rtr_attr));
 
     rtr_attr.qp_state = ibv_qp_state::IBV_QPS_RTR;
-    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_1024;       // This implies splitting message into 256 Byte chunks
+    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_1024;  // This implies splitting message into 256 Byte chunks
     rtr_attr.rq_psn = 0;
     rtr_attr.max_dest_rd_atomic = 1;
     rtr_attr.min_rnr_timer = 0x12;

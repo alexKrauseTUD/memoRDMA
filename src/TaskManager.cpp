@@ -9,6 +9,9 @@
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "FunctionalTests.hpp"
+#include "Logger.h"
+
+using namespace memordma;
 
 TaskManager::TaskManager() : globalId{1} {
     size_t init_flags = 0;
@@ -36,7 +39,7 @@ TaskManager::TaskManager() : globalId{1} {
             }
             taskList.emplace_back(stol(content.substr(last)));
         } catch (...) {
-            std::cout << "[Error] Invalid number(s) detected, nothing done." << std::endl;
+            Logger::getInstance() << LogLevel::ERROR << "Invalid number(s) detected, nothing done." << std::endl;
             return;
         }
 
@@ -115,7 +118,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     useDefaultConfig = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
                     correct = false;
                 }
 
@@ -158,7 +161,7 @@ void TaskManager::setup(size_t init_flags) {
                     std::cin >> ibPort;
 
                     if (ibPort < 0)
-                        std::cout << "[Error] The provided IB-Port was incorrect! Please enter the correct number!" << std::endl;
+                        Logger::getInstance() << LogLevel::ERROR << "The provided IB-Port was incorrect! Please enter the correct number!" << std::endl;
 
                 } while (ibPort < 0);
 
@@ -169,7 +172,7 @@ void TaskManager::setup(size_t init_flags) {
                     std::cin >> gidIndex;
 
                     if (gidIndex < 0)
-                        std::cout << "[Error] The provided GID-Index was incorrect! Please enter the correct number!" << std::endl;
+                        Logger::getInstance() << LogLevel::ERROR << "The provided GID-Index was incorrect! Please enter the correct number!" << std::endl;
 
                 } while (gidIndex < 0);
 
@@ -190,7 +193,7 @@ void TaskManager::setup(size_t init_flags) {
                         correctInput2 = true;
                         confBuffer = false;
                     } else {
-                        std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
+                        Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
                         correctInput2 = false;
                     }
 
@@ -202,7 +205,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> numOwnReceive;
 
                         if (numOwnReceive < 1)
-                            std::cout << "[Error] The provided number of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided number of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (numOwnReceive < 1);
 
@@ -211,7 +214,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> sizeOwnReceive;
 
                         if (sizeOwnReceive < 1)
-                            std::cout << "[Error] The provided size of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided size of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (sizeOwnReceive < 1);
 
@@ -220,7 +223,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> numRemoteReceive;
 
                         if (numRemoteReceive < 1)
-                            std::cout << "[Error] The provided number of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided number of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (numRemoteReceive < 1);
 
@@ -229,7 +232,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> sizeRemoteReceive;
 
                         if (sizeRemoteReceive < 1)
-                            std::cout << "[Error] The provided size of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided size of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (sizeRemoteReceive < 1);
 
@@ -238,7 +241,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> sizeOwnSend;
 
                         if (sizeOwnSend < 1)
-                            std::cout << "[Error] The provided size of own Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided size of own Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (sizeOwnSend < 1);
 
@@ -247,7 +250,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> sizeRemoteSend;
 
                         if (sizeRemoteSend < 1)
-                            std::cout << "[Error] The provided size of remote Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided size of remote Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
 
                     } while (sizeRemoteSend < 1);
 
@@ -260,7 +263,7 @@ void TaskManager::setup(size_t init_flags) {
                         std::cin >> metaInfoSize;
 
                         if (metaInfoSize < minMetaInfoSize)
-                            std::cout << "[Error] The provided size for the MetaInfo-Buffer was to small! Please enter a number of at least " << minMetaInfoSize << "!" << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "The provided size for the MetaInfo-Buffer was to small! Please enter a number of at least " << minMetaInfoSize << "!" << std::endl;
 
                     } while (metaInfoSize < minMetaInfoSize);
                 }
@@ -291,9 +294,9 @@ void TaskManager::setup(size_t init_flags) {
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
             if (connectionId != 0) {
-                std::cout << "[Success] Connection " << connectionId << " opened for config: " << std::endl;
+                Logger::getInstance() << LogLevel::SUCCESS << "Connection " << connectionId << " opened for config: " << std::endl;
             } else {
-                std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
+                Logger::getInstance() << LogLevel::ERROR << "Something went wrong! The connection could not be opened for config: " << std::endl;
             }
             print_config(config);
             std::cout << std::endl;
@@ -320,7 +323,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     useDefaultConfig = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
                     correct = false;
                 }
 
@@ -345,9 +348,9 @@ void TaskManager::setup(size_t init_flags) {
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
             if (connectionId != 0) {
-                std::cout << "[Success] Connection " << connectionId << " opened for config: " << std::endl;
+                Logger::getInstance() << LogLevel::SUCCESS << "Connection " << connectionId << " opened for config: " << std::endl;
             } else {
-                std::cout << "[Error] Something went wrong! The connection could not be opened for config: " << std::endl;
+                Logger::getInstance() << LogLevel::ERROR << "Something went wrong! The connection could not be opened for config: " << std::endl;
             }
             print_config(config);
             std::cout << std::endl;
@@ -400,7 +403,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
                     correct = false;
                 }
 
@@ -435,7 +438,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
                     correct = false;
                 }
 
@@ -470,7 +473,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
                     correct = false;
                 }
 
@@ -505,7 +508,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    std::cout << "[Error] Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
                     correct = false;
                 }
 

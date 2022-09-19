@@ -265,26 +265,6 @@ static void print_config(struct config_t &config) {
     }
 }
 
-static void print_usage(const char *progname) {
-    printf("Usage:\n");
-    printf("%s          start a server and wait for connection\n", progname);
-    printf("%s <host>   connect to server at <host>\n\n", progname);
-    printf("Options:\n");
-    printf(
-        "-p, --port <port>           listen on / connect to port <port> "
-        "(default 20000)\n");
-    printf(
-        "-d, --ib-dev <dev>          use IB device <dev> (default first "
-        "device found)\n");
-    printf(
-        "-i, --ib-port <port>        use port <port> of IB device (default "
-        "1)\n");
-    printf(
-        "-g, --gid_idx <gid index>   gid index to be used in GRH (default "
-        "not used)\n");
-    printf("-h, --help                  this message\n");
-}
-
 static double BtoMB(uint64_t byte) {
     return static_cast<double>(byte) / 1024 / 1024;
 }

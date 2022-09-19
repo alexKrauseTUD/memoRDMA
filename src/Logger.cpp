@@ -43,6 +43,7 @@ thread_local std::unordered_map<LogLevel, std::shared_ptr<LogFormat>, LogLevelHa
     {LogLevel::CONSOLE, std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)))},
     {LogLevel::WARNING, std::make_shared<LogFormat>("WARNING", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_WARNING)))},
     {LogLevel::INFO,    std::make_shared<LogFormat>("INFO", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_INFO)))},
+    {LogLevel::SUCCESS, std::make_shared<LogFormat>("SUCCESS", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_SUCCESS)))},
     {LogLevel::DEBUG1,  std::make_shared<LogFormat>("DEBUG 1", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG1)))},
     {LogLevel::DEBUG2,  std::make_shared<LogFormat>("DEBUG 2", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG2)))}
     };
@@ -147,6 +148,8 @@ void Logger::LoadConfiguration() {
         logLevel = LogLevel::WARNING;
     else if (slevel == "info")
         logLevel = LogLevel::INFO;
+    else if (slevel == "success")
+        logLevel = LogLevel::SUCCESS;
     else if (slevel == "debug1")
         logLevel = LogLevel::DEBUG1;
     else if (slevel == "debug2")
