@@ -90,12 +90,20 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                 std::cout.flags(f);
             }
         }
+
+        // std::this_thread::sleep_for(std::chrono::seconds(tid * 2));
+
+        // for (auto elem : metaInfoReceive) {
+        //     std::cout << +elem << ", ";
+        // }
+        // std::cout << std::endl;
+
         std::cout << "[check_receive] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
     // for the sending threads -> check whether a SB is ready to be send
     check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
-        using namespace std::chrono_literals;
+        // using namespace std::chrono_literals;
         std::ios_base::fmtflags f(std::cout.flags());
         // std::cout << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
@@ -122,6 +130,14 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                 std::cout.flags(f);
             }
         }
+
+        // std::this_thread::sleep_for(std::chrono::seconds(tid * 2 + 1));
+
+        // for (auto elem : metaInfoSend) {
+        //     std::cout << +elem << ", ";
+        // }
+        // std::cout << std::endl;
+
         std::cout << "[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
     };
 
@@ -514,7 +530,7 @@ int Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t de
     memset(&rtr_attr, 0, sizeof(rtr_attr));
 
     rtr_attr.qp_state = ibv_qp_state::IBV_QPS_RTR;
-    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_256;
+    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_1024;       // This implies splitting message into 256 Byte chunks
     rtr_attr.rq_psn = 0;
     rtr_attr.max_dest_rd_atomic = 1;
     rtr_attr.min_rnr_timer = 0x12;
@@ -670,7 +686,7 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
         remainingSize -= maxDataToWrite;
     }
 
-    return 0;
+    return remainingSize == 0 ? 0 : 1;
 }
 
 /**
@@ -824,7 +840,8 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
 
         sr.num_sge = 1;
         sr.opcode = IBV_WR_RDMA_WRITE;
-        sr.send_flags = IBV_SEND_SIGNALED;
+        // sr.send_flags = IBV_SEND_SIGNALED;
+        sr.send_flags = IBV_SEND_INLINE;
 
         sr.wr.rdma.remote_addr = res.remote_props.meta_receive_buf + entrySize * remoteIndex;
         sr.wr.rdma.rkey = res.remote_props.meta_receive_rkey;
@@ -962,7 +979,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
         while (numBlockedSend < bufferConfig.num_own_send) {
             for (std::size_t i = 0; i < bufferConfig.num_own_send; ++i) {
-                if (metaInfoSend[i] == rdma_ready || metaInfoSend[i] == rdma_reconfigure) {
+                if (metaInfoSend[i] == rdma_ready || metaInfoSend[i] == rdma_reconfiguring) {
                     setSendOpcode(i, rdma_blocked, true);
                     ++numBlockedSend;
                 } else {
@@ -1039,7 +1056,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         for (size_t tid = 0; tid < bufConfig.num_own_send_threads; ++tid) {
             sendWorkerPool.emplace_back(std::make_unique<std::thread>(check_send, &globalSendAbort, tid, bufConfig.num_own_send_threads));
             CPU_ZERO(&cpuset);
-            CPU_SET(tid + bufConfig.num_own_send_threads, &cpuset);
+            CPU_SET(tid + bufConfig.num_own_receive_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";

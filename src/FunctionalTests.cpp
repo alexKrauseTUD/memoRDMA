@@ -6,10 +6,9 @@ FunctionalTests::FunctionalTests() {
         package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->getBufferPtr());
         // Start of Payload
         uint64_t* data = reinterpret_cast<uint64_t*>(rcv_buffer->getBufferPtr() + sizeof(package_t::header_t) + head->payload_start);
+        uint64_t packageId = head->id;
 
         std::lock_guard<std::mutex> lg(mapMutex);
-
-        uint64_t packageId = head->id;
 
         if (!receiveMap.contains(packageId)) {
             receiveMap.emplace(packageId, ReceiveData());
