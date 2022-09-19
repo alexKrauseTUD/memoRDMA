@@ -11,6 +11,7 @@
 #include <atomic>
 #include <iomanip>
 #include <sstream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -66,6 +67,8 @@ struct LogColorHash {
 struct LogFormat {
     std::string level;
     std::string color;
+
+    LogFormat( std::string _level, std::string _color ) : level{_level}, color{_color}  {};
 };
 
 struct ColorCode {
@@ -155,7 +158,7 @@ class Logger : public std::ostringstream {
     /// Holds color names and colorcodes
     static thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> colorCodes_;
     /// Holds information about each log level
-    static thread_local std::unordered_map<LogLevel, LogFormat*, LogLevelHash> formatMap;
+    static thread_local std::unordered_map<LogLevel, std::shared_ptr<LogFormat>, LogLevelHash> formatMap;
 
    protected:
     /// Defines the minimal display log level
@@ -167,7 +170,7 @@ class Logger : public std::ostringstream {
     static thread_local std::atomic<bool> initializedAtomic;
 
    public:
-    static thread_local Logger* instance;
+    static thread_local std::shared_ptr<Logger> instance;
 };
 
 }  // namespace memordma

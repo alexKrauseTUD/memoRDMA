@@ -12,8 +12,8 @@ class ConnectionManager {
    public:
     static ConnectionManager &getInstance() {
         static ConnectionManager instance;
-        if ( instance.configuration == nullptr ) {
-            instance.configuration = new Configuration();
+        if ( !instance.configuration ) {
+            instance.configuration = std::make_unique<Configuration>();
         }
         return instance;
     }
@@ -47,7 +47,7 @@ class ConnectionManager {
     void stop();
     bool abortSignaled() const;
 
-    Configuration* configuration = nullptr;
+    std::unique_ptr<Configuration> configuration;
 
    private:
     /* Singleton-required */
