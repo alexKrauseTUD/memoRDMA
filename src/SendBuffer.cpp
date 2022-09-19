@@ -2,8 +2,10 @@
 
 #include "Buffer.h"
 
+using namespace memordma;
+
 SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
-    std::cout << "[Buffer] Allocating: " << getBufferSize() << " bytes for RDMA Send-Buffer" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "[SendBuffer] Allocating: " << getBufferSize() << " bytes for RDMA Send-Buffer" << std::endl;
 }
 
 /**

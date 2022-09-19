@@ -11,6 +11,7 @@
 #include "PackageManager.hpp"
 #include "common.h"
 #include "util.h"
+#include "Logger.h"
 
 // // structure to exchange data which is needed to connect the QPs
 struct cm_con_data_t {

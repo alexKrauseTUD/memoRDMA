@@ -25,6 +25,7 @@ enum class LogLevel {
     CONSOLE,
     WARNING,
     INFO,
+    SUCCESS,
     DEBUG1,
     DEBUG2
 };
@@ -89,11 +90,13 @@ struct LogMessage {
 #ifndef NODEBUGLOGGING
 #define WARNING(x) Logger::getInstance() << LogLevel::WARNING << x
 #define INFO(x) Logger::getInstance() << LogLevel::INFO << x
+#define SUCCESS(x) Logger::getInstance() << LogLevel::SUCCESS << x
 #define DEBUG1(x) Logger::getInstance() << LogLevel::DEBUG1 << x
 #define DEBUG2(x) Logger::getInstance() << LogLevel::DEBUG2 << x
 #else
 #define WARNING(x)
 #define INFO(x)
+#define SUCCESS(x)
 #define DEBUG1(x)
 #define DEBUG2(x)
 #endif

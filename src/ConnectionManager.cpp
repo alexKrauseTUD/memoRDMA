@@ -102,9 +102,9 @@ int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_
     return 1;
 }
 
-int ConnectionManager::sendOpCode(std::size_t connectionId, uint8_t opcode) {
+int ConnectionManager::sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->sendOpcode(opcode, true);
+        return connections[connectionId]->sendOpcode(opcode, sendToRemote);
     } else {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }

@@ -23,6 +23,7 @@
 #define MEMO_DEFAULT_LOGGER_COLOR_CONSOLE "logger.color.console"
 #define MEMO_DEFAULT_LOGGER_COLOR_WARNING "logger.color.warning"
 #define MEMO_DEFAULT_LOGGER_COLOR_INFO "logger.color.info"
+#define MEMO_DEFAULT_LOGGER_COLOR_SUCCESS "logger.color.success"
 #define MEMO_DEFAULT_LOGGER_COLOR_DEBUG1 "logger.color.debug1"
 #define MEMO_DEFAULT_LOGGER_COLOR_DEBUG2 "logger.color.debug2"
 

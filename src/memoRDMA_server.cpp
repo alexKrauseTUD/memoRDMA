@@ -40,37 +40,6 @@ int main(int argc, char *argv[]) {
         exit(-2);
     }
 
-    config_t config = {.dev_name = "",
-                       .server_name = "",
-                       .tcp_port = 20000,
-                       .client_mode = false,
-                       .ib_port = 1,
-                       .gid_idx = -1};
-
-    // \begin parse command line parameters
-    while (1) {
-        int c;
-        static struct option long_options[] = {
-            {"help", no_argument, 0, 'h'},
-            {NULL, 0, 0, 0}};
-
-        c = getopt_long(argc, argv, "ch", long_options, NULL);
-        if (c == -1)
-            break;
-
-        switch (c) {
-            case 'h':
-            default:
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    {
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(100ms);
-    }
-
     bool abort = false;
     auto globalExit = [&]() -> void {
         {
@@ -100,7 +69,7 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        std::cout << "Chosen:" << op << std::endl;
+        Logger::getInstance() << LogLevel::INFO << "Chosen:" << op << std::endl;
         std::transform(op.begin(), op.end(), op.begin(), [](unsigned char c) { return std::tolower(c); });
 
         if (op == "exit") {
@@ -112,7 +81,7 @@ int main(int argc, char *argv[]) {
                 id = stol(op);
                 converted = true;
             } catch (...) {
-                std::cout << "[Error] No number given." << std::endl;
+                Logger::getInstance() << LogLevel::ERROR << "No number given." << std::endl;
                 continue;
             }
             if (converted) {
@@ -120,21 +89,6 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-
-    // if (!config.client_mode)
-    // {
-    // }
-    // else
-    // {
-    //     /* Client */
-    //     std::cout << "Entering CLIENT side event loop." << std::endl;
-    //     ConnectionManager::getInstance().receiveConnection("1", config);
-    //     while (!ConnectionManager::getInstance().abortSignaled())
-    //     {
-    //         using namespace std::chrono_literals;
-    //         std::this_thread::sleep_for(100ms);
-    //     }
-    // }
 
     return 0;
 }
