@@ -173,8 +173,9 @@ void Logger::LoadConfiguration() {
 
     timeFormat = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_TIMEFORMAT);
     colorEnabled = ConnectionManager::getInstance().configuration->get<int>(MEMO_DEFAULT_LOGGER_COLOR_ENABLE);
-    logToFile = ConnectionManager::getInstance().configuration->get<int>("logger.logtofile");
-    std::string fname = ConnectionManager::getInstance().configuration->getAsString("logger.file");
+    logToFile = ConnectionManager::getInstance().configuration->get<bool>(MEMO_DEFAULT_LOGGER_LOG_TO_FILE);
+    std::string fname = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_FILENAME);
+    std::cout << fname << std::endl;
     if (fname != logFileName && logToFile) {
         logFileName = fname;
         if (logfile.is_open()) {
