@@ -23,21 +23,33 @@
 // Default color for fatal logs
 #logger.color.fatal = red
 
-// logger.color.info [green]
+// logger.color.info [light_green]
 // Default color for info logs
-#logger.color.info = green
+#logger.color.info = light_green
+
+// logger.color.success [green]
+// Default color for success logs
+#logger.color.success = green
 
 // logger.color.warning [brown]
 // Default color for warning logs
 #logger.color.warning = brown
 
 // logger.level [DEBUG2]
-// Control log level[FATAL, ERROR, CONSOLE, WARNING, INFO, DEBUG1, DEBUG2]
+// Control log level[FATAL, ERROR, CONSOLE, WARNING, INFO, SUCCESS, DEBUG1, DEBUG2]
 #logger.level = DEBUG2
+
+// logger.logfile [default.log]
+// The filename, where every valid logger output is mirrored. New data is always appended to an existing file.
+#logger.logfile = default.log
 
 // logger.timeformat [%m/%d %H:%M:%S]
 // Time format for logger timestamp. see strftime().
 #logger.timeformat = %m/%d %H:%M:%S
+
+// logger.tofile [0]
+// Mirror the output of the logger to a file.
+#logger.tofile = 0
 
 // memo.default.autoconnect.initiate [0]
 // Upon startup, immediately use the default TCP Port and initiate a connection to the default initiate ip.

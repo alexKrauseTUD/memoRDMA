@@ -18,14 +18,17 @@
 using namespace memordma;
 
 Configuration::Configuration() {
-    addDefault(MEMO_DEFAULT_LOGGER_LEVEL, "DEBUG2", "Control log level\n[FATAL, ERROR, CONSOLE, WARNING, INFO, DEBUG1, DEBUG2]");
+    addDefault(MEMO_DEFAULT_LOGGER_LEVEL, "DEBUG2", "Control log level\n[FATAL, ERROR, CONSOLE, WARNING, INFO, SUCCESS, DEBUG1, DEBUG2]");
+    addDefault(MEMO_DEFAULT_LOGGER_FILENAME, "default.log", "The filename, where every valid logger output is mirrored. New data is always appended to an existing file.");
+    addDefault(MEMO_DEFAULT_LOGGER_LOG_TO_FILE, "0", "Mirror the output of the logger to a file.");
     addDefault(MEMO_DEFAULT_LOGGER_TIMEFORMAT, "%m/%d %H:%M:%S", "Time format for logger timestamp. see strftime().");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_ENABLE, "0", "Enable color support for Logger");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_FATAL, "red", "Default color for fatal logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_ERROR, "red", "Default color for error logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE, "yellow", "Default color for console logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_WARNING, "brown", "Default color for warning logs");
-    addDefault(MEMO_DEFAULT_LOGGER_COLOR_INFO, "green", "Default color for info logs");
+    addDefault(MEMO_DEFAULT_LOGGER_COLOR_INFO, "light_green", "Default color for info logs");
+    addDefault(MEMO_DEFAULT_LOGGER_COLOR_SUCCESS, "green", "Default color for success logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_DEBUG1, "blue", "Default color for debug1 logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_DEBUG2, "blue", "Default color for debug2 logs");
 
