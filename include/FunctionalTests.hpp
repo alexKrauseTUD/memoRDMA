@@ -11,6 +11,7 @@
 #include "Connection.h"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
+#include "Logger.h"
 
 struct ReceiveData {
     uint64_t receivedBytes = 0;
