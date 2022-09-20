@@ -16,6 +16,8 @@
 #define MEMO_CONFIG_EXAMPLE_FILE "memo.conf.default"
 
 #define MEMO_DEFAULT_LOGGER_LEVEL "logger.level"
+#define MEMO_DEFAULT_LOGGER_FILENAME "logger.logfile"
+#define MEMO_DEFAULT_LOGGER_LOG_TO_FILE "logger.tofile"
 #define MEMO_DEFAULT_LOGGER_TIMEFORMAT "logger.timeformat"
 #define MEMO_DEFAULT_LOGGER_COLOR_ENABLE "logger.color.enable"
 #define MEMO_DEFAULT_LOGGER_COLOR_FATAL "logger.color.fatal"

@@ -11,6 +11,7 @@
 #include <atomic>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -20,6 +21,7 @@
 namespace memordma {
 
 enum class LogLevel {
+    NOFORMAT,
     FATAL,
     ERROR,
     CONSOLE,
@@ -153,6 +155,9 @@ class Logger : public std::ostringstream {
     static Logger& getInstance();
 
     static bool colorEnabled;
+    static bool logToFile;
+    static std::string logFileName;
+    static std::ofstream logfile;
 
     /// Get the colorcode from a string
     static std::string getColorCode(std::string color);

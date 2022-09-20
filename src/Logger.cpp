@@ -6,9 +6,11 @@
  */
 
 #include "Logger.h"
+
+#include <thread>
+
 #include "Configuration.h"
 #include "ConnectionManager.h"
-#include <thread>
 
 namespace memordma {
 
@@ -16,7 +18,10 @@ thread_local std::shared_ptr<Logger> Logger::instance;
 
 LogLevel Logger::logLevel = LogLevel::INFO;
 std::string Logger::timeFormat = "%m/%d %H:%M:%S";
+std::string Logger::logFileName = "";
+std::ofstream Logger::logfile{};
 bool Logger::colorEnabled = false;
+bool Logger::logToFile = false;
 
 thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> Logger::colorCodes_ = {
     {LogColor::BLACK, {"black", "\e[30m"}},
@@ -38,8 +43,9 @@ thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> Logger::color
     {LogColor::NOCOLOR, {"noc", "\e[0;39m"}}};
 
 thread_local std::unordered_map<LogLevel, std::shared_ptr<LogFormat>, LogLevelHash> Logger::formatMap = {
-    {LogLevel::FATAL,   std::make_shared<LogFormat>("FATAL", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_FATAL)))},
-    {LogLevel::ERROR,   std::make_shared<LogFormat>("ERROR", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_ERROR)))},
+    {LogLevel::NOFORMAT, std::make_shared<LogFormat>("", getColorCode(LogColor::NOCOLOR))},
+    {LogLevel::FATAL, std::make_shared<LogFormat>("FATAL", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_FATAL)))},
+    {LogLevel::ERROR, std::make_shared<LogFormat>("ERROR", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_ERROR)))},
     {LogLevel::CONSOLE, std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)))},
     {LogLevel::WARNING, std::make_shared<LogFormat>("WARNING", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_WARNING)))},
     {LogLevel::INFO,    std::make_shared<LogFormat>("INFO", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_INFO)))},
@@ -79,8 +85,8 @@ Logger::Logger(LogLevel logLevel, std::string timeFormat) : Logger(logLevel) {
     Logger::timeFormat = timeFormat;
 }
 
-Logger & Logger::flush() {
-	if ( currentLevel <= logLevel ) {
+Logger& Logger::flush() {
+    if (currentLevel <= logLevel) {
         std::time_t t = std::time(0);
         char ft[64];
         // ThreadManager::setGlobalMemoryAllocator();
@@ -92,15 +98,25 @@ Logger & Logger::flush() {
         if (colorEnabled) {
             s << Logger::colorCodes_.at(LogColor::NOCOLOR).value;
         }
-        // time stamp
-        s << "[" << ft << "]";
-        // log level
-        s << "[" << formatMap.at(currentLevel)->color << std::setfill(' ') << std::setw(7) << formatMap.at(currentLevel)->level << (colorEnabled ? colorCodes_.at(LogColor::NOCOLOR).value : "") << "] ";
-        // log message
+        if (currentLevel != LogLevel::NOFORMAT) {
+            // time stamp
+            s << "[" << ft << "]";
+            // log level
+            s << "[" << formatMap.at(currentLevel)->color << std::setfill(' ') << std::setw(7) << formatMap.at(currentLevel)->level << (colorEnabled ? colorCodes_.at(LogColor::NOCOLOR).value : "") << "] ";
+            // log message
+        }
         s << str() << std::endl;
 
         // logMessage(currentLevel, s.str());
         std::cout << s.str();
+        if (logToFile) {
+            if (currentLevel != LogLevel::NOFORMAT) {
+                logfile << "[" << ft << "][" << std::setfill(' ') << std::setw(7) << formatMap.at(currentLevel)->level << "] " << str() << std::endl;
+            } else {
+                logfile << "[" << ft << "] " << str() << std::endl;
+            }
+            logfile.flush();
+        }
     }
     str("");
     currentLevel = LogLevel::CONSOLE;
@@ -157,6 +173,24 @@ void Logger::LoadConfiguration() {
 
     timeFormat = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_TIMEFORMAT);
     colorEnabled = ConnectionManager::getInstance().configuration->get<int>(MEMO_DEFAULT_LOGGER_COLOR_ENABLE);
+    logToFile = ConnectionManager::getInstance().configuration->get<int>("logger.logtofile");
+    std::string fname = ConnectionManager::getInstance().configuration->getAsString("logger.file");
+    if (fname != logFileName && logToFile) {
+        logFileName = fname;
+        if (logfile.is_open()) {
+            std::cout << "Closing old logfile." << std::endl;
+            logfile.close();
+        }
+        std::cout << "Opening new logfile " << fname << std::endl;
+        logfile.open(fname, std::ios_base::app);
+    } else {
+        if (!logToFile && logfile.is_open()) {
+            std::cout << "Closing logfile" << std::endl;
+            logfile.close();
+        } else if (logToFile) {
+            logfile.open(fname, std::ios_base::app);
+        }
+    }
 }
 
 }  // namespace memordma
