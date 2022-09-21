@@ -4,6 +4,7 @@
 #include <inttypes.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -11,22 +12,74 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <condition_variable>
 
 #include "Buffer.h"
-#include "util.h"
+
+#define MAX_POLL_CQ_TIMEOUT 30000  // ms
+
+// structure of test parameters
+struct config_t {
+    std::string dev_name;     // IB device name
+    std::string server_name;  // server hostname
+    uint32_t tcp_port;        // server TCP port
+    bool client_mode;         // Don't run an event loop
+    int ib_port;              // local IB port to work with
+    int gid_idx;              // GID index to use
+};
+
+struct buffer_config_t {
+    uint8_t num_own_send_threads;
+    uint8_t num_own_receive_threads;
+    uint8_t num_remote_send_threads;
+    uint8_t num_remote_receive_threads;
+    uint8_t num_own_receive;
+    uint64_t size_own_receive;
+    uint8_t num_remote_receive;
+    uint64_t size_remote_receive;
+    uint8_t num_own_send;
+    uint64_t size_own_send;
+    uint8_t num_remote_send;
+    uint64_t size_remote_send;
+    uint8_t meta_info_size;
+};
+
+// // structure to exchange data which is needed to connect the QPs
+struct cm_con_data_t {
+    uint64_t meta_receive_buf;
+    uint32_t meta_receive_rkey;
+    uint64_t meta_send_buf;
+    uint32_t meta_send_rkey;
+    uint32_t receive_num;
+    uint32_t send_num;
+    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
+    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
+    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
+    buffer_config_t buffer_config;
+    uint32_t qp_num;  // QP number
+    uint16_t lid;     // LID of the IB port
+    uint8_t gid[16];  // GID
+} __attribute__((packed));
+
+struct reconfigure_data {
+    buffer_config_t buffer_config;
+    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
+    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
+    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
+    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
+};
 
 typedef std::function<void(const size_t)> ResetFunction;
 
 // structure of system resources
 struct resources {
-    struct ibv_device_attr device_attr;  // device attributes
-    struct ibv_port_attr port_attr;      // IB port attributes
-    struct cm_con_data_t remote_props;   // values to connect to remote side
-    struct ibv_context *ib_ctx;          // device handle
-    struct ibv_pd *pd;                   // PD handle
-    struct ibv_cq *cq;                   // CQ handle
-    struct ibv_qp *qp;                   // QP handle
+    struct ibv_device_attr device_attr;           // device attributes
+    struct ibv_port_attr port_attr;               // IB port attributes
+    struct cm_con_data_t remote_props;            // values to connect to remote side
+    struct ibv_context *ib_ctx;                   // device handle
+    struct ibv_pd *pd;                            // PD handle
+    struct ibv_cq *cq;                            // CQ handle
+    struct ibv_qp *qp;                            // QP handle
     std::vector<uint64_t> remote_receive_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_receive_rkeys;
     std::vector<uint64_t> remote_send_buffer;  // memory buffer pointer, used for RDMA send ops
@@ -73,6 +126,13 @@ class Connection {
     int throughputBenchmark(std::string logName, Strategies strat);
     int consumingBenchmark(std::string logName, Strategies strat);
 
+    static int sock_connect(std::string client_name, int port);
+    static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data);
+    static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig);
+    static void sock_close(int &sockfd);
+    static int receive_tcp(int sockfd, int xfer_size, char *remote_data);
+    static int send_tcp(int sockfd, int xfer_size, char *local_data);
+
    private:
     config_t config;
     buffer_config_t bufferConfig;
@@ -97,7 +157,7 @@ class Connection {
     struct ibv_mr *metaInfoReceiveMR;
     struct ibv_mr *metaInfoSendMR;
 
-    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void* buf, size_t bufferSize);
+    struct ibv_mr *registerMemoryRegion(struct ibv_pd *pd, void *buf, size_t bufferSize);
 
     void setupSendBuffer();
     void setupReceiveBuffer();

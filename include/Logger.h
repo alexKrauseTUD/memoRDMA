@@ -9,16 +9,19 @@
 #define LOGGER_H_
 
 #include <atomic>
-#include <iomanip>
-#include <sstream>
 #include <fstream>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 
-#include "util.h"
-
 namespace memordma {
+
+    typedef std::ostream &(*manip1)(std::ostream &);
+    typedef std::basic_ios<std::ostream::char_type, std::ostream::traits_type> ios_type;
+    typedef ios_type &(*manip2)(ios_type &);
+    typedef std::ios_base &(*manip3)(std::ios_base &);
 
 enum class LogLevel {
     NOFORMAT,
@@ -71,7 +74,7 @@ struct LogFormat {
     std::string level;
     std::string color;
 
-    LogFormat( std::string _level, std::string _color ) : level{_level}, color{_color}  {};
+    LogFormat(std::string _level, std::string _color) : level{_level}, color{_color} {};
 };
 
 struct ColorCode {
@@ -89,18 +92,42 @@ struct LogMessage {
     std::string message;
 };
 
-#ifndef NODEBUGLOGGING
-#define WARNING(x) Logger::getInstance() << LogLevel::WARNING << x
-#define INFO(x) Logger::getInstance() << LogLevel::INFO << x
-#define SUCCESS(x) Logger::getInstance() << LogLevel::SUCCESS << x
-#define DEBUG1(x) Logger::getInstance() << LogLevel::DEBUG1 << x
-#define DEBUG2(x) Logger::getInstance() << LogLevel::DEBUG2 << x
+#ifdef MEMO_NOLOGGING
+    #define NOFORMAT(x)
+    #define FATAL(x)
+    #define ERROR(x)
+    #define CONSOLE(x)
+    #define WARNING(x)
+    #define INFO(x)
+    #define SUCCESS(x)
+    #define DEBUG1(x)
+    #define DEBUG2(x)
+
 #else
-#define WARNING(x)
-#define INFO(x)
-#define SUCCESS(x)
-#define DEBUG1(x)
-#define DEBUG2(x)
+    #define NOFORMAT(x) Logger::getInstance() << LogLevel::NOFORMAT << x
+    #define FATAL(x) Logger::getInstance() << LogLevel::FATAL << x
+    #define ERROR(x) Logger::getInstance() << LogLevel::ERROR << x
+    #define CONSOLE(x) Logger::getInstance() << LogLevel::CONSOLE << x
+
+    #ifndef MEMO_NOINFOLOGGING
+        #define WARNING(x) Logger::getInstance() << LogLevel::WARNING << x
+        #define INFO(x) Logger::getInstance() << LogLevel::INFO << x
+        #define SUCCESS(x) Logger::getInstance() << LogLevel::SUCCESS << x
+
+    #else
+        #define WARNING(x)
+        #define INFO(x)
+        #define SUCCESS(x)
+    #endif
+
+    #ifndef MEMO_NODEBUGLOGGING
+        #define DEBUG1(x) Logger::getInstance() << LogLevel::DEBUG1 << x
+        #define DEBUG2(x) Logger::getInstance() << LogLevel::DEBUG2 << x
+    #else
+        #define DEBUG1(x)
+        #define DEBUG2(x)
+    #endif
+
 #endif
 
 /**

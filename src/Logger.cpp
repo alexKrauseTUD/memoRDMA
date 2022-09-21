@@ -8,6 +8,7 @@
 #include "Logger.h"
 
 #include <thread>
+#include <iostream>
 
 #include "Configuration.h"
 #include "ConnectionManager.h"
@@ -24,23 +25,23 @@ bool Logger::colorEnabled = false;
 bool Logger::logToFile = false;
 
 thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> Logger::colorCodes_ = {
-    {LogColor::BLACK, {"black", "\e[30m"}},
-    {LogColor::RED, {"red", "\e[31m"}},
-    {LogColor::GREEN, {"green", "\e[32m"}},
-    {LogColor::YELLOW, {"yellow", "\e[33m"}},
-    {LogColor::BLUE, {"blue", "\e[34m"}},
-    {LogColor::MAGENTA, {"magenta", "\e[35m"}},
-    {LogColor::CYAN, {"cyan", "\e[36m"}},
-    {LogColor::LIGHT_GRAY, {"light_gray", "\e[37m"}},
-    {LogColor::DARK_GRAY, {"dark_gray", "\e[90m"}},
-    {LogColor::LIGHT_RED, {"light_red", "\e[91m"}},
-    {LogColor::LIGHT_GREEN, {"light_green", "\e[92m"}},
-    {LogColor::LIGHT_YELLOW, {"light_yellow", "\e[93m"}},
-    {LogColor::LIGHT_BLUE, {"light_blue", "\e[94m"}},
-    {LogColor::LIGHT_MAGENTA, {"light_magenta", "\e[95m"}},
-    {LogColor::LIGHT_CYAN, {"light_cyan", "\e[96m"}},
-    {LogColor::WHITE, {"white", "\e[97m"}},
-    {LogColor::NOCOLOR, {"noc", "\e[0;39m"}}};
+    {LogColor::BLACK, {"black", "\033[30m"}},
+    {LogColor::RED, {"red", "\033[31m"}},
+    {LogColor::GREEN, {"green", "\033[32m"}},
+    {LogColor::YELLOW, {"yellow", "\033[33m"}},
+    {LogColor::BLUE, {"blue", "\033[34m"}},
+    {LogColor::MAGENTA, {"magenta", "\033[35m"}},
+    {LogColor::CYAN, {"cyan", "\033[36m"}},
+    {LogColor::LIGHT_GRAY, {"light_gray", "\033[37m"}},
+    {LogColor::DARK_GRAY, {"dark_gray", "\033[90m"}},
+    {LogColor::LIGHT_RED, {"light_red", "\033[91m"}},
+    {LogColor::LIGHT_GREEN, {"light_green", "\033[92m"}},
+    {LogColor::LIGHT_YELLOW, {"light_yellow", "\033[93m"}},
+    {LogColor::LIGHT_BLUE, {"light_blue", "\033[94m"}},
+    {LogColor::LIGHT_MAGENTA, {"light_magenta", "\033[95m"}},
+    {LogColor::LIGHT_CYAN, {"light_cyan", "\033[96m"}},
+    {LogColor::WHITE, {"white", "\033[97m"}},
+    {LogColor::NOCOLOR, {"noc", "\033[0;39m"}}};
 
 thread_local std::unordered_map<LogLevel, std::shared_ptr<LogFormat>, LogLevelHash> Logger::formatMap = {
     {LogLevel::NOFORMAT, std::make_shared<LogFormat>("", getColorCode(LogColor::NOCOLOR))},
@@ -89,9 +90,7 @@ Logger& Logger::flush() {
     if (currentLevel <= logLevel) {
         std::time_t t = std::time(0);
         char ft[64];
-        // ThreadManager::setGlobalMemoryAllocator();
         std::strftime(ft, 64, Logger::timeFormat.c_str(), std::localtime(&t));
-        // ThreadManager::restoreMemoryAllocator();
         std::stringstream s;
 
         // reset color
@@ -140,9 +139,7 @@ Logger& Logger::operator<<(const LogLevel& level) {
 }
 
 Logger& Logger::operator<<(const LogColor& color) {
-    //	LoggerFence _;
     if (Logger::colorEnabled) {
-        //		(*(std::ostringstream*)this) << Logger::colorCodes_.at(color).value;
         (*this) << Logger::colorCodes_.at(color).value;
     }
     return *this;
@@ -175,23 +172,21 @@ void Logger::LoadConfiguration() {
     colorEnabled = ConnectionManager::getInstance().configuration->get<int>(MEMO_DEFAULT_LOGGER_COLOR_ENABLE);
     logToFile = ConnectionManager::getInstance().configuration->get<bool>(MEMO_DEFAULT_LOGGER_LOG_TO_FILE);
     std::string fname = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_FILENAME);
-    std::cout << fname << std::endl;
     if (fname != logFileName && logToFile) {
         logFileName = fname;
         if (logfile.is_open()) {
-            std::cout << "Closing old logfile." << std::endl;
             logfile.close();
         }
-        std::cout << "Opening new logfile " << fname << std::endl;
         logfile.open(fname, std::ios_base::app);
     } else {
         if (!logToFile && logfile.is_open()) {
-            std::cout << "Closing logfile" << std::endl;
             logfile.close();
         } else if (logToFile) {
             logfile.open(fname, std::ios_base::app);
         }
     }
+
+    formatMap[LogLevel::CONSOLE] = std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)));
 }
 
 }  // namespace memordma

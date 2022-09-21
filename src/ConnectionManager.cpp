@@ -1,6 +1,7 @@
 #include "ConnectionManager.h"
-
 #include "Connection.h"
+
+#include <iostream>
 
 ConnectionManager::ConnectionManager() : globalConnectionId{0} {
 }
@@ -19,8 +20,8 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
     return globalConnectionId;
 }
 
-std::shared_ptr<Connection> ConnectionManager::getConnectionById( size_t id ) {
-    if ( connections.contains(id) ) {
+std::shared_ptr<Connection> ConnectionManager::getConnectionById(size_t id) {
+    if (connections.contains(id)) {
         return connections[id];
     }
     return nullptr;
