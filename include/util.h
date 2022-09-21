@@ -249,22 +249,6 @@ static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *rem
 }
 // \end socket operation
 
-static void print_config(struct config_t &config) {
-    {
-        INFO("Device name:          %s\n", config.dev_name.c_str());
-        INFO("IB port:              %u\n", config.ib_port);
-    }
-    if (!config.server_name.empty()) {
-        INFO("IP:                   %s\n", config.server_name.c_str());
-    }
-    {
-        INFO("TCP port:             %u\n", config.tcp_port);
-    }
-    if (config.gid_idx >= 0) {
-        INFO("GID index:            %u\n", config.gid_idx);
-    }
-}
-
 static double BtoMB(uint64_t byte) {
     return static_cast<double>(byte) / 1024 / 1024;
 }
