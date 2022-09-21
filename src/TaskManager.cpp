@@ -13,6 +13,21 @@
 
 using namespace memordma;
 
+static void print_config(struct config_t &config) {
+    Logger::getInstance() << LogLevel::INFO << "\tDevice name:\t\t" << config.dev_name << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\tIB port:\t\t" << config.ib_port << std::endl;
+
+    if (!config.server_name.empty()) {
+        Logger::getInstance() << LogLevel::INFO << "\tIP:\t\t\t" << config.server_name << std::endl;
+    }
+
+    Logger::getInstance() << LogLevel::INFO << "\tTCP port:\t\t" << config.tcp_port << std::endl;
+
+    if (config.gid_idx >= 0) {
+        Logger::getInstance() << LogLevel::INFO << "\tGID index:\t\t" << config.gid_idx << std::endl;
+    }
+}
+
 TaskManager::TaskManager() : globalId{1} {
     size_t init_flags = 0;
     init_flags |= connection_handling;
