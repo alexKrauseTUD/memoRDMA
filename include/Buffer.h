@@ -10,34 +10,7 @@
 
 #include "PackageManager.hpp"
 #include "common.h"
-#include "util.h"
-#include "Logger.h"
 
-// // structure to exchange data which is needed to connect the QPs
-struct cm_con_data_t {
-    uint64_t meta_receive_buf;
-    uint32_t meta_receive_rkey;
-    uint64_t meta_send_buf;
-    uint32_t meta_send_rkey;
-    uint32_t receive_num;
-    uint32_t send_num;
-    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
-    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
-    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
-    buffer_config_t buffer_config;
-    uint32_t qp_num;  // QP number
-    uint16_t lid;     // LID of the IB port
-    uint8_t gid[16];  // GID
-} __attribute__((packed));
-
-struct reconfigure_data {
-    buffer_config_t buffer_config;
-    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
-    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
-    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
-};
 
 class Buffer {
    public:

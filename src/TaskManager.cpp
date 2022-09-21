@@ -10,6 +10,7 @@
 #include "DataProvider.h"
 #include "FunctionalTests.hpp"
 #include "Logger.h"
+#include "Utility.h"
 
 using namespace memordma;
 
@@ -612,18 +613,18 @@ void TaskManager::genericBenchFunc(std::string shortName, std::string name, benc
                                                     .size_remote_send = 640,
                                                     .meta_info_size = 16};
 
-                    CHECK(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
+                    Utility::check_or_die(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
 
-                    std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << GetBytesReadable(size_rb) << ")" << std::endl;
+                    std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << Utility::GetBytesReadable(size_rb) << ")" << std::endl;
                     std::cout << std::endl;
                     std::cout << name << std::endl;
 
                     switch (tc) {
                         case ss_tput:
-                            CHECK(ConnectionManager::getInstance().throughputBenchmark(connectionId, logName, strat));
+                            Utility::check_or_die(ConnectionManager::getInstance().throughputBenchmark(connectionId, logName, strat));
                             break;
                         case ds_tput:
-                            CHECK(ConnectionManager::getInstance().consumingBenchmark(connectionId, logName, strat));
+                            Utility::check_or_die(ConnectionManager::getInstance().consumingBenchmark(connectionId, logName, strat));
                             break;
                         default:
                             std::cout << "A non-valid bench_code was provided!";

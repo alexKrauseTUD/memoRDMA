@@ -1,4 +1,5 @@
 #include "FunctionalTests.hpp"
+#include "Utility.h"
 
 using namespace memordma;
 
@@ -33,7 +34,8 @@ FunctionalTests::FunctionalTests() {
         }
     };
 
-    CallbackFunction dataTransferTestAck = [this](const size_t conId, const ReceiveBuffer* rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
+    // We have to comply with the callback function signature but don't need the size_t conId here. Thus a GCC specific unused information.
+    CallbackFunction dataTransferTestAck = [this](__attribute__ ((unused)) const size_t conId, const ReceiveBuffer* rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
         // Package header
         package_t::header_t* head = reinterpret_cast<package_t::header_t*>(rcv_buffer->getBufferPtr());
         // Start of Payload
@@ -85,7 +87,8 @@ uint8_t FunctionalTests::executeAllTests(bool lite) {
 
     out.close();
 
-    Logger::getInstance() << LogLevel::INFO << "\t[" << name << "]\tMet " << +numberProblems << " Problems while executing all tests.\n" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[" << name << "]\tMet " << +numberProblems << " Problems while executing all tests.\n"
+                          << std::endl;
 
     return numberProblems;
 }
@@ -98,8 +101,8 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
     uint8_t errorCount = 0;
     uint64_t* data = generateRandomDummyData<uint64_t>(elementCount);
 
-    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << GetBytesReadable(dataSize) << std::endl;
-    out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << GetBytesReadable(dataSize) << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
+    out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
 
     uint64_t checkSum = 0;
     for (size_t i = 0; i < elementCount; ++i) {
@@ -130,8 +133,8 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
 
-                        Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
-                        out << "[INFO]\t\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        out << "[INFO]\t\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
                         for (size_t i = 0; i < 5; ++i) {
                             receiveMap.clear();
@@ -150,9 +153,9 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
                             if (!resultsArrived) {
                                 errorCount++;
                                 Logger::getInstance() << LogLevel::ERROR << "\t[DataTransferTest]\tA result in iteration " << +i << " did not arrive within 10s!" << std::endl;
-                                Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                                Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
                                 out << "[ERROR]\t\t[DataTransferTest]\tA result in iteration " << +i << " did not arrive within 10s!" << std::endl;
-                                out << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                                out << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
                             } else {
                                 resultsArrived = false;
 
@@ -164,9 +167,9 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
                                     } else {
                                         errorCount++;
                                         Logger::getInstance() << LogLevel::ERROR << "\t[DataTransferTest]\tThe Result in iteration " << +i << " does not match the expected one. Expected: " << checkSum << "; Got: " << currentResult << std::endl;
-                                        Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                                        Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
                                         out << "[ERROR]\t\t[DataTransferTest]\tThe Result in iteration " << +i << " does not match the expected one. Expected: " << checkSum << "; Got: " << currentResult << std::endl;
-                                        out << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                                        out << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
                                     }
                                 }
                             }
@@ -177,7 +180,8 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
         }
     }
 
-    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tEnded with " << +errorCount << " Errors.\n" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tEnded with " << +errorCount << " Errors.\n"
+                          << std::endl;
     out << "[INFO]\t\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
     out << std::endl;
 
@@ -211,8 +215,8 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
                                                         .size_remote_send = bytes,
                                                         .meta_info_size = 16};
 
-                        Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
-                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
                     }
@@ -240,8 +244,8 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
                                                         .size_remote_send = bytes,
                                                         .meta_info_size = 16};
 
-                        Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
-                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
+                        out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_r_threads << "; #SB " << +num_sb << "; #ST " << +num_s_threads << std::endl;
 
                         ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
                     }
@@ -250,7 +254,8 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
         }
     }
 
-    Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors.\n" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors.\n"
+                          << std::endl;
     out << "[INFO]\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors." << std::endl;
     out << std::endl;
 
@@ -265,8 +270,8 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
     uint8_t errorCount = 0;
     uint64_t* data = generateRandomDummyData<uint64_t>(elementCount);
 
-    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << GetBytesReadable(dataSize) << std::endl;
-    out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << GetBytesReadable(dataSize) << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
+    out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
 
     uint64_t checkSum = 0;
     for (size_t i = 0; i < elementCount; ++i) {
@@ -294,8 +299,8 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
 
             ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
 
-            Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
-            out << "[INFO]\t\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            out << "[INFO]\t\t[DataTransferTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
 
             for (size_t i = 0; i < 5; ++i) {
                 receiveMap.clear();
@@ -314,9 +319,9 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
                 if (!resultsArrived) {
                     errorCount++;
                     Logger::getInstance() << LogLevel::ERROR << "\t[DataTransferTest]\tA result in iteration " << +i << " did not arrive within 10s!" << std::endl;
-                    Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+                    Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
                     out << "[ERROR]\t\t[DataTransferTest]\tA result in iteration " << +i << " did not arrive within 10s!" << std::endl;
-                    out << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+                    out << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
                 } else {
                     resultsArrived = false;
 
@@ -328,9 +333,9 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
                         } else {
                             errorCount++;
                             Logger::getInstance() << LogLevel::ERROR << "\t[DataTransferTest]\tThe Result in iteration " << +i << " does not match the expected one. Expected: " << checkSum << "; Got: " << currentResult << std::endl;
-                            Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+                            Logger::getInstance() << LogLevel::ERROR << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
                             out << "[ERROR]\t\t[DataTransferTest]\tThe Result in iteration " << +i << " does not match the expected one. Expected: " << checkSum << "; Got: " << currentResult << std::endl;
-                            out << "\t\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+                            out << "\t\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
                         }
                     }
                 }
@@ -338,7 +343,8 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
         }
     }
 
-    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tEnded with " << +errorCount << " Errors.\n" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[DataTransferTest]\tEnded with " << +errorCount << " Errors.\n"
+                          << std::endl;
     out << "[INFO]\t\t[DataTransferTest]\tEnded with " << +errorCount << " Errors." << std::endl;
     out << std::endl;
 
@@ -369,8 +375,8 @@ uint8_t FunctionalTests::bufferReconfigurationTestLite(std::ofstream& out) {
                                             .size_remote_send = bytes,
                                             .meta_info_size = 16};
 
-            Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
-            out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
 
             ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
         }
@@ -392,14 +398,15 @@ uint8_t FunctionalTests::bufferReconfigurationTestLite(std::ofstream& out) {
                                             .size_remote_send = bytes,
                                             .meta_info_size = 16};
 
-            Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
-            out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
+            out << "[INFO]\t[BufferReconfigurationTest]\tConnection-ID 1; Buffer Size " << Utility::GetBytesReadable(bytes) << "; #RB " << +num_rb << "; #RT " << +num_rb << "; #SB " << +num_rb << "; #ST " << +num_rb << std::endl;
 
             ConnectionManager::getInstance().reconfigureBuffer(1, bufferConfig);
         }
     }
 
-    Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors.\n" << std::endl;
+    Logger::getInstance() << LogLevel::INFO << "\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors.\n"
+                          << std::endl;
     out << "[INFO]\t[BufferReconfigurationTest]\tEnded with " << +errorCount << " Errors." << std::endl;
     out << std::endl;
 
@@ -407,4 +414,16 @@ uint8_t FunctionalTests::bufferReconfigurationTestLite(std::ofstream& out) {
 }
 
 FunctionalTests::~FunctionalTests() {
+}
+
+template <typename T>
+T* FunctionalTests::generateRandomDummyData(const uint64_t elementCount) {
+    std::default_random_engine generator;
+    std::uniform_int_distribution<T> distribution(0, 100);
+    auto data = reinterpret_cast<T*>(malloc(elementCount * sizeof(T)));
+    for (size_t i = 0; i < elementCount; ++i) {
+        data[i] = distribution(generator);
+    }
+
+    return data;
 }

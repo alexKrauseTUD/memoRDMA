@@ -7,13 +7,16 @@
 #include <fstream>
 #include <functional>
 #include <future>
+#include <iostream>
 #include <thread>
 #include <tuple>
 #include <vector>
 
 #include "Connection.h"
 #include "DataProvider.h"
+#include "Utility.h"
 
+using namespace memordma;
 int Connection::throughputBenchmark(std::string logName, Strategies strat) {
     /* provide data to remote */
     std::size_t maxDataElements = 1ull << MAX_DATA_SIZE;
@@ -40,14 +43,14 @@ int Connection::throughputBenchmark(std::string logName, Strategies strat) {
             typedef std::chrono::duration<double> d_sec;
             d_sec secs = e_ts - s_ts;
 
-            std::cout << "[ThroughputTest] Communicated " << dataSize << " Bytes (" << BtoMB(dataSize) << " MB) in " << secs.count() << " s -- " << BtoMB(dataSize) / (secs.count()) << " MB/s " << std::endl;
+            std::cout << "[ThroughputTest] Communicated " << dataSize << " Bytes (" << Utility::BtoMB(dataSize) << " MB) in " << secs.count() << " s -- " << Utility::BtoMB(dataSize) / (secs.count()) << " MB/s " << std::endl;
 
-            auto readable_size = GetBytesReadable(dataSize);
+            auto readable_size = Utility::GetBytesReadable(dataSize);
 
             std::cout.precision(15);
             std::cout.setf(std::ios::fixed, std::ios::floatfield);
             std::cout.setf(std::ios::showpoint);
-            out << +bufferConfig.num_own_send_threads << "\t" << +bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << +bufferConfig.num_remote_receive_threads << "\t" << +bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << BtoMB(dataSize) / (secs.count()) << std::endl
+            out << +bufferConfig.num_own_send_threads << "\t" << +bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << +bufferConfig.num_remote_receive_threads << "\t" << +bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << Utility::BtoMB(dataSize) / (secs.count()) << std::endl
                 << std::flush;
             std::cout.flags(f);
         }
@@ -96,14 +99,14 @@ int Connection::consumingBenchmark(std::string logName, Strategies strat) {
             typedef std::chrono::duration<double> d_sec;
             d_sec secs = e_ts - s_ts;
 
-            std::cout << "[ConsumeTest] Communicated " << dataSize << " Bytes (" << BtoMB(dataSize) << " MB) in " << secs.count() << " s -- " << BtoMB(dataSize) / (secs.count()) << " MB/s " << std::endl;
+            std::cout << "[ConsumeTest] Communicated " << dataSize << " Bytes (" << Utility::BtoMB(dataSize) << " MB) in " << secs.count() << " s -- " << Utility::BtoMB(dataSize) / (secs.count()) << " MB/s " << std::endl;
 
-            auto readable_size = GetBytesReadable(dataSize);
+            auto readable_size = Utility::GetBytesReadable(dataSize);
 
             std::cout.precision(15);
             std::cout.setf(std::ios::fixed, std::ios::floatfield);
             std::cout.setf(std::ios::showpoint);
-            out << bufferConfig.num_own_send_threads << "\t" << bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << bufferConfig.num_remote_receive_threads << "\t" << bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << BtoMB(dataSize) / (secs.count()) << std::endl
+            out << bufferConfig.num_own_send_threads << "\t" << bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << bufferConfig.num_remote_receive_threads << "\t" << bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << Utility::BtoMB(dataSize) / (secs.count()) << std::endl
                 << std::flush;
             std::cout.flags(f);
         }

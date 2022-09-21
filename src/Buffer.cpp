@@ -1,6 +1,13 @@
+
 #include "Buffer.h"
 
 #include <stdio.h>
+
+#include <iostream>
+
+#include "Logger.h"
+#include "Utility.h"
+#include <assert.h>
 
 Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
     if (bufferSize % 2 != 0) {
@@ -19,8 +26,8 @@ Buffer::~Buffer() {
 
 /**
  * @brief Cleanup and deallocate all resources of this buffer.
- * 
- * @return int 
+ *
+ * @return int
  */
 int Buffer::resourcesDestroy() {
     ibv_dereg_mr(mr);
@@ -31,7 +38,7 @@ int Buffer::resourcesDestroy() {
 
 /**
  * @brief For getting read access to the size of the buffer (in bytes).
- * 
+ *
  * @return const std::size_t The size of the buffer in bytes.
  */
 std::size_t Buffer::getBufferSize() const {
@@ -40,7 +47,7 @@ std::size_t Buffer::getBufferSize() const {
 
 /**
  * @brief For getting read access to the private buffer-pointer.
- * 
+ *
  * @return char* The char pointer (byte addressing) of the buffer.
  */
 char* Buffer::getBufferPtr() const {
@@ -49,16 +56,16 @@ char* Buffer::getBufferPtr() const {
 
 /**
  * @brief For getting read access to the private buffer-mr.
- * 
+ *
  * @return struct ibv_mr* The pointer to the mr of the buffer.
  */
-struct ibv_mr * Buffer::getMrPtr() const {
+struct ibv_mr* Buffer::getMrPtr() const {
     return mr;
 }
 
 /**
  * @brief Resetting the buffer to complete 0. This is technically not needed, but we do it on creation at least.
- * 
+ *
  */
 void Buffer::clearBuffer() const {
     memset(buf, 0, bufferSize);
@@ -66,11 +73,11 @@ void Buffer::clearBuffer() const {
 
 /**
  * @brief Registering the Memory Region for the buffer.
- * 
+ *
  * @param pd The protection domain where the mr should be registered.
  * @return struct ibv_mr* A pointer to the registered memory region object.
  */
-struct ibv_mr *Buffer::registerMemoryRegion(struct ibv_pd *pd) {
+struct ibv_mr* Buffer::registerMemoryRegion(struct ibv_pd* pd) {
     mr = ibv_reg_mr(pd, buf, bufferSize, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     assert(mr != NULL);
     return mr;
@@ -119,10 +126,11 @@ int Buffer::postRequest(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint
 
     auto send_result = ibv_post_send(qp, &sr, &bad_wr);
 
+    using namespace memordma;
     if (send_result != 0) {
-        std::cout << "ERROR " << send_result << std::endl;
+        ERROR("Send_result: " << send_result << std::endl;)
     }
-    CHECK(send_result);
+    Utility::check_or_die(send_result);
 
     return 0;
 }

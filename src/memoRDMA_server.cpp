@@ -12,7 +12,6 @@
 #include "ConnectionManager.h"
 #include "TaskManager.h"
 #include "common.h"
-#include "util.h"
 #include "FunctionalTests.hpp"
 #include "Logger.h"
 
@@ -33,6 +32,7 @@ using namespace memordma;
 
 int main(int argc, char *argv[]) {
     // Init Config and stuff.
+    ConnectionManager::getInstance().configuration->add( argc, argv );
     Logger::LoadConfiguration();
 
     if ( !checkLinkUp() ) {

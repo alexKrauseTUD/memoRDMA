@@ -3,6 +3,7 @@
 #include <ConnectionManager.h>
 #include <stdlib.h>
 
+#include <assert.h>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -10,13 +11,16 @@
 #include <fstream>
 #include <functional>
 #include <future>
+#include <iostream>
 #include <thread>
 #include <tuple>
 #include <vector>
 
+#include <unistd.h>
+
 #include "DataProvider.h"
 #include "Logger.h"
-#include "util.h"
+#include "Utility.h"
 
 using namespace memordma;
 
@@ -300,14 +304,14 @@ void Connection::exchangeBufferInfo() {
     memset(&my_gid, 0, sizeof(my_gid));
 
     if (config.gid_idx >= 0) {
-        CHECK(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
+        Utility::check_or_die(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
     }
 
     // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
     // etc. exchange using TCP sockets info required to connect QPs
-    local_con_data.meta_receive_buf = htonll((uintptr_t)&metaInfoReceive);
+    local_con_data.meta_receive_buf = Utility::htonll((uintptr_t)&metaInfoReceive);
     local_con_data.meta_receive_rkey = htonl(metaInfoReceiveMR->rkey);
-    local_con_data.meta_send_buf = htonll((uintptr_t)&metaInfoSend);
+    local_con_data.meta_send_buf = Utility::htonll((uintptr_t)&metaInfoSend);
     local_con_data.meta_send_rkey = htonl(metaInfoSendMR->rkey);
     local_con_data.receive_num = ownReceiveBuffer.size();
     local_con_data.send_num = ownSendBuffer.size();
@@ -315,14 +319,14 @@ void Connection::exchangeBufferInfo() {
     // collect buffer information for RB
     auto pos = 0;
     for (const auto &rb : ownReceiveBuffer) {
-        local_con_data.receive_buf[pos] = htonll((uintptr_t)rb->getBufferPtr());
+        local_con_data.receive_buf[pos] = Utility::htonll((uintptr_t)rb->getBufferPtr());
         local_con_data.receive_rkey[pos++] = htonl(rb->getMrPtr()->rkey);
     }
 
     // collect buffer information for SB
     pos = 0;
     for (const auto &sb : ownSendBuffer) {
-        local_con_data.send_buf[pos] = htonll((uintptr_t)sb->getBufferPtr());
+        local_con_data.send_buf[pos] = Utility::htonll((uintptr_t)sb->getBufferPtr());
         local_con_data.send_rkey[pos++] = htonl(sb->getMrPtr()->rkey);
     }
 
@@ -340,9 +344,9 @@ void Connection::exchangeBufferInfo() {
         send_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data);
     }
 
-    remote_con_data.meta_receive_buf = ntohll(tmp_con_data.meta_receive_buf);
+    remote_con_data.meta_receive_buf = Utility::ntohll(tmp_con_data.meta_receive_buf);
     remote_con_data.meta_receive_rkey = ntohl(tmp_con_data.meta_receive_rkey);
-    remote_con_data.meta_send_buf = ntohll(tmp_con_data.meta_send_buf);
+    remote_con_data.meta_send_buf = Utility::ntohll(tmp_con_data.meta_send_buf);
     remote_con_data.meta_send_rkey = ntohl(tmp_con_data.meta_send_rkey);
     remote_con_data.receive_num = tmp_con_data.receive_num;
     remote_con_data.send_num = tmp_con_data.send_num;
@@ -360,7 +364,7 @@ void Connection::exchangeBufferInfo() {
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
     for (size_t i = 0; i < temp_receive_buf.size(); ++i) {
-        res.remote_receive_buffer.push_back(ntohll(temp_receive_buf[i]));
+        res.remote_receive_buffer.push_back(Utility::ntohll(temp_receive_buf[i]));
         res.remote_receive_rkeys.push_back(ntohl(temp_receive_rkey[i]));
     }
 
@@ -370,14 +374,14 @@ void Connection::exchangeBufferInfo() {
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
     for (size_t i = 0; i < temp_send_buf.size(); ++i) {
-        res.remote_send_buffer.push_back(ntohll(temp_send_buf[i]));
+        res.remote_send_buffer.push_back(Utility::ntohll(temp_send_buf[i]));
         res.remote_send_rkeys.push_back(ntohl(temp_receive_rkey[i]));
     }
 
     /* Change the queue pair state */
-    CHECK(changeQueuePairStateToInit(res.qp));
-    CHECK(changeQueuePairStateToRTR(res.qp, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid));
-    CHECK(changeQueuePairStateToRTS(res.qp));
+    Utility::check_or_die(changeQueuePairStateToInit(res.qp));
+    Utility::check_or_die(changeQueuePairStateToRTR(res.qp, remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid));
+    Utility::check_or_die(changeQueuePairStateToRTS(res.qp));
 }
 
 /**
@@ -390,7 +394,7 @@ void Connection::createResources() {
     struct ibv_context *context = createContext();
 
     // query port properties
-    CHECK(ibv_query_port(context, config.ib_port, &res.port_attr));
+    Utility::check_or_die(ibv_query_port(context, config.ib_port, &res.port_attr));
 
     /* Create a protection domain */
     struct ibv_pd *protection_domain = ibv_alloc_pd(context);
@@ -606,8 +610,7 @@ int Connection::pollCompletion() {
     }
 
     if (wc.status != IBV_WC_SUCCESS) {
-        ERROR("Got bad completion with status: 0x%x, vendor syndrome: 0x%x\n",
-              wc.status, wc.vendor_err);
+        ERROR("Got bad completion with status: " << std::hex << wc.status << " vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
         goto die;
     }
 
@@ -1322,4 +1325,157 @@ int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
 
 Connection::~Connection() {
     closeConnection();
+}
+
+// \begin socket operation
+//
+// For simplicity, the example program uses TCP sockets to exchange control
+// information. If a TCP/IP stack/connection is not available, connection
+// manager (CM) may be used to pass this information. Use of CM is beyond the
+// scope of this example.
+
+// Connect a socket. If servername is specified a client connection will be
+// initiated to the indicated server and port. Otherwise listen on the indicated
+// port for an incoming connection.
+int Connection::sock_connect(std::string client_name, int port) {
+    struct addrinfo *resolved_addr = NULL;
+    struct addrinfo *iterator;
+    char service[6];
+    int sockfd = -1;
+    int listenfd = 0;
+
+    // @man getaddrinfo:
+    //  struct addrinfo {
+    //      int             ai_flags;
+    //      int             ai_family;
+    //      int             ai_socktype;
+    //      int             ai_protocol;
+    //      socklen_t       ai_addrlen;
+    //      struct sockaddr *ai_addr;
+    //      char            *ai_canonname;
+    //      struct addrinfo *ai_next;
+    //  }
+    struct addrinfo hints = {.ai_flags = AI_PASSIVE,
+                             .ai_family = AF_INET,
+                             .ai_socktype = SOCK_STREAM,
+                             .ai_protocol = 0,
+                             .ai_addrlen = 0,
+                             .ai_addr = nullptr,
+                             .ai_canonname = nullptr,
+                             .ai_next = nullptr
+                             };
+
+    if (client_name.empty()) {
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port + k);
+
+            Utility::check_or_die(getaddrinfo(NULL, service, &hints, &resolved_addr));
+
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Client mode: setup listening socket and accept a connection
+                listenfd = sockfd;
+                err = bind(listenfd, iterator->ai_addr, iterator->ai_addrlen);
+                if (err == 0) {
+                    err = listen(listenfd, 1);
+                    if (err == 0) {
+                        INFO("Waiting on port " << port + k << " for TCP connection" << std::endl;)
+                        sockfd = accept(listenfd, NULL, 0);
+                    }
+                }
+            }
+
+            if (err == 0) {
+                return sockfd;
+            }
+        }
+    } else {
+        int err;
+        for (int k = 0; k < 20; ++k) {
+            // resolve DNS address, user sockfd as temp storage
+            sprintf(service, "%d", port + k);
+
+            Utility::check_or_die(getaddrinfo(client_name.c_str(), service, &hints, &resolved_addr));
+
+            for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
+                sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
+                assert(sockfd >= 0);
+
+                // Server mode: initial connection to remote
+                err = connect(sockfd, iterator->ai_addr, iterator->ai_addrlen);
+            }
+
+            if (err == 0) {
+                INFO("Connecting on port " << port + k << " for TCP connection" << std::endl;)
+                return sockfd;
+            }
+        }
+    }
+
+    return -1;
+}
+
+// Sync data across a socket. The indicated local data will be sent to the
+// remote. It will then wait for the remote to send its data back. It is
+// assumned that the two sides are in sync and call this function in the proper
+// order. Chaos will ensure if they are not. Also note this is a blocking
+// function and will wait for the full data to be received from the remote.
+int Connection::sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data) {
+    int read_bytes = 0;
+    int write_bytes = 0;
+
+    write_bytes = write(sockfd, local_data, xfer_size);
+    assert(write_bytes == xfer_size);
+
+    read_bytes = read(sockfd, remote_data, xfer_size);
+    assert(read_bytes == xfer_size);
+
+    INFO("SYNCHRONIZED!\n\n");
+
+    // FIXME: hard code that always returns no error
+    return 0;
+}
+// \end socket operation
+
+buffer_config_t Connection::invertBufferConfig(buffer_config_t bufferConfig) {
+    return {.num_own_send_threads = bufferConfig.num_remote_send_threads,
+            .num_own_receive_threads = bufferConfig.num_remote_receive_threads,
+            .num_remote_send_threads = bufferConfig.num_own_send_threads,
+            .num_remote_receive_threads = bufferConfig.num_own_receive_threads,
+            .num_own_receive = bufferConfig.num_remote_receive,
+            .size_own_receive = bufferConfig.size_remote_receive,
+            .num_remote_receive = bufferConfig.num_own_receive,
+            .size_remote_receive = bufferConfig.size_own_receive,
+            .num_own_send = bufferConfig.num_remote_send,
+            .size_own_send = bufferConfig.size_remote_send,
+            .num_remote_send = bufferConfig.num_own_send,
+            .size_remote_send = bufferConfig.size_own_send,
+            .meta_info_size = bufferConfig.meta_info_size};
+}
+
+void Connection::sock_close(int &sockfd) {
+    Utility::check_or_die(close(sockfd));
+}
+
+int Connection::receive_tcp(int sockfd, int xfer_size, char *remote_data) {
+    int read_bytes = 0;
+
+    read_bytes = read(sockfd, remote_data, xfer_size);
+    assert(read_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
+}
+int Connection::send_tcp(int sockfd, int xfer_size, char *local_data) {
+    int write_bytes = 0;
+
+    write_bytes = write(sockfd, local_data, xfer_size);
+    assert(write_bytes == xfer_size);
+
+    // FIXME: hard code that always returns no error
+    return 0;
 }

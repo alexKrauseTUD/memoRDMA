@@ -11,9 +11,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "Logger.h"
-#include "util.h"
+#include "Utility.h"
 
 using namespace memordma;
 
@@ -82,6 +83,7 @@ void Configuration::add(int argc, char* argv[]) {
             argument.erase(0, 1);
             std::string key = argument.substr(0, pos - 1);
             std::string value = argument.substr(pos, std::string::npos);
+            std::cout << "K/V: " << key << " " << value << std::endl;
             insert(key, value);
         }
     }
@@ -163,6 +165,7 @@ bool Configuration::writeConfiguration(std::string filename, bool writeDescripti
 }
 
 bool Configuration::exists(std::string key) {
+    std::cout << "Checking " << key << std::endl;
     return conf.count(key);
 }
 
@@ -181,6 +184,7 @@ std::string Configuration::getAsString(std::string key, bool* exists, bool lower
         *exists = this->exists(key);
     }
     if (this->exists(key)) {
+        std::cout << "Key " << key << " exists" << std::endl;
         if (lowercase) {
             std::string data(conf[key]);
             std::transform(data.begin(), data.end(), data.begin(),
@@ -208,10 +212,10 @@ void Configuration::insert(std::string key, std::string value) {
     // make lowercase, trim whitespaces and remove quotes
         std::transform(key.begin(), key.end(), key.begin(),
                            [](unsigned char c) { return std::tolower(c); });
-    trim(key);
-    trim(value);
-    trim_any_of(key, "\"\'");
-    trim_any_of(value, "\"\'");
+    Utility::trim(key);
+    Utility::trim(value);
+    Utility::trim_any_of(key, "\"\'");
+    Utility::trim_any_of(value, "\"\'");
 
     if (key.length() < 1) {
         return;

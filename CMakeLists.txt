@@ -23,6 +23,14 @@ else()
     message( "Beware! Existing Config in binary dir but none found in root dir.")
 endif()
 
+# Remove all definitions from CMakeCache
+remove_definitions(-DMEMO_NOLOGGING -DMEMO_NOINFOLOGGING -DMEMO_NODEBUGLOGGING)
+
+# Add Logger Configuration as you please
+# add_definitions(-DMEMO_NOLOGGING)
+# add_definitions(-DMEMO_NOINFOLOGGING)
+# add_definitions(-DMEMO_NODEBUGLOGGING)
+
 add_executable(memoRDMA_server ${SRC_SRV} ${HEADERS})
 target_compile_options(memoRDMA_server PRIVATE "${OPTIMIZE_OPTIONS}")
 target_link_libraries(memoRDMA_server "ibverbs" "pthread")
