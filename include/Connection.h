@@ -144,9 +144,11 @@ class Connection {
     std::mutex receiveBufferBlockMutex;
     std::mutex sendBufferBlockMutex;
     std::mutex reconfigureMutex;
+    std::mutex closingMutex;
 
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
+    bool connectionClosed = false;
 
     std::vector<std::unique_ptr<ReceiveBuffer>> ownReceiveBuffer;
     std::vector<std::unique_ptr<SendBuffer>> ownSendBuffer;

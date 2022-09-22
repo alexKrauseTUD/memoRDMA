@@ -388,7 +388,7 @@ void TaskManager::setup(size_t init_flags) {
         }));
 
         registerTask(std::make_shared<Task>("closeAllConnections", "Close All Connections", []() -> void {
-            ConnectionManager::getInstance().closeAllConnections();
+            ConnectionManager::getInstance().closeAllConnections(true);
         }));
     }
 
