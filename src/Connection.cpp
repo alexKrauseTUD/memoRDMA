@@ -936,7 +936,7 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::closeConnection(bool sendRemote) {
-    std::unique_lock<std::mutex> lk(closingMutex);
+    std::lock_guard<std::mutex> lk(closingMutex);
     if (!connectionClosed) {
         connectionClosed = true;
         setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
