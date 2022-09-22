@@ -165,7 +165,6 @@ bool Configuration::writeConfiguration(std::string filename, bool writeDescripti
 }
 
 bool Configuration::exists(std::string key) {
-    std::cout << "Checking " << key << std::endl;
     return conf.count(key);
 }
 
@@ -184,7 +183,6 @@ std::string Configuration::getAsString(std::string key, bool* exists, bool lower
         *exists = this->exists(key);
     }
     if (this->exists(key)) {
-        std::cout << "Key " << key << " exists" << std::endl;
         if (lowercase) {
             std::string data(conf[key]);
             std::transform(data.begin(), data.end(), data.begin(),
