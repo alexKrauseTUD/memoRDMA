@@ -29,7 +29,7 @@ class ConnectionManager {
     CallbackFunction getCallback( uint8_t code ) const;
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
-    int closeAllConnections();
+    int closeAllConnections(bool remoteShutdown);
     int sendData(std::size_t connectionId, char* data, std::size_t dataSize, char* customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
     int sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote);
     int sendCustomOpcodeToAllConnections( uint8_t code );
@@ -44,7 +44,7 @@ class ConnectionManager {
     int throughputBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
     int consumingBenchmark(std::size_t connectionId, std::string logName, Strategies strat);
 
-    void stop();
+    void stop(bool remoteShutdown);
     bool abortSignaled() const;
 
     std::unique_ptr<Configuration> configuration;

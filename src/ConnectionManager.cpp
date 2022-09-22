@@ -7,7 +7,7 @@ ConnectionManager::ConnectionManager() : globalConnectionId{0} {
 }
 
 ConnectionManager::~ConnectionManager() {
-    stop();
+    stop(false);
 }
 
 int ConnectionManager::registerConnection(config_t &config, buffer_config_t &bufferConfig) {
@@ -70,12 +70,12 @@ int ConnectionManager::closeConnection(std::size_t connectionId, bool sendRemote
     return 1;
 }
 
-int ConnectionManager::closeAllConnections() {
+int ConnectionManager::closeAllConnections(bool remoteShutdown) {
     std::size_t success = 0;
     std::size_t allSuccess = 0;
 
     for (auto &[name, con] : connections) {
-        success = con->closeConnection();
+        success = con->closeConnection(remoteShutdown);
         if (success == 0)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
         else
@@ -83,7 +83,7 @@ int ConnectionManager::closeAllConnections() {
         allSuccess += success;
     }
 
-    if (allSuccess == 0) {
+    if (connections.size() && allSuccess == 0) {
         std::cout << "All Connections were successfully closed!" << std::endl;
         connections.clear();
     } else {
@@ -196,9 +196,9 @@ int ConnectionManager::consumingBenchmark(std::size_t connectionId, std::string 
     return 1;
 }
 
-void ConnectionManager::stop() {
+void ConnectionManager::stop(bool remoteShutdown) {
     if (!stopped) {
-        closeAllConnections();
+        closeAllConnections(remoteShutdown);
     }
 }
 

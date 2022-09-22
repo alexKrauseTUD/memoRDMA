@@ -1,12 +1,14 @@
 #include "Connection.h"
 
 #include <ConnectionManager.h>
-#include <stdlib.h>
-
 #include <assert.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <csignal>
 #include <cstring>
 #include <fstream>
 #include <functional>
@@ -15,8 +17,6 @@
 #include <thread>
 #include <tuple>
 #include <vector>
-
-#include <unistd.h>
 
 #include "DataProvider.h"
 #include "Logger.h"
@@ -84,11 +84,8 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         ackReconfigureBuffer(i);
                     } break;
                     case rdma_shutdown: {
-                        auto closeFunc = [this]() {
-                            closeConnection(false);
-                        };
-                        setReceiveOpcode(i, rdma_blocked, false);
-                        std::thread(closeFunc).detach();
+                        auto shutdown = []() {std::raise(SIGUSR1);};
+                        std::thread(shutdown).detach();
                     }; break;
                     default: {
                         continue;
@@ -939,9 +936,12 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::closeConnection(bool sendRemote) {
-    setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
-
-    destroyResources();
+    std::unique_lock<std::mutex> lk(closingMutex);
+    if (!connectionClosed) {
+        connectionClosed = true;
+        setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
+        destroyResources();
+    }
 
     return 0;
 }
@@ -1362,8 +1362,7 @@ int Connection::sock_connect(std::string client_name, int port) {
                              .ai_addrlen = 0,
                              .ai_addr = nullptr,
                              .ai_canonname = nullptr,
-                             .ai_next = nullptr
-                             };
+                             .ai_next = nullptr};
 
     if (client_name.empty()) {
         int err;
