@@ -28,7 +28,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 
     // for resetting the buffer -> this is needed for the callbacks as they do not have access to the necessary structures
     reset_buffer = [this](const size_t i) -> void {
-        // ownReceiveBuffer[i]->clearBuffer();
+        ownReceiveBuffer[i]->clearBuffer();
         setReceiveOpcode(i, rdma_ready, true);
     };
 
@@ -37,7 +37,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         // using namespace std::chrono_literals;
 
         // std::ios_base::fmtflags f(std::cout.flags());
-        Logger::getInstance() << LogLevel::INFO << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
+        Logger::getInstance() << LogLevel::INFO << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::endl;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         // currently this works with (busy) waiting -> TODO: conditional variable with wait
@@ -102,7 +102,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         // using namespace std::chrono_literals;
 
         // std::ios_base::fmtflags f(std::cout.flags());
-        Logger::getInstance() << LogLevel::INFO << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
+        Logger::getInstance() << LogLevel::INFO << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::endl;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
@@ -761,6 +761,7 @@ int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
  * @return uint64_t The generated 'random' id.
  */
 uint64_t Connection::generatePackageID() {
+    std::lock_guard<std::mutex> lg(idGeneratorMutex);
     return randGen();
 }
 

@@ -84,6 +84,7 @@ class Connection {
     std::mutex receiveBufferBlockMutex;
     std::mutex sendBufferBlockMutex;
     std::mutex reconfigureMutex;
+    std::mutex idGeneratorMutex;
 
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
