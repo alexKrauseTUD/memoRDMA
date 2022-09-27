@@ -24,7 +24,7 @@
 
 using namespace memordma;
 
-Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
+Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false), completionAbort(false) {
     config = _config;
     bufferConfig = _bufferConfig;
     localConId = _localConId;
@@ -41,7 +41,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         // using namespace std::chrono_literals;
 
         // std::ios_base::fmtflags f(std::cout.flags());
-        Logger::getInstance() << LogLevel::INFO << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::flush;
+        Logger::getInstance() << LogLevel::INFO << "[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::endl;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         // currently this works with (busy) waiting -> TODO: conditional variable with wait
@@ -84,7 +84,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         ackReconfigureBuffer(i);
                     } break;
                     case rdma_shutdown: {
-                        auto shutdown = []() {std::raise(SIGUSR1);};
+                        auto shutdown = []() { std::raise(SIGUSR1); };
                         std::thread(shutdown).detach();
                     }; break;
                     default: {
@@ -103,7 +103,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         // using namespace std::chrono_literals;
 
         // std::ios_base::fmtflags f(std::cout.flags());
-        Logger::getInstance() << LogLevel::INFO << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::flush;
+        Logger::getInstance() << LogLevel::INFO << "[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::endl;
         size_t metaSizeHalf = metaInfoReceive.size() / 2;
 
         while (!*abort) {
@@ -130,6 +130,38 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
         }
 
         Logger::getInstance() << LogLevel::INFO << "[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl;
+    };
+
+    pollCompletion = [this](std::atomic<bool> *abort) -> void {
+        Logger::getInstance() << LogLevel::INFO << "[pollCompletion] Starting thread!" << std::endl;
+
+        while (!*abort) {
+            struct ibv_wc wc;
+            int poll_result = ibv_poll_cq(res.cq, 1, &wc);
+
+            if (poll_result == 0) {
+                continue;
+            } else if (poll_result < 0) {
+                // poll CQ failed
+                ERROR("poll CQ failed\n");
+            }
+
+            if (wc.status != IBV_WC_SUCCESS) {
+                ERROR("Got bad completion with status: " << std::hex << wc.status << " vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
+                exit(EXIT_FAILURE);
+            }
+
+            if (wc.wr_id < 100) {
+                const size_t notify_remote_rb_id = (100 * (wc.wr_id / 10)) /* 100, 200, ..., 800 */ + ((wc.wr_id % 10) + (metaInfoReceive.size() / 2)) /* 8 <= something <= 15 */;
+                auto &completed_sb = ownSendBuffer[(wc.wr_id / 10) - 1];
+                DEBUG2(notify_remote_rb_id << "\t" << wc.wr_id << std::endl);
+                setReceiveOpcode(notify_remote_rb_id, completed_sb->sendOpcode, completed_sb->sendOpcode != rdma_ready);
+            } else {
+                setSendOpcode((wc.wr_id / 100) - 1, rdma_ready, false);
+            }
+        }
+
+        Logger::getInstance() << LogLevel::INFO << "[pollCompletion] Ending through abort!" << std::endl;
     };
 
     init();
@@ -168,6 +200,8 @@ void Connection::init() {
     for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
         sendWorkerPool.emplace_back(std::make_unique<std::thread>(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
     }
+
+    pollCompletionThreadPool.emplace_back(std::make_unique<std::thread>(pollCompletion, &completionAbort));
 }
 
 /**
@@ -184,6 +218,10 @@ void Connection::destroyResources() {
     std::for_each(sendWorkerPool.begin(), sendWorkerPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
     sendWorkerPool.clear();
     globalSendAbort = false;
+    completionAbort = true;
+    std::for_each(pollCompletionThreadPool.begin(), pollCompletionThreadPool.end(), [](std::unique_ptr<std::thread> &t) { t->join(); });
+    pollCompletionThreadPool.clear();
+    completionAbort = false;
 
     // delete RDMA buffers -> their destructors have to take care of their attributes!
     ownReceiveBuffer.clear();
@@ -573,51 +611,6 @@ int Connection::changeQueuePairStateToRTS(struct ibv_qp *qp) {
 }
 
 /**
- * @brief Poll the CQ for a single event. This function will continue to poll the queue until MAX_POLL_TIMEOUT ms have passed.
- *
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::pollCompletion() {
-    struct ibv_wc wc;
-    unsigned long start_time_ms;
-    unsigned long curr_time_ms;
-    struct timeval curr_time;
-    int poll_result;
-
-    // poll the completion for a while before giving up of doing it
-    gettimeofday(&curr_time, NULL);
-    start_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
-    do {
-        poll_result = ibv_poll_cq(res.cq, 1, &wc);
-        gettimeofday(&curr_time, NULL);
-        curr_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
-    } while ((poll_result == 0) &&
-             ((curr_time_ms - start_time_ms) < MAX_POLL_CQ_TIMEOUT));
-
-    if (poll_result < 0) {
-        // poll CQ failed
-        ERROR("poll CQ failed\n");
-        goto die;
-    } else if (poll_result == 0) {
-        ERROR("Completion wasn't found in the CQ after timeout\n");
-        goto die;
-    } else {
-        // CQE found
-        // INFO("Completion was found in CQ with status 0x%x\n", wc.status);
-    }
-
-    if (wc.status != IBV_WC_SUCCESS) {
-        ERROR("Got bad completion with status: " << std::hex << wc.status << " vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
-        goto die;
-    }
-
-    // FIXME: ;)
-    return 0;
-die:
-    exit(EXIT_FAILURE);
-}
-
-/**
  * @brief Calculating how much bytes of payload can fit into one remote RB.
  *
  * @param customMetaDataSize The size of the custom meta data. This is only known to the workload and not to package or buffer.
@@ -728,16 +721,17 @@ int Connection::__sendData(const size_t index, Strategies strat) {
     int nextFreeRec = findNextFreeReceiveAndBlock();
 
     if (strat == Strategies::push) {
-        sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->getBufferPtr(), 0);
-        pollCompletion();
+        DEBUG2(nextFreeRec << std::endl);
+        sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->getBufferPtr(), 10 * (index + 1) + nextFreeRec);
+        // pollCompletion();
     }
 
-    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
+    // setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
 
-    if (strat == Strategies::push) {
-        // sb->clearBuffer();
-        setSendOpcode(index, rdma_ready, false);
-    }
+    // if (strat == Strategies::push) {
+    //     // sb->clearBuffer();
+    //     setSendOpcode(index, rdma_ready, false);
+    // }
 
     return 0;
 }
@@ -802,10 +796,11 @@ int Connection::getNextFreeSend() {
  */
 void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote) {
     std::lock_guard<std::mutex> lk(receiveBufferCheckMutex);
-    metaInfoReceive[index] = opcode;
+    const size_t localRbIndex = index % 100;
+    metaInfoReceive[localRbIndex] = opcode;
 
     if (sendToRemote) {
-        size_t remoteIndex = (index + (metaInfoReceive.size() / 2)) % metaInfoReceive.size();
+        size_t remoteIndex = (localRbIndex + (metaInfoReceive.size() / 2)) % metaInfoReceive.size();
 
         struct ibv_send_wr sr;
         struct ibv_sge sge;
@@ -816,7 +811,7 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
         // prepare the scatter / gather entry
         memset(&sge, 0, sizeof(sge));
 
-        sge.addr = (uintptr_t)(&(metaInfoReceive[index]));
+        sge.addr = (uintptr_t)(&(metaInfoReceive[localRbIndex]));
         sge.length = entrySize;
         sge.lkey = metaInfoReceiveMR->lkey;
 
@@ -824,7 +819,7 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
         memset(&sr, 0, sizeof(sr));
 
         sr.next = NULL;
-        sr.wr_id = 0;
+        sr.wr_id = index;
         sr.sg_list = &sge;
 
         sr.num_sge = 1;
@@ -837,7 +832,7 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
 
         ibv_post_send(res.qp, &sr, &bad_wr);
 
-        pollCompletion();
+        // pollCompletion();
     }
 }
 
@@ -884,7 +879,7 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
 
         ibv_post_send(res.qp, &sr, &bad_wr);
 
-        pollCompletion();
+        // pollCompletion();
     }
 }
 
@@ -908,7 +903,7 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
         }
 
         ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.qp, ownReceiveBuffer[index]->getBufferPtr(), 0);
-        pollCompletion();
+        // pollCompletion();
         setSendOpcode(sbIndex, rdma_ready, true);
     }
 

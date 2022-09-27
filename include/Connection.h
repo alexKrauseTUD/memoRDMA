@@ -172,7 +172,7 @@ class Connection {
     int changeQueuePairStateToInit(struct ibv_qp *queue_pair);
     int changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
-    int pollCompletion();
+    // int pollCompletion();
 
     reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
     void ackReconfigureBuffer(size_t index);
@@ -189,12 +189,16 @@ class Connection {
 
     std::atomic<bool> globalReceiveAbort;
     std::atomic<bool> globalSendAbort;
+    std::atomic<bool> completionAbort;
 
     void destroyResources();
 
     ResetFunction reset_buffer;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
+
+    std::function<void(std::atomic<bool> *)> pollCompletion;
+    std::vector<std::unique_ptr<std::thread>> pollCompletionThreadPool;
 
     std::mt19937_64 randGen;
 
