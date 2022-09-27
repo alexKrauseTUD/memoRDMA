@@ -32,7 +32,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
 
     // for resetting the buffer -> this is needed for the callbacks as they do not have access to the necessary structures
     reset_buffer = [this](const size_t i) -> void {
-        // ownReceiveBuffer[i]->clearBuffer();
+        ownReceiveBuffer[i]->clearBuffer();
         setReceiveOpcode(i, rdma_ready, true);
     };
 
@@ -755,6 +755,7 @@ int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
  * @return uint64_t The generated 'random' id.
  */
 uint64_t Connection::generatePackageID() {
+    std::lock_guard<std::mutex> lg(idGeneratorMutex);
     return randGen();
 }
 

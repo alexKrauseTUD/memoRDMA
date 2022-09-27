@@ -145,6 +145,7 @@ class Connection {
     std::mutex sendBufferBlockMutex;
     std::mutex reconfigureMutex;
     std::mutex closingMutex;
+    std::mutex idGeneratorMutex;
 
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
