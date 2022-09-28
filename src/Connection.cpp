@@ -33,7 +33,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     // for resetting the buffer -> this is needed for the callbacks as they do not have access to the necessary structures
     reset_buffer = [this](const size_t i) -> void {
         ownReceiveBuffer[i]->clearBuffer();
-        setReceiveOpcode(i, rdma_ready, true);
+        setReceiveOpcode(1000 + i, rdma_ready, true);
     };
 
     // for the receiving threads -> check whether a RB is ready to be consumed
@@ -74,10 +74,13 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         receiveDataFromRemote(i, true, Strategies::pull);
                     } break;
                     case rdma_reconfigure: {
+                        // package_t::header_t *header = reinterpret_cast<package_t::header_t *>(ownReceiveBuffer[i]->getBufferPtr());
+                        // DEBUG2("GOT RECONFIGURE\t" << +i << " ID: " << header->id << " Package Number: " << header->package_number << std::endl);
+
                         auto recFunc = [this](size_t index) {
                             receiveReconfigureBuffer(index);
                         };
-                        setReceiveOpcode(i, rdma_reconfiguring, false);
+                        setReceiveOpcode(1000 + i, rdma_reconfiguring, false);
                         std::thread(recFunc, i).detach();
                     } break;
                     case rdma_reconfigure_ack: {
@@ -133,7 +136,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     };
 
     pollCompletion = [this](std::atomic<bool> *abort) -> void {
-        Logger::getInstance() << LogLevel::INFO << "[pollCompletion] Starting thread!" << std::endl;
+        INFO("[pollCompletion] Starting thread!" << std::endl);
 
         while (!*abort) {
             struct ibv_wc wc;
@@ -147,21 +150,36 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
             }
 
             if (wc.status != IBV_WC_SUCCESS) {
-                ERROR("Got bad completion with status: " << std::hex << wc.status << " vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
+                ERROR("Got bad completion with status: " << ibv_wc_status_str(wc.status) << " (" << std::hex << wc.status << ") vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
                 exit(EXIT_FAILURE);
             }
 
-            if (wc.wr_id < 100) {
-                const size_t notify_remote_rb_id = (100 * (wc.wr_id / 10)) /* 100, 200, ..., 800 */ + ((wc.wr_id % 10) + (metaInfoReceive.size() / 2)) /* 8 <= something <= 15 */;
-                auto &completed_sb = ownSendBuffer[(wc.wr_id / 10) - 1];
-                DEBUG2(notify_remote_rb_id << "\t" << wc.wr_id << std::endl);
+            // DEBUG2("Current wr_id: " << wc.wr_id << std::endl);
+
+            if (wc.wr_id < 10) {
+                // This is no important completion atm -> no need to do anything -> TODO: fix the corresponding positions to be meaningfull
+                // DEBUG2("<10: " << wc.wr_id << std::endl);
+                continue;
+            } else if (wc.wr_id < 100) {
+                const size_t sbIndex = (wc.wr_id / 10) - 1;
+                const size_t rbIndex = wc.wr_id % 10;
+                const size_t notify_remote_rb_id = (100 * (sbIndex + 1)) /* 100, 200, ..., 800 */ + (rbIndex + (metaInfoReceive.size() / 2)) /* 8 <= something <= 15 */;
+                auto &completed_sb = ownSendBuffer[sbIndex];
+                // DEBUG2(notify_remote_rb_id << std::endl);
+                completed_sb->clearBuffer();
                 setReceiveOpcode(notify_remote_rb_id, completed_sb->sendOpcode, completed_sb->sendOpcode != rdma_ready);
+                if (completed_sb->sendOpcode == rdma_ready) {
+                    setSendOpcode(1000 + sbIndex, rdma_ready, false);
+                }
+            } else if (wc.wr_id < 1000) {
+                setSendOpcode(1000 + ((wc.wr_id / 100) - 1), rdma_ready, false);
             } else {
-                setSendOpcode((wc.wr_id / 100) - 1, rdma_ready, false);
+                // DEBUG2(">=1000: " << wc.wr_id << std::endl);
+                continue;
             }
         }
 
-        Logger::getInstance() << LogLevel::INFO << "[pollCompletion] Ending through abort!" << std::endl;
+        INFO("[pollCompletion] Ending through abort!" << std::endl);
     };
 
     init();
@@ -184,12 +202,14 @@ void Connection::init() {
     // done with TCP so socket is closed -> sometimes this seems to not work 100 percent
     sock_close(res.sock);
 
+    pollCompletionThreadPool.emplace_back(std::make_unique<std::thread>(pollCompletion, &completionAbort));
+
     // the buffers are set locally and remotly to ready (usable) -> this can not be done on creation as the remote meta structure is not known at this moment
     for (size_t rbi = 0; rbi < bufferConfig.num_own_receive; ++rbi) {
-        setReceiveOpcode(rbi, rdma_ready, true);
+        setReceiveOpcode(1000 + rbi, rdma_ready, true);
     }
     for (size_t sbi = 0; sbi < bufferConfig.num_own_send; ++sbi) {
-        setSendOpcode(sbi, rdma_ready, true);
+        setSendOpcode(1000 + sbi, rdma_ready, true);
     }
 
     // as much threads as wanted are spawned
@@ -200,8 +220,6 @@ void Connection::init() {
     for (size_t tid = 0; tid < bufferConfig.num_own_send_threads; ++tid) {
         sendWorkerPool.emplace_back(std::make_unique<std::thread>(check_send, &globalSendAbort, tid, bufferConfig.num_own_send_threads));
     }
-
-    pollCompletionThreadPool.emplace_back(std::make_unique<std::thread>(pollCompletion, &completionAbort));
 }
 
 /**
@@ -247,20 +265,21 @@ void Connection::destroyResources() {
  *
  */
 void Connection::printConnectionInfo() const {
-    std::cout << "Remote IP:\t\t\t" << config.server_name << "\n"
-              << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
-              << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
-              << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
-              << "\tOwn RB Size:\t\t" << bufferConfig.size_own_receive << "\n"
-              << "\tRemote SB Number:\t" << +bufferConfig.num_remote_send << "\n"
-              << "\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
-              << "\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
-              << "\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
-              << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
-              << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
-              << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
-              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
-              << std::endl;
+    INFO("Connection Information:\n"
+         << "\t\tRemote IP:\t\t" << config.server_name << "\n"
+         << "\t\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
+         << "\t\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
+         << "\t\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
+         << "\t\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
+         << "\t\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
+         << "\t\tOwn RB Size:\t\t" << bufferConfig.size_own_receive << "\n"
+         << "\t\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
+         << "\t\tRemote SB Number:\t" << +bufferConfig.num_remote_send << "\n"
+         << "\t\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
+         << "\t\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
+         << "\t\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
+         << "\t\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
+         << std::endl);
 }
 
 /**
@@ -270,7 +289,7 @@ void Connection::printConnectionInfo() const {
 void Connection::setupSendBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
         ownSendBuffer.push_back(std::make_unique<SendBuffer>(bufferConfig.size_own_send));
-        setSendOpcode(i, rdma_ready, false);
+        setSendOpcode(1000 + i, rdma_ready, false);
     }
 }
 
@@ -281,7 +300,7 @@ void Connection::setupSendBuffer() {
 void Connection::setupReceiveBuffer() {
     for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
         ownReceiveBuffer.push_back(std::make_unique<ReceiveBuffer>(bufferConfig.size_own_receive));
-        setReceiveOpcode(i, rdma_ready, false);
+        setReceiveOpcode(1000 + i, rdma_ready, false);
     }
 }
 
@@ -655,14 +674,16 @@ int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t 
 
         sb->loadPackage(sb->getBufferPtr(), &package, appMetaData);
 
+        // DEBUG1("Loaded package id: " << package.get_header().id << " with package number: " << package.get_header().package_number << " on SB: " << nextFreeSend << std::endl);
+
         sb->sendOpcode = opcode;
 
         package.advancePayloadPtr(maxDataToWrite);
 
         if (strat == Strategies::push) {
-            setSendOpcode(nextFreeSend, rdma_ready_to_push, false);
+            setSendOpcode(1000 + nextFreeSend, rdma_ready_to_push, false);
         } else if (strat == Strategies::pull) {
-            setSendOpcode(nextFreeSend, rdma_ready_to_pull, true);
+            setSendOpcode(1000 + nextFreeSend, rdma_ready_to_pull, true);
         }
 
         remainingSize -= maxDataToWrite;
@@ -685,7 +706,7 @@ int Connection::findNextFreeReceiveAndBlock() {
         nextFreeRec = getNextFreeReceive();
     }
 
-    setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), rdma_working, false);
+    setReceiveOpcode(1000 + (nextFreeRec + (metaInfoReceive.size() / 2)), rdma_working, false);
 
     return nextFreeRec;
 }
@@ -704,7 +725,7 @@ int Connection::findNextFreeSendAndBlock() {
         nextFreeSend = getNextFreeSend();
     }
 
-    setSendOpcode(nextFreeSend, rdma_working, false);
+    setSendOpcode(1000 + nextFreeSend, rdma_working, false);
 
     return nextFreeSend;
 }
@@ -717,12 +738,14 @@ int Connection::findNextFreeSendAndBlock() {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::__sendData(const size_t index, Strategies strat) {
+    setSendOpcode(1000 + index, rdma_working, false);
     auto &sb = ownSendBuffer[index];
     int nextFreeRec = findNextFreeReceiveAndBlock();
 
     if (strat == Strategies::push) {
-        DEBUG2(nextFreeRec << std::endl);
         sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.qp, sb->getBufferPtr(), 10 * (index + 1) + nextFreeRec);
+
+        // DEBUG1("Sent Package from SB " << index << " to Remote RB " << nextFreeRec << std::endl);
         // pollCompletion();
     }
 
@@ -744,7 +767,7 @@ int Connection::__sendData(const size_t index, Strategies strat) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::sendOpcode(uint8_t opcode, bool sendToRemote) {
-    setReceiveOpcode(metaInfoReceive.size() / 2 + findNextFreeReceiveAndBlock(), opcode, sendToRemote);
+    setReceiveOpcode(1000 + (metaInfoReceive.size() / 2 + findNextFreeReceiveAndBlock()), opcode, sendToRemote);
 
     return 0;
 }
@@ -825,8 +848,8 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
 
         sr.num_sge = 1;
         sr.opcode = IBV_WR_RDMA_WRITE;
-        // sr.send_flags = IBV_SEND_SIGNALED;
-        sr.send_flags = IBV_SEND_INLINE;
+        sr.send_flags = IBV_SEND_SIGNALED;
+        // sr.send_flags = IBV_SEND_INLINE;
 
         sr.wr.rdma.remote_addr = res.remote_props.meta_receive_buf + entrySize * remoteIndex;
         sr.wr.rdma.rkey = res.remote_props.meta_receive_rkey;
@@ -846,10 +869,11 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
  */
 void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) {
     std::lock_guard<std::mutex> lk(sendBufferCheckMutex);
-    metaInfoSend[index] = opcode;
+    const size_t localSbIndex = index % 100;
+    metaInfoSend[localSbIndex] = opcode;
 
     if (sendToRemote) {
-        size_t remoteIndex = (index + (metaInfoSend.size() / 2)) % metaInfoSend.size();
+        size_t remoteIndex = (localSbIndex + (metaInfoSend.size() / 2)) % metaInfoSend.size();
 
         struct ibv_send_wr sr;
         struct ibv_sge sge;
@@ -860,7 +884,7 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
         // prepare the scatter / gather entry
         memset(&sge, 0, sizeof(sge));
 
-        sge.addr = (uintptr_t)(&(metaInfoSend[index]));
+        sge.addr = (uintptr_t)(&(metaInfoSend[localSbIndex]));
         sge.length = entrySize;
         sge.lkey = metaInfoSendMR->lkey;
 
@@ -868,7 +892,7 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
         memset(&sr, 0, sizeof(sr));
 
         sr.next = NULL;
-        sr.wr_id = 0;
+        sr.wr_id = index;
         sr.sg_list = &sge;
 
         sr.num_sge = 1;
@@ -892,7 +916,7 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
  * @param strat Whether the data is already written to the RB (push) or must be read from the remote SB (pull).
  */
 void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategies strat) {
-    setReceiveOpcode(index, rdma_working, false);
+    setReceiveOpcode(1000 + index, rdma_working, false);
 
     if (strat == Strategies::pull) {
         // Pretty sure this does not work atm -> Will fix eventually
@@ -905,7 +929,7 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
 
         ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.qp, ownReceiveBuffer[index]->getBufferPtr(), 0);
         // pollCompletion();
-        setSendOpcode(sbIndex, rdma_ready, true);
+        setSendOpcode(1000 + sbIndex, rdma_ready, true);
     }
 
     if (consu) {
@@ -922,7 +946,7 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
         free(localPtr);
     }
 
-    setReceiveOpcode(index, rdma_ready, true);
+    setReceiveOpcode(1000 + index, rdma_ready, true);
 }
 
 /**
@@ -935,7 +959,7 @@ int Connection::closeConnection(bool sendRemote) {
     std::lock_guard<std::mutex> lk(closingMutex);
     if (!connectionClosed) {
         connectionClosed = true;
-        setReceiveOpcode(metaInfoReceive.size() / 2, rdma_shutdown, sendRemote);
+        setReceiveOpcode(1000 + (metaInfoReceive.size() / 2), rdma_shutdown, sendRemote);
         destroyResources();
     }
 
@@ -957,7 +981,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         while (numBlockedRec < bufferConfig.num_own_receive) {
             for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
                 if (metaInfoReceive[i] == rdma_ready || metaInfoReceive[i] == rdma_reconfiguring) {
-                    setReceiveOpcode(i, rdma_blocked, true);
+                    setReceiveOpcode(1000 + i, rdma_blocked, true);
                     ++numBlockedRec;
                 } else {
                     continue;
@@ -968,7 +992,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
         while (numBlockedSend < bufferConfig.num_own_send) {
             for (std::size_t i = 0; i < bufferConfig.num_own_send; ++i) {
                 if (metaInfoSend[i] == rdma_ready || metaInfoSend[i] == rdma_reconfiguring) {
-                    setSendOpcode(i, rdma_blocked, true);
+                    setSendOpcode(1000 + i, rdma_blocked, true);
                     ++numBlockedSend;
                 } else {
                     continue;
@@ -1075,19 +1099,19 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
     for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
         if (i < bufferConfig.num_own_receive)
-            setReceiveOpcode(i, rdma_ready, true);
+            setReceiveOpcode(1000 + i, rdma_ready, true);
         else
-            setReceiveOpcode(i, rdma_no_op, true);
+            setReceiveOpcode(1000 + i, rdma_no_op, true);
     }
 
     for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
         if (i < bufferConfig.num_own_send)
-            setSendOpcode(i, rdma_ready, true);
+            setSendOpcode(1000 + i, rdma_ready, true);
         else
-            setSendOpcode(i, rdma_no_op, true);
+            setSendOpcode(1000 + i, rdma_no_op, true);
     }
 
-    std::cout << "Reconfigured Buffers to: " << std::endl;
+    INFO("Reconfigured Buffers to: " << std::endl);
     printConnectionInfo();
 
     return recData;
@@ -1123,7 +1147,7 @@ int Connection::receiveReconfigureBuffer(const uint8_t index) {
     memcpy(recData, ptr, sizeof(reconfigure_data));
     recData->buffer_config = invertBufferConfig(recData->buffer_config);
 
-    setReceiveOpcode(index, rdma_ready, true);
+    setReceiveOpcode(1000 + index, rdma_ready, true);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
@@ -1165,7 +1189,7 @@ void Connection::ackReconfigureBuffer(size_t index) {
     memcpy(recData, ptr, sizeof(reconfigure_data));
     recData->buffer_config = invertBufferConfig(recData->buffer_config);
 
-    setReceiveOpcode(index, rdma_ready, true);
+    setReceiveOpcode(1000 + index, rdma_ready, true);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
@@ -1188,7 +1212,7 @@ void Connection::ackReconfigureBuffer(size_t index) {
     std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
     reconfigureCV.notify_all();
 
-    setReceiveOpcode(index, rdma_ready, true);
+    setReceiveOpcode(1000 + index, rdma_ready, true);
 }
 
 /**
