@@ -9,14 +9,35 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 #include "Logger.h"
 #include "Utility.h"
 
 using namespace memordma;
+
+template <>
+uint8_t Configuration::get(std::string key, bool* exists) {
+    if (exists != nullptr) {
+        *exists = this->exists(key);
+    }
+    uint8_t result;
+    std::map<std::string, std::string> container;
+    if (this->exists(key)) {
+        container = conf;
+    } else if (defaults.count(key) > 0) {
+        container = defaults;
+    }
+
+    uint16_t temp;
+    std::stringstream(container[key]) >> temp;
+    constexpr auto max = std::numeric_limits<uint8_t>::max();
+    result = std::min(temp, (uint16_t)max);
+
+    return result;
+}
 
 Configuration::Configuration() {
     addDefault(MEMO_DEFAULT_LOGGER_LEVEL, "DEBUG2", "Control log level\n[FATAL, ERROR, CONSOLE, WARNING, INFO, SUCCESS, DEBUG1, DEBUG2]");
@@ -62,9 +83,9 @@ Configuration::Configuration() {
     addDefault(MEMO_DEFAULT_CONNECTION_AUTO_INITIATE, "0", "Upon startup, immediately use the default TCP Port and initiate a connection to the default initiate ip.");
     addDefault(MEMO_DEFAULT_CONNECTION_AUTO_LISTEN_IP, "141.76.47.8", "haecBoehm");
     addDefault(MEMO_DEFAULT_CONNECTION_AUTO_INITIATE_IP, "141.76.47.9", "haecBoehmTheSecond");
-    
+
     if (!readFromFile(MEMO_CONFIG_FILE)) {
-        std::cout << "[Logger] Could not open standard configuration file ('" << MEMO_CONFIG_FILE << "')." << std::endl;
+        std::cout << "[Logger] Could not open standard configuration file ('" << MEMO_CONFIG_FILE << "') -- using default values." << std::endl;
     }
 }
 
@@ -83,7 +104,6 @@ void Configuration::add(int argc, char* argv[]) {
             argument.erase(0, 1);
             std::string key = argument.substr(0, pos - 1);
             std::string value = argument.substr(pos, std::string::npos);
-            std::cout << "K/V: " << key << " " << value << std::endl;
             insert(key, value);
         }
     }
@@ -208,8 +228,8 @@ std::string Configuration::get(std::string key, bool* exists) {
 
 void Configuration::insert(std::string key, std::string value) {
     // make lowercase, trim whitespaces and remove quotes
-        std::transform(key.begin(), key.end(), key.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
     Utility::trim(key);
     Utility::trim(value);
     Utility::trim_any_of(key, "\"\'");
