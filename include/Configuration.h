@@ -8,10 +8,10 @@
 #ifndef MEMORDMA_CONFIGURATION_H_
 #define MEMORDMA_CONFIGURATION_H_
 
-#include <string>
 #include <map>
+#include <string>
 
-//Configuration Options
+// Configuration Options
 #define MEMO_CONFIG_FILE "memo.conf"
 #define MEMO_CONFIG_EXAMPLE_FILE "memo.conf.default"
 
@@ -44,8 +44,8 @@
 #define MEMO_DEFAULT_OWN_SEND_BUFFER_SIZE "memo.default.own.sb.size"
 #define MEMO_DEFAULT_OWN_RECEIVE_BUFFER_SIZE "memo.default.own.rb.size"
 
-#define MEMO_DEFAULT_REMOTE_SEND_BUFFER_SIZE "memo.default.sb.size"
-#define MEMO_DEFAULT_REMOTE_RECEIVE_BUFFER_SIZE "memo.default.rb.size"
+#define MEMO_DEFAULT_REMOTE_SEND_BUFFER_SIZE "memo.default.remote.sb.size"
+#define MEMO_DEFAULT_REMOTE_RECEIVE_BUFFER_SIZE "memo.default.remote.rb.size"
 
 #define MEMO_DEFAULT_META_INFO_SIZE "memo.default.metainfo.size"
 
@@ -61,45 +61,46 @@
 #define MEMO_DEFAULT_CONNECTION_AUTO_LISTEN_IP "memo.default.autoconnect.listen.ip"
 #define MEMO_DEFAULT_CONNECTION_AUTO_INITIATE_IP "memo.default.autoconnect.initiate.ip"
 
+#include <cstdint>
+#include <sstream>
 
 class Configuration {
-public:
-	Configuration();
-	virtual ~Configuration();
-	void add(int argc, char* argv[]);
-	void addDefault(std::string key, std::string value, std::string description = "");
-	void setDescription(std::string key, std::string description);
-	bool writeConfiguration(std::string filename, bool writeDescriptions = true, bool writeDefaults = false, bool writeChangedOnly = false);
+   public:
+    Configuration();
+    virtual ~Configuration();
+    void add(int argc, char* argv[]);
+    void addDefault(std::string key, std::string value, std::string description = "");
+    void setDescription(std::string key, std::string description);
+    bool writeConfiguration(std::string filename, bool writeDescriptions = true, bool writeDefaults = false, bool writeChangedOnly = false);
 
-	bool exists(std::string key);
+    bool exists(std::string key);
 
-	template <class T>
-	T get(std::string key, bool* exists = nullptr) {
-		if (exists != nullptr) {
-			*exists = this->exists(key);
-		}
-		T result;
-		if (this->exists(key)) {
-			std::stringstream(conf[key]) >> result;
-		} else if (defaults.count(key) > 0) {
-			std::stringstream(defaults[key]) >> result;
-		}
-		return result;
-	}
+    template <class T>
+    T get(std::string key, bool* exists = nullptr) {
+        if (exists != nullptr) {
+            *exists = this->exists(key);
+        }
+        T result;
+        if (this->exists(key)) {
+            std::stringstream(conf[key]) >> result;
+        } else if (defaults.count(key) > 0) {
+            std::stringstream(defaults[key]) >> result;
+        }
+        return result;
+    }
 
-	bool isSet(std::string key, bool* exists = nullptr);
+    bool isSet(std::string key, bool* exists = nullptr);
 
-	std::string getAsString(std::string key, bool* exists = nullptr, bool lowercase = false);
-	std::string get(std::string key, bool* exists = nullptr);
-	// void print(QueryAnswerPrinter* channel, bool all = false);
+    std::string getAsString(std::string key, bool* exists = nullptr, bool lowercase = false);
+    std::string get(std::string key, bool* exists = nullptr);
+    // void print(QueryAnswerPrinter* channel, bool all = false);
 
-	std::map<std::string, std::string> conf;
-	std::map<std::string, std::string> defaults;
-	std::map<std::string, std::string> descriptions;
+    std::map<std::string, std::string> conf;
+    std::map<std::string, std::string> defaults;
+    std::map<std::string, std::string> descriptions;
 
-	bool readFromFile(std::string filename);
-	void insert(std::string key, std::string value);
+    bool readFromFile(std::string filename);
+    void insert(std::string key, std::string value);
 };
-
 
 #endif /* MEMORDMA_CONFIGURATION_H_ */

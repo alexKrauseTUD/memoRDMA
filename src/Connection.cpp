@@ -209,7 +209,7 @@ void Connection::destroyResources() {
  *
  */
 void Connection::printConnectionInfo() const {
-    std::cout << "Remote IP:\t\t\t" << config.server_name << "\n"
+    std::cout << "Remote IP:\t\t\t" << config.server_name << ":" << config.tcp_port << "\n"
               << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
               << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
               << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
@@ -221,7 +221,7 @@ void Connection::printConnectionInfo() const {
               << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
               << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
               << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
-              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
+              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads
               << std::endl;
 }
 
@@ -254,21 +254,20 @@ void Connection::setupReceiveBuffer() {
 void Connection::initTCP() {
     if (!config.client_mode) {
         // @server
-        res.sock = sock_connect(config.server_name, config.tcp_port);
+        res.sock = sock_connect(config.server_name, &config.tcp_port);
         if (res.sock < 0) {
             Logger::getInstance() << LogLevel::ERROR << "Failed to establish TCP connection to server " << config.server_name.c_str() << ", port " << config.tcp_port << std::endl;
             exit(EXIT_FAILURE);
         }
     } else {
         // @client
-        res.sock = sock_connect("", config.tcp_port);
+        res.sock = sock_connect("", &config.tcp_port);
         if (res.sock < 0) {
             Logger::getInstance() << LogLevel::ERROR << "Failed to establish TCP connection with client on port " << +config.tcp_port << std::endl;
             exit(EXIT_FAILURE);
         }
     }
     Logger::getInstance() << LogLevel::INFO << "TCP connection was established!" << std::endl;
-    ;
 }
 
 /**
@@ -1337,7 +1336,7 @@ Connection::~Connection() {
 // Connect a socket. If servername is specified a client connection will be
 // initiated to the indicated server and port. Otherwise listen on the indicated
 // port for an incoming connection.
-int Connection::sock_connect(std::string client_name, int port) {
+int Connection::sock_connect(std::string client_name, uint32_t* port) {
     struct addrinfo *resolved_addr = NULL;
     struct addrinfo *iterator;
     char service[6];
@@ -1368,7 +1367,7 @@ int Connection::sock_connect(std::string client_name, int port) {
         int err;
         for (int k = 0; k < 20; ++k) {
             // resolve DNS address, user sockfd as temp storage
-            sprintf(service, "%d", port + k);
+            sprintf(service, "%d", *port + k);
 
             Utility::check_or_die(getaddrinfo(NULL, service, &hints, &resolved_addr));
 
@@ -1382,13 +1381,14 @@ int Connection::sock_connect(std::string client_name, int port) {
                 if (err == 0) {
                     err = listen(listenfd, 1);
                     if (err == 0) {
-                        INFO("Waiting on port " << port + k << " for TCP connection" << std::endl;)
+                        INFO("Waiting on port " << *port + k << " for TCP connection" << std::endl;)
                         sockfd = accept(listenfd, NULL, 0);
                     }
                 }
             }
 
             if (err == 0) {
+                *port = *port + k;
                 return sockfd;
             }
         }
@@ -1396,8 +1396,8 @@ int Connection::sock_connect(std::string client_name, int port) {
         int err;
         for (int k = 0; k < 20; ++k) {
             // resolve DNS address, user sockfd as temp storage
-            sprintf(service, "%d", port + k);
-
+            sprintf(service, "%d", *port + k);
+            DEBUG2( "Trying Port " << *port + k << " for TCP Init..." << std::endl;)
             Utility::check_or_die(getaddrinfo(client_name.c_str(), service, &hints, &resolved_addr));
 
             for (iterator = resolved_addr; iterator != NULL; iterator = iterator->ai_next) {
@@ -1409,7 +1409,8 @@ int Connection::sock_connect(std::string client_name, int port) {
             }
 
             if (err == 0) {
-                INFO("Connecting on port " << port + k << " for TCP connection" << std::endl;)
+                INFO("Connecting on port " << *port + k << " for TCP connection" << std::endl;)
+                *port = *port + k;
                 return sockfd;
             }
         }
