@@ -107,13 +107,13 @@
 // How many threads are used to copy from local sendbuffers to remote receive buffers.
 #memo.default.own.sender = 2
 
-// memo.default.rb.size [524288]
-// Used for Reconfiguring the buffer config on the remote side: Size of remote receive buffers in Byte.
-#memo.default.rb.size = 524288
-
 // memo.default.remote.rb.count [2]
 // Used for Reconfiguring the buffer config on the remote side: How many receive buffers are created remotely.
 #memo.default.remote.rb.count = 2
+
+// memo.default.remote.rb.size [524288]
+// Used for Reconfiguring the buffer config on the remote side: Size of remote receive buffers in Byte.
+#memo.default.remote.rb.size = 524288
 
 // memo.default.remote.receiver [2]
 // Used for Reconfiguring the buffer config on the remote side: How many threads are used to observe local receive buffers.
@@ -123,13 +123,13 @@
 // Used for Reconfiguring the buffer config on the remote side: How many send buffers are created remotely.
 #memo.default.remote.sb.count = 2
 
+// memo.default.remote.sb.size [524288]
+// Used for Reconfiguring the buffer config on the remote side: Size of remote send buffers in Byte.
+#memo.default.remote.sb.size = 524288
+
 // memo.default.remote.sender [2]
 // Used for Reconfiguring the buffer config on the remote side: How many threads are used to copy from remote sendbuffers to local receive buffers.
 #memo.default.remote.sender = 2
-
-// memo.default.sb.size [524288]
-// Used for Reconfiguring the buffer config on the remote side: Size of remote send buffers in Byte.
-#memo.default.sb.size = 524288
 
 // memo.default.tcp.port [20000]
 // TCP Port to perform initial handshake and exchange RDMA Infos.

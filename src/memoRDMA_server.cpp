@@ -57,7 +57,6 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
     }
-
     ConnectionManager::getInstance().configuration->add(argc, argv);
     Logger::LoadConfiguration();
 
@@ -77,6 +76,9 @@ int main(int argc, char *argv[]) {
     };
 
     TaskManager::getInstance().setGlobalAbortFunction(globalExit);
+    if ( ConnectionManager::getInstance().configuration->get<bool>(MEMO_DEFAULT_CONNECTION_AUTO_LISTEN) ) {
+        std::thread( []() -> void {TaskManager::getInstance().executeByIdent("listenConnection");} ).detach();
+    }
 
     // This is a bit dirty solution. It is needed for registering the callbacks on SU.
     FunctionalTests::getInstance();

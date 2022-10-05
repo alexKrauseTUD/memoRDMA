@@ -23,8 +23,8 @@ struct config_t {
     std::string server_name;  // server hostname
     uint32_t tcp_port;        // server TCP port
     bool client_mode;         // Don't run an event loop
-    int ib_port;              // local IB port to work with
-    int gid_idx;              // GID index to use
+    int32_t ib_port;              // local IB port to work with
+    int32_t gid_idx;              // GID index to use
 };
 
 struct buffer_config_t {
@@ -126,7 +126,7 @@ class Connection {
     int throughputBenchmark(std::string logName, Strategies strat);
     int consumingBenchmark(std::string logName, Strategies strat);
 
-    static int sock_connect(std::string client_name, int port);
+    static int sock_connect(std::string client_name, uint32_t* port);
     static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data);
     static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig);
     static void sock_close(int &sockfd);

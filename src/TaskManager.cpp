@@ -14,7 +14,7 @@
 
 using namespace memordma;
 
-static void print_config(struct config_t &config) {
+static void print_config(struct config_t& config) {
     Logger::getInstance() << LogLevel::INFO << "\tDevice name:\t\t" << config.dev_name << std::endl;
     Logger::getInstance() << LogLevel::INFO << "\tIB port:\t\t" << config.ib_port << std::endl;
 
@@ -27,6 +27,23 @@ static void print_config(struct config_t &config) {
     if (config.gid_idx >= 0) {
         Logger::getInstance() << LogLevel::INFO << "\tGID index:\t\t" << config.gid_idx << std::endl;
     }
+}
+
+static void print_buff_cfg(struct config_t& config, struct buffer_config_t& bufferConfig) {
+    std::cout << "Remote IP:\t\t\t" << config.server_name << "\n"
+              << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
+              << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
+              << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
+              << "\tOwn RB Size:\t\t" << bufferConfig.size_own_receive << "\n"
+              << "\tRemote SB Number:\t" << +bufferConfig.num_remote_send << "\n"
+              << "\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
+              << "\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
+              << "\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
+              << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
+              << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
+              << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
+              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
+              << std::endl;
 }
 
 TaskManager::TaskManager() : globalId{1} {
@@ -112,252 +129,74 @@ void TaskManager::executeById(std::size_t id) {
     }
 }
 
+void TaskManager::executeByIdent(std::string name) {
+    for ( auto t : tasks ) {
+        if ( t.second->ident == name ) {
+            t.second->run();
+            return;
+        }
+    }
+}
+
 void TaskManager::setup(size_t init_flags) {
     if (init_flags & connection_handling) {
         registerTask(std::make_shared<Task>("openConnection", "Open Connection", []() -> void {
-            bool clientMode = false;
+            uint8_t numOwnReceive = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_OWN_RECEIVE_BUFFER_COUNT);
+            uint32_t sizeOwnReceive = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_OWN_RECEIVE_BUFFER_SIZE);
+            uint8_t numRemoteReceive = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_REMOTE_RECEIVE_BUFFER_COUNT);
+            uint32_t sizeRemoteReceive = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_REMOTE_RECEIVE_BUFFER_SIZE);
+            uint64_t sizeOwnSend = ConnectionManager::getInstance().configuration->get<uint64_t>(MEMO_DEFAULT_OWN_SEND_BUFFER_SIZE);
+            uint64_t sizeRemoteSend = ConnectionManager::getInstance().configuration->get<uint64_t>(MEMO_DEFAULT_REMOTE_SEND_BUFFER_SIZE);
 
-            bool correct;
-            bool useDefaultConfig;
-            std::string input;
+            /* This should be used to adapt the meta info struct. However, we currently only allow 8 buffer per side, hard coded.
+                std::size_t largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
+                std::size_t minMetaInfoSize = 2 * (1 + largerNum);
+                const uint8_t defaultMetaSize = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_META_INFO_SIZE);
+                uint8_t metaInfoSize = minMetaInfoSize > defaultMetaSize ? minMetaInfoSize : defaultMetaSize;
+            */
+            config_t config = {.dev_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
+                               .server_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_INITIATE_IP),
+                               .tcp_port = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
+                               .client_mode = false,
+                               .ib_port = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
+                               .gid_idx = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
 
-            do {
-                std::cin.clear();
-                std::cin.sync();
-                std::cout << "Do you want to use the defaul configuration ('y' / 'yes') or an own one ('n' / 'no')?" << std::endl;
-                std::getline(std::cin, input);
-
-                if (input.compare("y") == 0 || input.compare("yes") == 0) {
-                    correct = true;
-                    useDefaultConfig = true;
-                } else if (input.compare("n") == 0 || input.compare("no") == 0) {
-                    correct = true;
-                    useDefaultConfig = false;
-                } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
-                    correct = false;
-                }
-
-            } while (!correct);
-
-            std::string devName = "mlx5_0";
-            std::string serverName = clientMode ? "141.76.47.8" : "141.76.47.9";
-            uint32_t tcpPort = 20000;
-            int ibPort = 1;
-            int gidIndex = 0;
-
-            uint8_t numOwnReceive = 2;
-            uint32_t sizeOwnReceive = 1024 * 512;
-            uint8_t numRemoteReceive = 2;
-            uint32_t sizeRemoteReceive = 1024 * 512;
-            uint64_t sizeOwnSend = 1024 * 512;
-            uint64_t sizeRemoteSend = 1024 * 512;
-
-            std::size_t largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
-
-            std::size_t minMetaInfoSize = 2 * (1 + largerNum);
-            uint8_t metaInfoSize = minMetaInfoSize > 16 ? minMetaInfoSize : 16;
-
-            if (!useDefaultConfig) {
-                std::cout << "Please enter the Server-IP!" << std::endl;
-                std::cin >> serverName;
-
-                std::string devName = "0";
-
-                std::cout << "Please enter the IB-Device-Name! (Default: 0)" << std::endl;
-                std::cin >> devName;
-
-                std::cout << "Please enter the TCP-Port that you want to use (if already used, another one is selected automatically)!" << std::endl;
-                std::cin >> tcpPort;
-
-                int ibPort = 0;
-
-                do {
-                    std::cout << "Please enter the IB-Port that you want to use! (Default: 0)" << std::endl;
-                    std::cin >> ibPort;
-
-                    if (ibPort < 0)
-                        Logger::getInstance() << LogLevel::ERROR << "The provided IB-Port was incorrect! Please enter the correct number!" << std::endl;
-
-                } while (ibPort < 0);
-
-                int gidIndex = 0;
-
-                do {
-                    std::cout << "Please enter the GID-Index that you want to use! (Default: 0)" << std::endl;
-                    std::cin >> gidIndex;
-
-                    if (gidIndex < 0)
-                        Logger::getInstance() << LogLevel::ERROR << "The provided GID-Index was incorrect! Please enter the correct number!" << std::endl;
-
-                } while (gidIndex < 0);
-
-                bool correctInput2 = false;
-                bool confBuffer = false;
-                std::string inp2;
-
-                do {
-                    std::cin.clear();
-                    std::cin.sync();
-                    std::cout << "Do you want to configure the buffer quantity and size ('y' / 'yes') or use the default configuration ('n' / 'no')?" << std::endl;
-                    std::getline(std::cin, inp2);
-
-                    if (inp2.compare("y") == 0 || inp2.compare("yes") == 0) {
-                        correctInput2 = true;
-                        confBuffer = true;
-                    } else if (inp2.compare("n") == 0 || inp2.compare("no") == 0) {
-                        correctInput2 = true;
-                        confBuffer = false;
-                    } else {
-                        Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
-                        correctInput2 = false;
-                    }
-
-                } while (!correctInput2);
-
-                if (confBuffer) {
-                    do {
-                        std::cout << "Please enter the number of own Receive-Buffers that you want to create!" << std::endl;
-                        std::cin >> numOwnReceive;
-
-                        if (numOwnReceive < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided number of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (numOwnReceive < 1);
-
-                    do {
-                        std::cout << "Please enter the size of own Receive-Buffers that you want to create!" << std::endl;
-                        std::cin >> sizeOwnReceive;
-
-                        if (sizeOwnReceive < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided size of own Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (sizeOwnReceive < 1);
-
-                    do {
-                        std::cout << "Please enter the number of remote Receive-Buffers that you want to create!" << std::endl;
-                        std::cin >> numRemoteReceive;
-
-                        if (numRemoteReceive < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided number of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (numRemoteReceive < 1);
-
-                    do {
-                        std::cout << "Please enter the size of remote Receive-Buffers that you want to create!" << std::endl;
-                        std::cin >> sizeRemoteReceive;
-
-                        if (sizeRemoteReceive < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided size of remote Receive-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (sizeRemoteReceive < 1);
-
-                    do {
-                        std::cout << "Please enter the size of own Send-Buffer that you want to create!" << std::endl;
-                        std::cin >> sizeOwnSend;
-
-                        if (sizeOwnSend < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided size of own Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (sizeOwnSend < 1);
-
-                    do {
-                        std::cout << "Please enter the size of remote Send-Buffer that you want to create!" << std::endl;
-                        std::cin >> sizeRemoteSend;
-
-                        if (sizeRemoteSend < 1)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided size of remote Send-Buffers was incorrect! Please enter the correct number (>0)!" << std::endl;
-
-                    } while (sizeRemoteSend < 1);
-
-                    largerNum = numOwnReceive < numRemoteReceive ? numRemoteReceive : numOwnReceive;
-
-                    minMetaInfoSize = 2 * (1 + largerNum);
-
-                    do {
-                        std::cout << "Please enter the size for the MetaInfo-Buffer that you want to create! (number of entries)" << std::endl;
-                        std::cin >> metaInfoSize;
-
-                        if (metaInfoSize < minMetaInfoSize)
-                            Logger::getInstance() << LogLevel::ERROR << "The provided size for the MetaInfo-Buffer was to small! Please enter a number of at least " << minMetaInfoSize << "!" << std::endl;
-
-                    } while (metaInfoSize < minMetaInfoSize);
-                }
-            }
-
-            config_t config = {.dev_name = devName,
-                               .server_name = serverName,
-                               .tcp_port = tcpPort ? tcpPort : 20000,
-                               .client_mode = clientMode,
-                               .ib_port = ibPort,
-                               .gid_idx = gidIndex};
-
-            // TODO: configurability hardcoded
-            buffer_config_t bufferConfig = {.num_own_send_threads = 2,
-                                            .num_own_receive_threads = 2,
-                                            .num_remote_send_threads = 2,
-                                            .num_remote_receive_threads = 2,
+            buffer_config_t bufferConfig = {.num_own_send_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_OWN_SEND_THREADS),
+                                            .num_own_receive_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_OWN_RECEIVE_THREADS),
+                                            .num_remote_send_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_REMOTE_SEND_THREADS),
+                                            .num_remote_receive_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_REMOTE_RECEIVE_THREADS),
                                             .num_own_receive = numOwnReceive,
                                             .size_own_receive = sizeOwnReceive,
                                             .num_remote_receive = numRemoteReceive,
                                             .size_remote_receive = sizeRemoteReceive,
                                             .num_own_send = numRemoteReceive,
-                                            .size_own_send = sizeRemoteReceive,
+                                            .size_own_send = sizeOwnSend,
                                             .num_remote_send = numOwnReceive,
-                                            .size_remote_send = sizeOwnReceive,
-                                            .meta_info_size = 16};
+                                            .size_remote_send = sizeRemoteSend,
+                                            .meta_info_size = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_META_INFO_SIZE)};
 
+            print_config(config);
+            print_buff_cfg(config, bufferConfig);
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
             if (connectionId != 0) {
                 Logger::getInstance() << LogLevel::SUCCESS << "Connection " << connectionId << " opened for config: " << std::endl;
+                ConnectionManager::getInstance().getConnectionById(connectionId)->printConnectionInfo();
             } else {
                 Logger::getInstance() << LogLevel::ERROR << "Something went wrong! The connection could not be opened for config: " << std::endl;
+                print_config(config);
             }
-            print_config(config);
             std::cout << std::endl;
             std::cout << std::endl;
         }));
 
         registerTask(std::make_shared<Task>("listenConnection", "Listen for Connection", []() -> void {
-            bool clientMode = true;
-
-            bool correct;
-            bool useDefaultConfig;
-            std::string input;
-
-            do {
-                std::cin.clear();
-                std::cin.sync();
-                std::cout << "Do you want to use the defaul configuration ('y' / 'yes') or an own one ('n' / 'no')?" << std::endl;
-                std::getline(std::cin, input);
-
-                if (input.compare("y") == 0 || input.compare("yes") == 0) {
-                    correct = true;
-                    useDefaultConfig = true;
-                } else if (input.compare("n") == 0 || input.compare("no") == 0) {
-                    correct = true;
-                    useDefaultConfig = false;
-                } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('y' / 'yes' / 'n' / 'no')!" << std::endl;
-                    correct = false;
-                }
-
-            } while (!correct);
-
-            uint32_t tcpPort = 20000;
-
-            if (!useDefaultConfig) {
-                std::cout << "Please enter the TCP-Port that you want to use (if already used, another one is selected automatically)!" << std::endl;
-                std::cin >> tcpPort;
-            }
-
-            config_t config = {.dev_name = "mlx5_0",
-                               .server_name = clientMode ? "141.76.47.8" : "141.76.47.9",
-                               .tcp_port = tcpPort ? tcpPort : 20000,
-                               .client_mode = clientMode,
-                               .ib_port = 1,
-                               .gid_idx = 0};
+            config_t config = {.dev_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
+                               .server_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_LISTEN_IP),
+                               .tcp_port = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
+                               .client_mode = true,
+                               .ib_port = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
+                               .gid_idx = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
 
             buffer_config_t bufferConfig;
 
