@@ -463,7 +463,7 @@ struct ibv_context *Connection::createContext() {
     /* it is important to free the device list; otherwise memory will be leaked. */
     ibv_free_device_list(device_list);
     if (context == nullptr) {
-        std::cerr << "Unable to find the device " << device_name << std::endl;
+        LOG_ERROR("Unable to find the device " << device_name << std::endl);
     }
     return context;
 }
@@ -933,6 +933,8 @@ void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategie
 
         package_t::header_t *header = reinterpret_cast<package_t::header_t *>(ptr);
 
+        LOG_DEBUG2(header->id << "\t" << header->total_data_size << "\t" << header->current_payload_size << "\t" << header->package_number << std::endl);
+
         uint64_t *localPtr = reinterpret_cast<uint64_t *>(malloc(header->current_payload_size));
         memset(localPtr, 0, header->current_payload_size);
         memcpy(localPtr, ptr + package_t::metaDataSize(), header->current_payload_size);
@@ -1045,7 +1047,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid, &cpuset);
             int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
                 exit(-10);
             }
         }
@@ -1065,7 +1067,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid + bufConfig.num_own_receive_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
                 exit(-10);
             }
         }

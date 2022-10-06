@@ -11,7 +11,7 @@
 
 Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
     if (bufferSize % 2 != 0) {
-        std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
+        std::cout << "[Buffer] Parameter bufferSize not divisible by 2. Rounding up!" << std::endl;
         ++bufferSize;
     }
 

@@ -176,10 +176,9 @@ int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t ne
     return 1;
 }
 
-template <BenchmarkType benchType, Strategies strat>
-int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name) {
+int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->benchmark<benchType, strat>(shortName, name);
+        return connections[connectionId]->benchmark(shortName, name, benchType, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }

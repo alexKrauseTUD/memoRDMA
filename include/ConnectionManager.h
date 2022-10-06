@@ -41,8 +41,7 @@ class ConnectionManager {
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    template <BenchmarkType benchType, Strategies strat>
-    int benchmark(std::size_t connectionId, std::string shortName, std::string name);
+    int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat);
 
     void stop(bool remoteShutdown);
     bool abortSignaled() const;

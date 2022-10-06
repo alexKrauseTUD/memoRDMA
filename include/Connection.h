@@ -141,8 +141,7 @@ class Connection {
     int throughputBenchmark(std::string logName, Strategies strat);
     int consumingBenchmark(std::string logName, Strategies strat);
 
-    template <BenchmarkType benchType, Strategies strat>
-    int benchmark(std::string shortName, std::string name);
+    int benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat);
 
     static int sock_connect(std::string client_name, uint32_t *port);
     static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data);

@@ -27,7 +27,7 @@ void signal_handler(int signal) {
             std::_Exit(EXIT_SUCCESS);
         } break;
         default: {
-            std::cerr << "Unexpected signal " << signal << " received\n";
+            std::cerr << "Unexpected signal " << signal << " received!\n";
         } break;
     }
     std::_Exit(EXIT_FAILURE);
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     for (auto sig : {SIGINT, SIGUSR1}) {
         auto previous_handler = std::signal(sig, signal_handler);
         if (previous_handler == SIG_ERR) {
-            std::cerr << "Setup of custom signal handler failed\n";
+            std::cerr << "Setup of custom signal handler failed!\n";
             return EXIT_FAILURE;
         }
     }
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     while (!abort) {
         op = "-1";
         TaskManager::getInstance().printAll();
-        std::cout << "Type \"exit\" to terminate." << std::endl;
+        LOG_NOFORMAT("Type \"exit\" to terminate." << std::endl);
         // std::cin >> op;
         std::getline(std::cin, op, '\n');
         if (op == "-1") {

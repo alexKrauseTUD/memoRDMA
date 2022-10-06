@@ -18,12 +18,26 @@
 
 using namespace memordma;
 
-template <BenchmarkType benchType, Strategies strat>
-int Connection::benchmark(std::string shortName, std::string name) {
+int Connection::benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat) {
     /* provide data to remote */
     std::size_t maxDataElements = 1ull << MAX_DATA_SIZE;
     DataProvider d;
     d.generateDummyData(maxDataElements >> 1);
+
+    uint8_t sendOpcode = rdma_ready;
+    if (benchType == BenchmarkType::throughput) {
+        if (strat == Strategies::push) {
+            sendOpcode = rdma_ready;
+        } else if (strat == Strategies::pull) {
+            sendOpcode = rdma_pull_read;
+        }
+    } else if (benchType == BenchmarkType::consume) {
+        if (strat == Strategies::push) {
+            sendOpcode = rdma_data_finished;
+        } else if (strat == Strategies::pull) {
+            sendOpcode = rdma_pull_consume;
+        }
+    }
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
         for (uint8_t num_sb = 1; num_sb <= num_rb; ++num_sb) {
@@ -36,24 +50,24 @@ int Connection::benchmark(std::string shortName, std::string name) {
                 std::ofstream out;
                 out.open(logName, std::ios_base::app);
 
-                for (uint64_t size_rb = 1ull << 15; size_rb < 1ull << 28; size_rb <<= 1) {
+                for (uint64_t bufferSize = 1ull << 16; bufferSize <= 1ull << 22; bufferSize <<= 1) {
                     buffer_config_t bufferConfig = {.num_own_send_threads = thrds,
                                                     .num_own_receive_threads = thrds,
                                                     .num_remote_send_threads = thrds,
                                                     .num_remote_receive_threads = thrds,
                                                     .num_own_receive = num_rb,
-                                                    .size_own_receive = size_rb + package_t::metaDataSize(),
+                                                    .size_own_receive = bufferSize + package_t::metaDataSize(),
                                                     .num_remote_receive = num_rb,
-                                                    .size_remote_receive = size_rb + package_t::metaDataSize(),
+                                                    .size_remote_receive = bufferSize + package_t::metaDataSize(),
                                                     .num_own_send = num_sb,
-                                                    .size_own_send = size_rb + package_t::metaDataSize(),
+                                                    .size_own_send = bufferSize + package_t::metaDataSize(),
                                                     .num_remote_send = num_sb,
-                                                    .size_remote_send = size_rb + package_t::metaDataSize(),
+                                                    .size_remote_send = bufferSize + package_t::metaDataSize(),
                                                     .meta_info_size = 16};
 
                     Utility::checkOrDie(sendReconfigureBuffer(bufferConfig));
 
-                    LOG_DEBUG1("[" << name << "]\tUsed connection with id '1' and " << +num_rb << " remote receive buffer (size for one remote receive: " << Utility::GetBytesReadable(size_rb) << ")\n"
+                    LOG_DEBUG1("[" << name << "]\tUsed connection with id '1', " << +num_rb << " remote receive buffer (size for one remote receive: " << Utility::GetBytesReadable(bufferSize) << ") and " << +num_sb << " \n"
                                    << std::endl);
 
                     for (std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1) {
@@ -61,7 +75,7 @@ int Connection::benchmark(std::string shortName, std::string name) {
                             uint64_t dataSize = elementCount * sizeof(uint64_t);
                             char *copy = reinterpret_cast<char *>(d.data);
                             auto readable_size = Utility::GetBytesReadable(dataSize);
-                            LOG_DEBUG1("[" << name << "]\tGenerating " << readable_size << " of data to send them over." << std::endl);
+                            // LOG_DEBUG1("[" << name << "]\tGenerating " << readable_size << " of data to send them over." << std::endl);
 
                             bool allDone = false;
                             while (!allDone) {
@@ -76,19 +90,7 @@ int Connection::benchmark(std::string shortName, std::string name) {
 
                             auto s_ts = std::chrono::high_resolution_clock::now();
 
-                            if (benchType == BenchmarkType::throughput) {
-                                if (strat == Strategies::push) {
-                                    sendData(copy, dataSize, nullptr, 0, rdma_ready, strat);
-                                } else if (strat == Strategies::pull) {
-                                    sendData(copy, dataSize, nullptr, 0, rdma_pull_read, strat);
-                                }
-                            } else if (benchType == BenchmarkType::consume) {
-                                if (strat == Strategies::push) {
-                                    sendData(copy, dataSize, nullptr, 0, rdma_data_finished, strat);
-                                } else if (strat == Strategies::pull) {
-                                    sendData(copy, dataSize, nullptr, 0, rdma_pull_consume, strat);
-                                }
-                            }
+                            sendData(copy, dataSize, nullptr, 0, sendOpcode, strat);
 
                             allDone = false;
                             while (!allDone) {
@@ -110,18 +112,19 @@ int Connection::benchmark(std::string shortName, std::string name) {
 
                             LOG_SUCCESS(std::setprecision(10) << "[" << name << "]\tCommunicated " << dataSize << " Bytes (" << readable_size << ") in " << secs.count() << " s -- " << Utility::BtoMB(dataSize) / (secs.count()) << " MB/s " << std::endl);
 
-                            out << bufferConfig.num_own_send_threads << "\t" << bufferConfig.num_own_send << "\t" << bufferConfig.size_own_send << "\t" << bufferConfig.num_remote_receive_threads << "\t" << bufferConfig.num_remote_receive << "\t" << bufferConfig.size_remote_receive << "\t" << elementCount << "\t" << dataSize << "\t" << transfertime_ns << "\t" << Utility::BtoMB(dataSize) / (secs.count()) << std::endl
-                                << std::flush;
+                            out << bufferSize << "\t" << dataSize << "\t" << transfertime_ns << "\t" << Utility::BtoMB(dataSize) / (secs.count()) << std::endl;
                         }
                     }
 
-                    out.close();
-
-                    LOG_SUCCESS("[" << name << "]\tBenchmark ended." << std::endl);
+                    LOG_SUCCESS("[" << name << "]\tBenchmark with Buffer Size " << bufferSize << " ended." << std::endl);
                 }
+
+                out.close();
             }
         }
     }
+
+    LOG_SUCCESS("[" << name << "]\tBenchmark done." << std::endl);
 
     return 0;
 }
