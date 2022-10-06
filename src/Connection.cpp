@@ -62,13 +62,13 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
                         continue;
                     }; break;
                     case rdma_data_finished: {
-                        receiveDataFromRemote(i, true, Strategies::push);
+                        consumeData(i);
                     }; break;
                     case rdma_pull_read: {
-                        receiveDataFromRemote(i, false, Strategies::pull);
+                        readDataFromRemote(i, false);
                     } break;
                     case rdma_pull_consume: {
-                        receiveDataFromRemote(i, true, Strategies::pull);
+                        readDataFromRemote(i, true);
                     } break;
                     case rdma_reconfigure: {
                         auto recFunc = [this](size_t index) {
@@ -728,6 +728,40 @@ int Connection::findNextFreeSendAndBlock() {
 }
 
 /**
+ * @brief Search the send meta info struct once for a ready buffer. Only once as this should be a locked process and the lock should be returned in small intervalls.
+ *
+ * @return int The local index of the found SB.
+ */
+int Connection::getNextReadyToPullSend() {
+    std::shared_lock<std::shared_mutex> _lk(sendBufferCheckMutex);
+    size_t metaSizeHalf = metaInfoReceive.size() / 2;
+    for (size_t i = metaSizeHalf; i < metaInfoSend.size(); ++i) {
+        if (metaInfoSend[i] == rdma_ready_to_pull) return i - metaSizeHalf;
+    }
+
+    return -1;
+}
+
+/**
+ * @brief Searching for a ready local SB and block this for further usage before returning the buffer index.
+ *
+ * @return int The local SB index. This is the actual index in the meta info structure.
+ */
+int Connection::findNextReadyToPullSendAndBlock() {
+    int nextReadyToPullSend = -1;
+
+    std::lock_guard<std::mutex> lk(remoteSendBufferBlockMutex);
+    // ideally this will be done with a conditional variabel and not with busy waiting.
+    while (nextReadyToPullSend == -1) {
+        nextReadyToPullSend = getNextReadyToPullSend();
+    }
+
+    setSendOpcode(nextReadyToPullSend, rdma_working, false);
+
+    return nextReadyToPullSend;
+}
+
+/**
  * @brief The actual sending process. It assumes that the data is already in the indicated SB and is called when the corresponding opcode is set.
  *
  * @param index The local index of the SB.
@@ -738,20 +772,18 @@ int Connection::__sendData(const size_t index, Strategies strat) {
     setSendOpcode(index, rdma_working, false);
     auto &sb = ownSendBuffer[index];
     int nextFreeRec = findNextFreeReceiveAndBlock();
-    uint64_t wrId = nextFreeRec;
 
     if (strat == Strategies::push) {
+        uint64_t wrId = nextFreeRec;
         sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.dataQp, sb->getBufferPtr(), 10 * index + nextFreeRec);
         wrId = pollCompletion<CompletionType::useDataCq>();
-    }
 
-    auto &doneSb = ownSendBuffer[wrId / 10];
+        auto &doneSb = ownSendBuffer[wrId / 10];
 
-    setReceiveOpcode((wrId % 10) + (metaInfoReceive.size() / 2), doneSb->sendOpcode, doneSb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
-
-    if (strat == Strategies::push) {
-        // doneSb->clearBuffer();
+        setReceiveOpcode((wrId % 10) + (metaInfoReceive.size() / 2), doneSb->sendOpcode, doneSb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
         setSendOpcode(wrId / 10, rdma_ready, false);
+    } else {
+        setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);
     }
 
     return 0;
@@ -905,42 +937,48 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
 }
 
 /**
- * @brief Copying the data from the RB into local memory and set it free again.
+ * @brief Read the data from the remote SB.
  *
  * @param index The RB index where the data is located (or should be read into).
  * @param consu Whether the data should actually be consumed.
- * @param strat Whether the data is already written to the RB (push) or must be read from the remote SB (pull).
  */
-void Connection::receiveDataFromRemote(const size_t index, bool consu, Strategies strat) {
+void Connection::readDataFromRemote(const size_t index, bool consu) {
     setReceiveOpcode(index, rdma_working, false);
 
-    if (strat == Strategies::pull) {
-        // Pretty sure this does not work atm -> Will fix eventually
-        int sbIndex = index;
-        while (metaInfoSend[sbIndex] != rdma_ready_to_pull) {
-            sbIndex -= bufferConfig.num_remote_send_threads;
+    // Pretty sure this does not work atm -> Will fix eventually
+    int sbIndex = findNextReadyToPullSendAndBlock();
 
-            if (sbIndex < 0) sbIndex = index;
-        }
+    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
 
-        ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 0);
-        pollCompletion<CompletionType::useDataCq>();
-        setSendOpcode(sbIndex, rdma_ready, true);
-    }
+    setSendOpcode((wrId % 10) + metaInfoSend.size() / 2, rdma_ready, true);
 
     if (consu) {
-        char *ptr = ownReceiveBuffer[index]->getBufferPtr();
-
-        package_t::header_t *header = reinterpret_cast<package_t::header_t *>(ptr);
-
-        LOG_DEBUG2(header->id << "\t" << header->total_data_size << "\t" << header->current_payload_size << "\t" << header->package_number << std::endl);
-
-        uint64_t *localPtr = reinterpret_cast<uint64_t *>(malloc(header->current_payload_size));
-        memset(localPtr, 0, header->current_payload_size);
-        memcpy(localPtr, ptr + package_t::metaDataSize(), header->current_payload_size);
-
-        free(localPtr);
+        setReceiveOpcode(wrId / 10, rdma_data_finished, false);
+    } else {
+        setReceiveOpcode(wrId / 10, rdma_ready, true);
     }
+}
+
+/**
+ * @brief Copying the data from the RB into local memory and set it free again.
+ *
+ * @param index The RB index where the data is located (or should be read into).
+ */
+void Connection::consumeData(const size_t index) {
+    setReceiveOpcode(index, rdma_working, false);
+
+    char *ptr = ownReceiveBuffer[index]->getBufferPtr();
+
+    package_t::header_t *header = reinterpret_cast<package_t::header_t *>(ptr);
+
+    LOG_DEBUG2(header->id << "\t" << header->total_data_size << "\t" << header->current_payload_size << "\t" << header->package_number << std::endl);
+
+    uint64_t *localPtr = reinterpret_cast<uint64_t *>(malloc(header->current_payload_size));
+    memset(localPtr, 0, header->current_payload_size);
+    memcpy(localPtr, ptr + package_t::metaDataSize(), header->current_payload_size);
+
+    free(localPtr);
 
     setReceiveOpcode(index, rdma_ready, true);
 }
@@ -1047,7 +1085,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid, &cpuset);
             int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }
@@ -1067,7 +1106,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid + bufConfig.num_own_receive_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }

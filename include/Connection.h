@@ -126,7 +126,8 @@ class Connection {
 
     int closeConnection(bool send_remote = true);
 
-    void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
+    void readDataFromRemote(const size_t index, bool consu);
+    void consumeData(const size_t index);
 
     int addReceiveBuffer(std::size_t quantity, bool own);
     int removeReceiveBuffer(std::size_t quantity, bool own);
@@ -160,6 +161,7 @@ class Connection {
     std::shared_mutex sendBufferCheckMutex;
     std::mutex receiveBufferBlockMutex;
     std::mutex sendBufferBlockMutex;
+    std::mutex remoteSendBufferBlockMutex;
     std::mutex reconfigureMutex;
     std::mutex closingMutex;
     std::mutex idGeneratorMutex;
@@ -206,6 +208,9 @@ class Connection {
     void setReceiveOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     void setSendOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
+
+    int getNextReadyToPullSend();
+    int findNextReadyToPullSendAndBlock();
 
     int __sendData(const size_t index, Strategies strat);
 

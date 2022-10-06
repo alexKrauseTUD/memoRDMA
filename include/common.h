@@ -17,6 +17,7 @@ enum rdma_handler_communication: uint8_t {
     rdma_ready_to_push,
     rdma_ready_to_pull,
     rdma_functional_test,
+    rdma_functional_test_pull,
     rdma_functional_test_ack,
     rdma_shutdown
 };
