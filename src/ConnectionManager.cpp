@@ -176,19 +176,9 @@ int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t ne
     return 1;
 }
 
-int ConnectionManager::throughputBenchmark(std::size_t connectionId, std::string logName, Strategies strat) {
+int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputBenchmark(logName, strat);
-    } else {
-        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::consumingBenchmark(std::size_t connectionId, std::string logName, Strategies strat) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingBenchmark(logName, strat);
+        return connections[connectionId]->benchmark(shortName, name, benchType, strat);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }

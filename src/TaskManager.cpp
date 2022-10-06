@@ -14,36 +14,37 @@
 
 using namespace memordma;
 
-static void print_config(struct config_t& config) {
-    Logger::getInstance() << LogLevel::INFO << "\tDevice name:\t\t" << config.dev_name << std::endl;
-    Logger::getInstance() << LogLevel::INFO << "\tIB port:\t\t" << config.ib_port << std::endl;
+static void printSystemConfig(struct config_t& config) {
+    LOG_INFO("\tDevice name:\t\t" << config.dev_name << std::endl);
+    LOG_INFO("\tIB port:\t\t" << config.ib_port << std::endl);
 
     if (!config.server_name.empty()) {
-        Logger::getInstance() << LogLevel::INFO << "\tIP:\t\t\t" << config.server_name << std::endl;
+        LOG_INFO("\tIP:\t\t\t" << config.server_name << std::endl);
     }
 
-    Logger::getInstance() << LogLevel::INFO << "\tTCP port:\t\t" << config.tcp_port << std::endl;
+    LOG_INFO("\tTCP port:\t\t" << config.tcp_port << std::endl);
 
     if (config.gid_idx >= 0) {
-        Logger::getInstance() << LogLevel::INFO << "\tGID index:\t\t" << config.gid_idx << std::endl;
+        LOG_INFO("\tGID index:\t\t" << config.gid_idx << std::endl);
     }
 }
 
-static void print_buff_cfg(struct config_t& config, struct buffer_config_t& bufferConfig) {
-    std::cout << "Remote IP:\t\t\t" << config.server_name << "\n"
-              << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
-              << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
-              << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
-              << "\tOwn RB Size:\t\t" << bufferConfig.size_own_receive << "\n"
-              << "\tRemote SB Number:\t" << +bufferConfig.num_remote_send << "\n"
-              << "\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
-              << "\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
-              << "\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
-              << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
-              << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
-              << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
-              << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
-              << std::endl;
+static void printBufferConfig(struct config_t& config, struct buffer_config_t& bufferConfig) {
+    LOG_INFO("Remote IP:\t\t\t" << config.server_name << "\n"
+                                << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
+                                << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
+                                << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
+                                << "\tOwn RB Size:\t\t" << bufferConfig.size_own_receive << "\n"
+                                << "\tRemote SB Number:\t" << +bufferConfig.num_remote_send << "\n"
+                                << "\tRemote SB Size:\t\t" << bufferConfig.size_remote_send << "\n"
+                                << "\tRemote RB Number:\t" << +bufferConfig.num_remote_receive << "\n"
+                                << "\tRemote RB Size:\t\t" << bufferConfig.size_remote_receive << "\n"
+                                << "\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
+                                << "\tOwn R Threads:\t\t" << +bufferConfig.num_own_receive_threads << "\n"
+                                << "\tRemote S Threads:\t" << +bufferConfig.num_remote_send_threads << "\n"
+                                << "\tRemote R Threads:\t" << +bufferConfig.num_remote_receive_threads << "\n"
+                                << std::endl
+                                << std::endl);
 }
 
 TaskManager::TaskManager() : globalId{1} {
@@ -58,8 +59,7 @@ TaskManager::TaskManager() : globalId{1} {
 
     registerTask(std::make_shared<Task>("executeMulti", "Execute multiple by ID with shutdown", [&]() -> void {
         std::vector<std::size_t> taskList;
-        std::cout << "Space-separated list of tests to run: " << std::endl
-                  << "> " << std::flush;
+        LOG_INFO("Space-separated list of tests to run: " << std::endl);
         std::string content = "";
         const char delimiter = ' ';
         std::getline(std::cin, content);
@@ -72,12 +72,12 @@ TaskManager::TaskManager() : globalId{1} {
             }
             taskList.emplace_back(stol(content.substr(last)));
         } catch (...) {
-            Logger::getInstance() << LogLevel::ERROR << "Invalid number(s) detected, nothing done." << std::endl;
+            LOG_ERROR("Invalid number(s) detected, nothing done." << std::endl);
             return;
         }
 
         for (auto v : taskList) {
-            std::cout << "[Taskmanager] Executing Task [" << v << "]" << std::endl;
+            LOG_INFO("[Taskmanager] Executing Task [" << v << "]" << std::endl);
             executeById(v);
 
             using namespace std::chrono_literals;
@@ -87,7 +87,7 @@ TaskManager::TaskManager() : globalId{1} {
         globalAbort();
     }));
 
-    globalAbort = []() -> void { std::cout << "[TaskManager] No global Abort function set." << std::endl; };
+    globalAbort = []() -> void { LOG_WARNING("[TaskManager] No global Abort function set." << std::endl); };
 }
 
 TaskManager::~TaskManager() {
@@ -102,7 +102,7 @@ void TaskManager::unregisterTask(std::string ident) {
     for (auto task : tasks) {
         if (task.second->ident.compare(ident) == 0) {
             tasks.erase(task.first);
-            std::cout << "[TaskManager] Removed Task " << ident << std::endl;
+            LOG_INFO("[TaskManager] Removed Task " << ident << std::endl);
         }
     }
 }
@@ -118,7 +118,7 @@ bool TaskManager::hasTask(std::string ident) const {
 
 void TaskManager::printAll() {
     for (auto it = tasks.begin(); it != tasks.end(); ++it) {
-        std::cout << "[" << it->first << "] " << it->second->name << std::endl;
+        LOG_NOFORMAT("[" << it->first << "] " << it->second->name << std::endl);
     }
 }
 
@@ -130,8 +130,8 @@ void TaskManager::executeById(std::size_t id) {
 }
 
 void TaskManager::executeByIdent(std::string name) {
-    for ( auto t : tasks ) {
-        if ( t.second->ident == name ) {
+    for (auto t : tasks) {
+        if (t.second->ident == name) {
             t.second->run();
             return;
         }
@@ -175,19 +175,17 @@ void TaskManager::setup(size_t init_flags) {
                                             .size_remote_send = sizeRemoteSend,
                                             .meta_info_size = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_META_INFO_SIZE)};
 
-            print_config(config);
-            print_buff_cfg(config, bufferConfig);
+            printSystemConfig(config);
+            printBufferConfig(config, bufferConfig);
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
             if (connectionId != 0) {
-                Logger::getInstance() << LogLevel::SUCCESS << "Connection " << connectionId << " opened for config: " << std::endl;
+                LOG_SUCCESS("Connection " << connectionId << " opened for config: " << std::endl);
                 ConnectionManager::getInstance().getConnectionById(connectionId)->printConnectionInfo();
             } else {
-                Logger::getInstance() << LogLevel::ERROR << "Something went wrong! The connection could not be opened for config: " << std::endl;
-                print_config(config);
+                LOG_ERROR("Something went wrong! The connection could not be opened for config: " << std::endl);
+                printSystemConfig(config);
             }
-            std::cout << std::endl;
-            std::cout << std::endl;
         }));
 
         registerTask(std::make_shared<Task>("listenConnection", "Listen for Connection", []() -> void {
@@ -203,13 +201,11 @@ void TaskManager::setup(size_t init_flags) {
             std::size_t connectionId = ConnectionManager::getInstance().registerConnection(config, bufferConfig);
 
             if (connectionId != 0) {
-                Logger::getInstance() << LogLevel::SUCCESS << "Connection " << connectionId << " opened for config: " << std::endl;
+                LOG_SUCCESS("Connection " << connectionId << " opened for config: " << std::endl);
             } else {
-                Logger::getInstance() << LogLevel::ERROR << "Something went wrong! The connection could not be opened for config: " << std::endl;
+                LOG_ERROR("Something went wrong! The connection could not be opened for config: " << std::endl);
             }
-            print_config(config);
-            std::cout << std::endl;
-            std::cout << std::endl;
+            printSystemConfig(config);
         }));
 
         registerTask(std::make_shared<Task>("printConnections", "Print Connections", []() -> void {
@@ -219,7 +215,7 @@ void TaskManager::setup(size_t init_flags) {
         registerTask(std::make_shared<Task>("closeConnection", "Close Connection", []() -> void {
             std::size_t connectionId;
 
-            std::cout << "Please enter the name of the connection you want to close!" << std::endl;
+            LOG_INFO("Please enter the name of the connection you want to close!" << std::endl);
             // TODO: check whether this works
             std::cin >> connectionId;
 
@@ -239,16 +235,16 @@ void TaskManager::setup(size_t init_flags) {
             bool correct;
             std::string input;
 
-            std::cout << "Please enter the name of the connection you want to change!" << std::endl;
+            LOG_INFO("Please enter the name of the connection you want to change!" << std::endl);
             std::cin >> connectionId;
 
-            std::cout << "How many Receive-Buffer do you want to add?" << std::endl;
+            LOG_INFO("How many Receive-Buffer do you want to add?" << std::endl);
             std::cin >> quantity;
 
             do {
                 std::cin.clear();
                 std::cin.sync();
-                std::cout << "Do you want to add on the own ('o') or on the remote ('r') site?" << std::endl;
+                LOG_INFO("Do you want to add on the own ('o') or on the remote ('r') site?" << std::endl);
                 std::getline(std::cin, input);
 
                 if (input.compare("o") == 0 || input.compare("own") == 0) {
@@ -258,7 +254,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    LOG_ERROR("Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl);
                     correct = false;
                 }
 
@@ -274,16 +270,16 @@ void TaskManager::setup(size_t init_flags) {
             bool correct;
             std::string input;
 
-            std::cout << "Please enter the name of the connection you want to change!" << std::endl;
+            LOG_INFO("Please enter the name of the connection you want to change!" << std::endl);
             std::cin >> connectionId;
 
-            std::cout << "How many Receive-Buffer do you want to remove? (At least 1 Receive-Buffer will be kept.)" << std::endl;
+            LOG_INFO("How many Receive-Buffer do you want to remove? (At least 1 Receive-Buffer will be kept.)" << std::endl);
             std::cin >> quantity;
 
             do {
                 std::cin.clear();
                 std::cin.sync();
-                std::cout << "Do you want to remove on the own ('o') or on the remote ('r') site?" << std::endl;
+                LOG_INFO("Do you want to remove on the own ('o') or on the remote ('r') site?" << std::endl);
                 std::getline(std::cin, input);
 
                 if (input.compare("o") == 0 || input.compare("own") == 0) {
@@ -293,7 +289,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    LOG_ERROR("Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl);
                     correct = false;
                 }
 
@@ -309,16 +305,16 @@ void TaskManager::setup(size_t init_flags) {
             bool correct;
             std::string input;
 
-            std::cout << "Please enter the name of the connection you want to change!" << std::endl;
+            LOG_INFO("Please enter the name of the connection you want to change!" << std::endl);
             std::cin >> connectionId;
 
-            std::cout << "Please enter the new size for all existing Receive-Buffer." << std::endl;
+            LOG_INFO("Please enter the new size for all existing Receive-Buffer." << std::endl);
             std::cin >> newSize;
 
             do {
                 std::cin.clear();
                 std::cin.sync();
-                std::cout << "Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl;
+                LOG_INFO("Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl);
                 std::getline(std::cin, input);
 
                 if (input.compare("o") == 0 || input.compare("own") == 0) {
@@ -328,7 +324,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    LOG_ERROR("Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl);
                     correct = false;
                 }
 
@@ -344,16 +340,16 @@ void TaskManager::setup(size_t init_flags) {
             bool correct;
             std::string input;
 
-            std::cout << "Please enter the name of the connection you want to change!" << std::endl;
+            LOG_INFO("Please enter the name of the connection you want to change!" << std::endl);
             std::cin >> connectionId;
 
-            std::cout << "Please enter the new size for the Send-Buffer." << std::endl;
+            LOG_INFO("Please enter the new size for the Send-Buffer." << std::endl);
             std::cin >> newSize;
 
             do {
                 std::cin.clear();
                 std::cin.sync();
-                std::cout << "Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl;
+                LOG_INFO("Do you want to resize on the own ('o') or on the remote ('r') site?" << std::endl);
                 std::getline(std::cin, input);
 
                 if (input.compare("o") == 0 || input.compare("own") == 0) {
@@ -363,7 +359,7 @@ void TaskManager::setup(size_t init_flags) {
                     correct = true;
                     own = false;
                 } else {
-                    Logger::getInstance() << LogLevel::ERROR << "Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl;
+                    LOG_ERROR("Your input was not interpretable! Please enter one of the given possibilities ('o' / 'own' / 'r' / 'remote')!" << std::endl);
                     correct = false;
                 }
 
@@ -382,31 +378,31 @@ void TaskManager::setup(size_t init_flags) {
         registerTask(std::make_shared<Task>("customOpcode", "Send Custom opcode to all Connections", []() -> void {
             uint8_t val;
             uint64_t input;
-            std::cout << "Opcode? [0,255]" << std::endl;
+            LOG_INFO("Opcode? [0,255]" << std::endl);
             std::cin >> input;
 
             val = (uint8_t)std::clamp(input, (uint64_t)0, (uint64_t)UINT8_MAX);
 
             ConnectionManager::getInstance().sendCustomOpcodeToAllConnections(val);
-            std::cout << "Custom opcode sent." << std::endl;
+            LOG_INFO("Custom opcode sent." << std::endl);
         }));
     }
 
     if (init_flags & performance_benchmarks) {
-        registerTask(std::make_shared<Task>("ss_tput", "Single-sided throughput benchmark", [this]() -> void {
-            genericBenchFunc("ss_tput", "Single-sided throughput benchmark", ss_tput, 1, Strategies::push);
+        registerTask(std::make_shared<Task>("ss_tput_push", "Single-sided throughput benchmark PUSH", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_push", "Single-sided throughput benchmark PUSH", BenchmarkType::throughput, Strategies::push));
         }));
 
-        registerTask(std::make_shared<Task>("ds_tput", "Double-sided throughput benchmark", [this]() -> void {
-            genericBenchFunc("ds_tput", "Double-sided throughput benchmark", ds_tput, 1, Strategies::push);
+        registerTask(std::make_shared<Task>("ds_tput_push", "Double-sided throughput benchmark PUSH", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_push", "Double-sided throughput benchmark PUSH", BenchmarkType::consume, Strategies::push));
         }));
 
         registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
-            genericBenchFunc("ss_tput_pull", "Single-sided throughput benchmark PULL", ss_tput, 1, Strategies::pull);
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_pull", "Single-sided throughput benchmark PULL", BenchmarkType::throughput, Strategies::pull));
         }));
 
         registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
-            genericBenchFunc("ds_tput_pull", "Double-sided throughput benchmark PULL", ds_tput, 1, Strategies::pull);
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_pull", "Double-sided throughput benchmark PULL", BenchmarkType::consume, Strategies::pull));
         }));
     }
 
@@ -423,57 +419,4 @@ void TaskManager::setup(size_t init_flags) {
 
 void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {
     globalAbort = fn;
-}
-
-void TaskManager::genericBenchFunc(std::string shortName, std::string name, bench_code tc, std::size_t connectionId, Strategies strat) {
-    using namespace std::chrono_literals;
-
-    for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
-        for (uint8_t num_sb = 1; num_sb <= num_rb; ++num_sb) {
-            for (uint8_t thrds = 1; thrds <= num_sb; ++thrds) {
-                auto in_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-                std::stringstream logNameStream;
-                logNameStream << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d-%H-%M-%S_") << shortName << "_" << +num_sb << "_" << +num_rb << "_" << +thrds << ".log";
-                std::string logName = logNameStream.str();
-                std::cout << "[Task] Set name: " << logName << std::endl;
-
-                for (uint64_t size_rb = 1ull << 15; size_rb < 1ull << 28; size_rb <<= 1) {
-                    buffer_config_t bufferConfig = {.num_own_send_threads = thrds,
-                                                    .num_own_receive_threads = 1,
-                                                    .num_remote_send_threads = 1,
-                                                    .num_remote_receive_threads = thrds,
-                                                    .num_own_receive = 1,
-                                                    .size_own_receive = 640,
-                                                    .num_remote_receive = num_rb,
-                                                    .size_remote_receive = size_rb + package_t::metaDataSize(),
-                                                    .num_own_send = num_sb,
-                                                    .size_own_send = size_rb + package_t::metaDataSize(),
-                                                    .num_remote_send = 1,
-                                                    .size_remote_send = 640,
-                                                    .meta_info_size = 16};
-
-                    Utility::check_or_die(ConnectionManager::getInstance().reconfigureBuffer(connectionId, bufferConfig));
-
-                    std::cout << "[main] Used connection with id '" << connectionId << "' and " << +num_rb << " remote receive buffer (size for one remote receive: " << Utility::GetBytesReadable(size_rb) << ")" << std::endl;
-                    std::cout << std::endl;
-                    std::cout << name << std::endl;
-
-                    switch (tc) {
-                        case ss_tput:
-                            Utility::check_or_die(ConnectionManager::getInstance().throughputBenchmark(connectionId, logName, strat));
-                            break;
-                        case ds_tput:
-                            Utility::check_or_die(ConnectionManager::getInstance().consumingBenchmark(connectionId, logName, strat));
-                            break;
-                        default:
-                            std::cout << "A non-valid bench_code was provided!";
-                            return;
-                    }
-
-                    std::cout << std::endl;
-                    std::cout << name << " ended." << std::endl;
-                }
-            }
-        }
-    }
 }

@@ -24,21 +24,22 @@ namespace memordma {
     typedef std::ios_base &(*manip3)(std::ios_base &);
 
 enum class LogLevel {
-    NOFORMAT,
-    FATAL,
-    ERROR,
-    CONSOLE,
-    WARNING,
-    INFO,
-    SUCCESS,
-    DEBUG1,
-    DEBUG2
+    LOG_NOFORMAT,
+    LOG_FATAL,
+    LOG_ERROR,
+    LOG_CONSOLE,
+    LOG_WARNING,
+    LOG_INFO,
+    LOG_SUCCESS,
+    LOG_DEBUG1,
+    LOG_DEBUG2
 };
 
 // log message colorization
 enum class LogColor {
     NOCOLOR,
     BLACK,
+    GREY,
     RED,
     GREEN,
     YELLOW,
@@ -93,39 +94,39 @@ struct LogMessage {
 };
 
 #ifdef MEMO_NOLOGGING
-    #define NOFORMAT(x)
-    #define FATAL(x)
-    #define ERROR(x)
-    #define CONSOLE(x)
-    #define WARNING(x)
-    #define INFO(x)
-    #define SUCCESS(x)
-    #define DEBUG1(x)
-    #define DEBUG2(x)
+    #define LOG_NOFORMAT(x)
+    #define LOG_FATAL(x)
+    #define LOG_ERROR(x)
+    #define LOG_CONSOLE(x)
+    #define LOG_WARNING(x)
+    #define LOG_INFO(x)
+    #define LOG_SUCCESS(x)
+    #define LOG_DEBUG1(x)
+    #define LOG_DEBUG2(x)
 
 #else
-    #define NOFORMAT(x) Logger::getInstance() << LogLevel::NOFORMAT << x
-    #define FATAL(x) Logger::getInstance() << LogLevel::FATAL << x
-    #define ERROR(x) Logger::getInstance() << LogLevel::ERROR << x
-    #define CONSOLE(x) Logger::getInstance() << LogLevel::CONSOLE << x
+    #define LOG_NOFORMAT(x) Logger::getInstance() << LogLevel::LOG_NOFORMAT << x
+    #define LOG_FATAL(x) Logger::getInstance() << LogLevel::LOG_FATAL << x
+    #define LOG_ERROR(x) Logger::getInstance() << LogLevel::LOG_ERROR << x
+    #define LOG_CONSOLE(x) Logger::getInstance() << LogLevel::LOG_CONSOLE << x
 
-    #ifndef MEMO_NOINFOLOGGING
-        #define WARNING(x) Logger::getInstance() << LogLevel::WARNING << x
-        #define INFO(x) Logger::getInstance() << LogLevel::INFO << x
-        #define SUCCESS(x) Logger::getInstance() << LogLevel::SUCCESS << x
+    #ifndef MEMO_NOLOG_INFOLOGGING
+        #define LOG_WARNING(x) Logger::getInstance() << LogLevel::LOG_WARNING << x
+        #define LOG_INFO(x) Logger::getInstance() << LogLevel::LOG_INFO << x
+        #define LOG_SUCCESS(x) Logger::getInstance() << LogLevel::LOG_SUCCESS << x
 
     #else
-        #define WARNING(x)
-        #define INFO(x)
-        #define SUCCESS(x)
+        #define LOG_WARNING(x)
+        #define LOG_INFO(x)
+        #define LOG_SUCCESS(x)
     #endif
 
     #ifndef MEMO_NODEBUGLOGGING
-        #define DEBUG1(x) Logger::getInstance() << LogLevel::DEBUG1 << x
-        #define DEBUG2(x) Logger::getInstance() << LogLevel::DEBUG2 << x
+        #define LOG_DEBUG1(x) Logger::getInstance() << LogLevel::LOG_DEBUG1 << x
+        #define LOG_DEBUG2(x) Logger::getInstance() << LogLevel::LOG_DEBUG2 << x
     #else
-        #define DEBUG1(x)
-        #define DEBUG2(x)
+        #define LOG_DEBUG1(x)
+        #define LOG_DEBUG2(x)
     #endif
 
 #endif
@@ -201,7 +202,7 @@ class Logger : public std::ostringstream {
     /// Defines the time formatting
     static std::string timeFormat;
     /// Defines the temporary log level
-    LogLevel currentLevel = LogLevel::CONSOLE;
+    LogLevel currentLevel = LogLevel::LOG_CONSOLE;
     static thread_local std::atomic<bool> initializedAtomic;
 
    public:

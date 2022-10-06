@@ -38,7 +38,7 @@ class Buffer {
 
 class SendBuffer : public Buffer {
    public:
-    uint8_t sendOpcode = rdma_data_finished;  // the opcode that is sent at the end of a data sending process to indicate the end of the process
+    uint8_t sendOpcode = rdma_no_op;  // the opcode that is sent at the end of a data sending process to indicate the end of the process
 
     explicit SendBuffer(std::size_t _bufferSize);
 

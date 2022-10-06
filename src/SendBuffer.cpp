@@ -6,7 +6,7 @@
 using namespace memordma;
 
 SendBuffer::SendBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
-    INFO("[SendBuffer] Allocating: " << getBufferSize() << " bytes for RDMA Send-Buffer" << std::endl;)
+    LOG_INFO("[SendBuffer] Allocating: " << getBufferSize() << " bytes for RDMA Send-Buffer" << std::endl);
 }
 
 /**

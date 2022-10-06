@@ -40,9 +40,9 @@ class Utility {
         }                            \
     }
     */
-    static void check_or_die(size_t val) {
+    static void checkOrDie(size_t val) {
         if (val != 0) {
-            ERROR("Check failed: " << strerror(errno) << std::endl;)
+            LOG_ERROR("Check failed: " << strerror(errno) << std::endl;)
             exit(EXIT_FAILURE);
         }
     };
@@ -68,28 +68,22 @@ class Utility {
         // Determine the suffix and readable value
         std::string suffix;
         double readable;
-        if (i >= 0x1000000000000000)  // Exabyte
-        {
+        if (i >= 0x1000000000000000) {  // Exabyte
             suffix = "EB";
             readable = (i >> 50);
-        } else if (i >= 0x4000000000000)  // Petabyte
-        {
+        } else if (i >= 0x4000000000000) {  // Petabyte
             suffix = "PB";
             readable = (i >> 40);
-        } else if (i >= 0x10000000000)  // Terabyte
-        {
+        } else if (i >= 0x10000000000) {  // Terabyte
             suffix = "TB";
             readable = (i >> 30);
-        } else if (i >= 0x40000000)  // Gigabyte
-        {
+        } else if (i >= 0x40000000) {  // Gigabyte
             suffix = "GB";
             readable = (i >> 20);
-        } else if (i >= 0x100000)  // Megabyte
-        {
+        } else if (i >= 0x100000) {  // Megabyte
             suffix = "MB";
             readable = (i >> 10);
-        } else if (i >= 0x400)  // Kilobyte
-        {
+        } else if (i >= 0x400) {  // Kilobyte
             suffix = "KB";
             readable = i;
         } else {

@@ -17,7 +17,7 @@ namespace memordma {
 
 thread_local std::shared_ptr<Logger> Logger::instance;
 
-LogLevel Logger::logLevel = LogLevel::INFO;
+LogLevel Logger::logLevel = LogLevel::LOG_INFO;
 std::string Logger::timeFormat = "%m/%d %H:%M:%S";
 std::string Logger::logFileName = "";
 std::ofstream Logger::logfile{};
@@ -26,6 +26,7 @@ bool Logger::logToFile = false;
 
 thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> Logger::colorCodes_ = {
     {LogColor::BLACK, {"black", "\033[30m"}},
+    {LogColor::GREY, {"grey", "\033[1;30m"}},
     {LogColor::RED, {"red", "\033[31m"}},
     {LogColor::GREEN, {"green", "\033[32m"}},
     {LogColor::YELLOW, {"yellow", "\033[33m"}},
@@ -39,20 +40,20 @@ thread_local std::unordered_map<LogColor, ColorCode, LogColorHash> Logger::color
     {LogColor::LIGHT_YELLOW, {"light_yellow", "\033[93m"}},
     {LogColor::LIGHT_BLUE, {"light_blue", "\033[94m"}},
     {LogColor::LIGHT_MAGENTA, {"light_magenta", "\033[95m"}},
-    {LogColor::LIGHT_CYAN, {"light_cyan", "\033[96m"}},
+    {LogColor::LIGHT_CYAN, {"light_cyan", "\033[1;36m"}},
     {LogColor::WHITE, {"white", "\033[97m"}},
     {LogColor::NOCOLOR, {"noc", "\033[0;39m"}}};
 
 thread_local std::unordered_map<LogLevel, std::shared_ptr<LogFormat>, LogLevelHash> Logger::formatMap = {
-    {LogLevel::NOFORMAT, std::make_shared<LogFormat>("", getColorCode(LogColor::NOCOLOR))},
-    {LogLevel::FATAL, std::make_shared<LogFormat>("FATAL", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_FATAL)))},
-    {LogLevel::ERROR, std::make_shared<LogFormat>("ERROR", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_ERROR)))},
-    {LogLevel::CONSOLE, std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)))},
-    {LogLevel::WARNING, std::make_shared<LogFormat>("WARNING", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_WARNING)))},
-    {LogLevel::INFO,    std::make_shared<LogFormat>("INFO", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_INFO)))},
-    {LogLevel::SUCCESS, std::make_shared<LogFormat>("SUCCESS", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_SUCCESS)))},
-    {LogLevel::DEBUG1,  std::make_shared<LogFormat>("DEBUG 1", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG1)))},
-    {LogLevel::DEBUG2,  std::make_shared<LogFormat>("DEBUG 2", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG2)))}
+    {LogLevel::LOG_NOFORMAT, std::make_shared<LogFormat>("", getColorCode(LogColor::NOCOLOR))},
+    {LogLevel::LOG_FATAL, std::make_shared<LogFormat>("FATAL", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_FATAL)))},
+    {LogLevel::LOG_ERROR, std::make_shared<LogFormat>("ERROR", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_ERROR)))},
+    {LogLevel::LOG_CONSOLE, std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)))},
+    {LogLevel::LOG_WARNING, std::make_shared<LogFormat>("WARNING", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_WARNING)))},
+    {LogLevel::LOG_INFO,    std::make_shared<LogFormat>("INFO", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_INFO)))},
+    {LogLevel::LOG_SUCCESS, std::make_shared<LogFormat>("SUCCESS", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_SUCCESS)))},
+    {LogLevel::LOG_DEBUG1,  std::make_shared<LogFormat>("DEBUG 1", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG1)))},
+    {LogLevel::LOG_DEBUG2,  std::make_shared<LogFormat>("DEBUG 2", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_DEBUG2)))}
     };
 
 thread_local std::atomic<bool> Logger::initializedAtomic = {false};
@@ -97,7 +98,7 @@ Logger& Logger::flush() {
         if (colorEnabled) {
             s << Logger::colorCodes_.at(LogColor::NOCOLOR).value;
         }
-        if (currentLevel != LogLevel::NOFORMAT) {
+        if (currentLevel != LogLevel::LOG_NOFORMAT) {
             // time stamp
             s << "[" << ft << "]";
             // log level
@@ -109,7 +110,7 @@ Logger& Logger::flush() {
         // logMessage(currentLevel, s.str());
         std::cout << s.str();
         if (logToFile) {
-            if (currentLevel != LogLevel::NOFORMAT) {
+            if (currentLevel != LogLevel::LOG_NOFORMAT) {
                 logfile << "[" << ft << "][" << std::setfill(' ') << std::setw(7) << formatMap.at(currentLevel)->level << "] " << str() << std::endl;
             } else {
                 logfile << "[" << ft << "] " << str() << std::endl;
@@ -118,7 +119,7 @@ Logger& Logger::flush() {
         }
     }
     str("");
-    currentLevel = LogLevel::CONSOLE;
+    currentLevel = LogLevel::LOG_CONSOLE;
     return *this;
 }
 
@@ -152,21 +153,21 @@ Logger::~Logger() {
 void Logger::LoadConfiguration() {
     std::string slevel = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_LEVEL, nullptr, true);
     if (slevel == "fatal")
-        logLevel = LogLevel::FATAL;
+        logLevel = LogLevel::LOG_FATAL;
     else if (slevel == "error")
-        logLevel = LogLevel::ERROR;
+        logLevel = LogLevel::LOG_ERROR;
     else if (slevel == "console")
-        logLevel = LogLevel::CONSOLE;
+        logLevel = LogLevel::LOG_CONSOLE;
     else if (slevel == "warning")
-        logLevel = LogLevel::WARNING;
+        logLevel = LogLevel::LOG_WARNING;
     else if (slevel == "info")
-        logLevel = LogLevel::INFO;
+        logLevel = LogLevel::LOG_INFO;
     else if (slevel == "success")
-        logLevel = LogLevel::SUCCESS;
+        logLevel = LogLevel::LOG_SUCCESS;
     else if (slevel == "debug1")
-        logLevel = LogLevel::DEBUG1;
+        logLevel = LogLevel::LOG_DEBUG1;
     else if (slevel == "debug2")
-        logLevel = LogLevel::DEBUG2;
+        logLevel = LogLevel::LOG_DEBUG2;
 
     timeFormat = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_LOGGER_TIMEFORMAT);
     colorEnabled = ConnectionManager::getInstance().configuration->get<int>(MEMO_DEFAULT_LOGGER_COLOR_ENABLE);
@@ -186,7 +187,7 @@ void Logger::LoadConfiguration() {
         }
     }
 
-    formatMap[LogLevel::CONSOLE] = std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)));
+    formatMap[LogLevel::LOG_CONSOLE] = std::make_shared<LogFormat>("CONSOLE", getColorCode(ConnectionManager::getInstance().configuration->get(MEMO_DEFAULT_LOGGER_COLOR_CONSOLE)));
 }
 
 }  // namespace memordma

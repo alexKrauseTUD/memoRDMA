@@ -11,7 +11,7 @@
 
 Buffer::Buffer(std::size_t _bufferSize) : bufferSize{_bufferSize} {
     if (bufferSize % 2 != 0) {
-        std::cout << "[Buffer] WARNING - bufferSize not divisible by 2. Rounding up!" << std::endl;
+        std::cout << "[Buffer] Parameter bufferSize not divisible by 2. Rounding up!" << std::endl;
         ++bufferSize;
     }
 
@@ -128,9 +128,9 @@ int Buffer::postRequest(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint
 
     using namespace memordma;
     if (send_result != 0) {
-        ERROR("Send_result: " << send_result << std::endl;)
+        LOG_ERROR("Send_result: " << send_result << std::endl);
     }
-    Utility::check_or_die(send_result);
+    Utility::checkOrDie(send_result);
 
     return 0;
 }
