@@ -6,16 +6,27 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <map>
 #include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "Buffer.h"
 
 #define MAX_POLL_CQ_TIMEOUT 30000  // ms
+
+enum class CompletionType : uint8_t {
+    useDataCq,
+    useMetaCq
+};
+
+enum class BenchmarkType : uint8_t {
+    throughput,
+    consume
+};
 
 // structure of test parameters
 struct config_t {
@@ -23,8 +34,8 @@ struct config_t {
     std::string server_name;  // server hostname
     uint32_t tcp_port;        // server TCP port
     bool client_mode;         // Don't run an event loop
-    int32_t ib_port;              // local IB port to work with
-    int32_t gid_idx;              // GID index to use
+    int32_t ib_port;          // local IB port to work with
+    int32_t gid_idx;          // GID index to use
 };
 
 struct buffer_config_t {
@@ -56,7 +67,8 @@ struct cm_con_data_t {
     uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
     uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
     buffer_config_t buffer_config;
-    uint32_t qp_num;  // QP number
+    uint32_t dataQpNum;  // QP number
+    uint32_t metaQpNum;  // QP number
     uint16_t lid;     // LID of the IB port
     uint8_t gid[16];  // GID
 } __attribute__((packed));
@@ -77,9 +89,12 @@ struct resources {
     struct ibv_port_attr port_attr;               // IB port attributes
     struct cm_con_data_t remote_props;            // values to connect to remote side
     struct ibv_context *ib_ctx;                   // device handle
-    struct ibv_pd *pd;                            // PD handle
-    struct ibv_cq *cq;                            // CQ handle
-    struct ibv_qp *qp;                            // QP handle
+    struct ibv_pd *dataPd;                        // PD handle
+    struct ibv_pd *metaPd;                        // PD handle
+    struct ibv_cq *dataCq;                        // CQ handle
+    struct ibv_cq *metaCq;                        // CQ handle
+    struct ibv_qp *dataQp;                        // QP handle
+    struct ibv_qp *metaQp;                        // QP handle
     std::vector<uint64_t> remote_receive_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_receive_rkeys;
     std::vector<uint64_t> remote_send_buffer;  // memory buffer pointer, used for RDMA send ops
@@ -126,7 +141,10 @@ class Connection {
     int throughputBenchmark(std::string logName, Strategies strat);
     int consumingBenchmark(std::string logName, Strategies strat);
 
-    static int sock_connect(std::string client_name, uint32_t* port);
+    template <BenchmarkType benchType, Strategies strat>
+    int benchmark(std::string shortName, std::string name);
+
+    static int sock_connect(std::string client_name, uint32_t *port);
     static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data);
     static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig);
     static void sock_close(int &sockfd);
@@ -139,13 +157,15 @@ class Connection {
     uint32_t localConId;
     resources res;
 
-    std::mutex receiveBufferCheckMutex;
-    std::mutex sendBufferCheckMutex;
+    std::shared_mutex receiveBufferCheckMutex;
+    std::shared_mutex sendBufferCheckMutex;
     std::mutex receiveBufferBlockMutex;
     std::mutex sendBufferBlockMutex;
     std::mutex reconfigureMutex;
     std::mutex closingMutex;
     std::mutex idGeneratorMutex;
+
+    std::shared_mutex completionSetMutex;
 
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
@@ -173,7 +193,9 @@ class Connection {
     int changeQueuePairStateToInit(struct ibv_qp *queue_pair);
     int changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
-    // int pollCompletion();
+    
+    template <CompletionType compType>
+    uint64_t pollCompletion();
 
     reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
     void ackReconfigureBuffer(size_t index);
@@ -190,7 +212,6 @@ class Connection {
 
     std::atomic<bool> globalReceiveAbort;
     std::atomic<bool> globalSendAbort;
-    std::atomic<bool> completionAbort;
 
     void destroyResources();
 
@@ -198,10 +219,9 @@ class Connection {
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_receive;
     std::function<void(std::atomic<bool> *, size_t tid, size_t thrdcnt)> check_send;
 
-    std::function<void(std::atomic<bool> *)> pollCompletion;
-    std::vector<std::unique_ptr<std::thread>> pollCompletionThreadPool;
-
     std::mt19937_64 randGen;
+
+    std::unordered_set<uint64_t> completionSet;
 
     std::vector<std::unique_ptr<std::thread>> readWorkerPool;
     std::vector<std::unique_ptr<std::thread>> sendWorkerPool;

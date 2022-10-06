@@ -95,7 +95,7 @@ void Configuration::add(int argc, char* argv[]) {
         size_t pos = argument.find_first_of("=");
         if (argument[0] != '-') {  // assume config file and read params from there
             if (!readFromFile(argument)) {
-                WARNING("Could not open configuration file ('" << argument << "')." << std::endl);
+                LOG_WARNING("Could not open configuration file ('" << argument << "')." << std::endl);
             }
         } else if (pos == std::string::npos) {  // assume boolean switch
             argument.erase(0, 1);

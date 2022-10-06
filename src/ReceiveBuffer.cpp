@@ -6,7 +6,7 @@
 using namespace memordma;
 
 ReceiveBuffer::ReceiveBuffer(std::size_t _bufferSize) : Buffer(_bufferSize) {
-    INFO("[ReceiveBuffer] Allocating: " << getBufferSize() << " bytes for RDMA Receive-Buffer" << std::endl;)
+    LOG_INFO("[ReceiveBuffer] Allocating: " << getBufferSize() << " bytes for RDMA Receive-Buffer" << std::endl);
 }
 
 std::size_t ReceiveBuffer::getMaxPayloadSize() const {

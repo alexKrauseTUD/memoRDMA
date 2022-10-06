@@ -128,9 +128,9 @@ int Buffer::postRequest(int len, ibv_wr_opcode opcode, uint64_t receivePtr, uint
 
     using namespace memordma;
     if (send_result != 0) {
-        ERROR("Send_result: " << send_result << std::endl;)
+        LOG_ERROR("Send_result: " << send_result << std::endl);
     }
-    Utility::check_or_die(send_result);
+    Utility::checkOrDie(send_result);
 
     return 0;
 }

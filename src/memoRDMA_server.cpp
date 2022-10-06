@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
     Logger::LoadConfiguration();
 
     if (!checkLinkUp()) {
-        Logger::getInstance() << LogLevel::FATAL << "Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl;
+        LOG_FATAL("Could not find 'Active' state in ibstat, please check! Maybe you need to run \"sudo opensm -B\" on any server." << std::endl);
         exit(-2);
     }
 
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        Logger::getInstance() << LogLevel::INFO << "Chosen:" << op << std::endl;
+        LOG_DEBUG1("Chosen:" << op << std::endl);
         std::transform(op.begin(), op.end(), op.begin(), [](unsigned char c) { return std::tolower(c); });
 
         if (op == "exit") {
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
                 id = stol(op);
                 converted = true;
             } catch (...) {
-                Logger::getInstance() << LogLevel::ERROR << "No number given." << std::endl;
+                LOG_ERROR("No number given." << std::endl);
                 continue;
             }
             if (converted) {
