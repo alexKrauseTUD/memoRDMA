@@ -226,7 +226,7 @@ class Connection {
     std::vector<std::unique_ptr<std::thread>> sendWorkerPool;
 
     static const std::size_t TEST_ITERATIONS = 10;
-    static const std::size_t MAX_DATA_SIZE = 31;
+    static const std::uint64_t MAX_DATA_ELEMENTS = 1ull << 31;
 };
 
 #endif  // MEMORDMA_RDMA_CONNECTION

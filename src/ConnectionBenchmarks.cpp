@@ -20,9 +20,8 @@ using namespace memordma;
 
 int Connection::benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat) {
     /* provide data to remote */
-    std::size_t maxDataElements = 1ull << MAX_DATA_SIZE;
     DataProvider d;
-    d.generateDummyData(maxDataElements >> 1);
+    d.generateDummyData(MAX_DATA_ELEMENTS);
 
     uint8_t sendOpcode = rdma_ready;
     if (benchType == BenchmarkType::throughput) {
@@ -70,7 +69,7 @@ int Connection::benchmark(const std::string shortName, const std::string name, c
                     LOG_DEBUG1("[" << name << "]\tUsed connection with id '1', " << +num_rb << " remote receive buffer (size for one remote receive: " << Utility::GetBytesReadable(bufferSize) << ") and " << +num_sb << " \n"
                                    << std::endl);
 
-                    for (std::size_t elementCount = 1; elementCount < maxDataElements; elementCount <<= 1) {
+                    for (std::size_t elementCount = 1; elementCount <= MAX_DATA_ELEMENTS; elementCount <<= 1) {
                         for (std::size_t iteration = 0; iteration < TEST_ITERATIONS; ++iteration) {
                             uint64_t dataSize = elementCount * sizeof(uint64_t);
                             char *copy = reinterpret_cast<char *>(d.data);
