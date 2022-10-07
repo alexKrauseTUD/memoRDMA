@@ -27,6 +27,7 @@ using namespace memordma;
 
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
     config = _config;
+    validateBufferConfig(_bufferConfig);
     bufferConfig = _bufferConfig;
     localConId = _localConId;
     res.sock = -1;
@@ -973,6 +974,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     std::size_t numBlockedSend = 0;
     bool allBlocked = false;
 
+    validateBufferConfig(bufConfig);
+
     while (!allBlocked) {
         while (numBlockedRec < bufferConfig.num_own_receive) {
             for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
@@ -1211,126 +1214,117 @@ void Connection::ackReconfigureBuffer(size_t index) {
     setReceiveOpcode(index, rdma_ready, true);
 }
 
-/**
- * @brief Wrapper for adding a number of RBs to the configuration.
- *
- * @param quantity Number of RBs to add.
- * @param own Whether to add them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own = true) {
-    buffer_config_t bufConfig = bufferConfig;
-    size_t newNumber;
-
-    if (own) {
-        newNumber = bufConfig.num_own_receive + quantity;
-    } else {
-        newNumber = bufConfig.num_remote_receive + quantity;
+void Connection::validateBufferConfig(buffer_config_t &bufConfig) {
+    // Checking meta info size -> atm this is not really needed, as this value is currently unused. if it is used, the corresponding parts of this function should be changed.
+    if (bufConfig.meta_info_size < 2) {
+        LOG_WARNING("The metaInfo struct needs at least a size of 2 to work. You violated this rule! Therefore, the meta info size is set to 2." << std::endl);
+        bufConfig.meta_info_size = 2;
+    } else if (bufConfig.meta_info_size % 2 != 0) {
+        LOG_WARNING("The metaInfoSize needs to be divisible by 2 to work. You violated this rule! Therefore, the meta info size is round up." << std::endl);
+        bufConfig.meta_info_size++;
     }
 
-    if (newNumber > (metaInfoReceive.size() / 2)) {
-        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
-        newNumber = (metaInfoReceive.size() / 2);
-    } else if (newNumber < 1) {
-        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl);
-        newNumber = 1;
+    // Checking size of the RBs
+    if (bufConfig.size_own_receive > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule for the local buffers! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_own_receive = 1ull << 30;
+    } else if (bufConfig.size_own_receive < 640) {
+        LOG_WARNING("The minimal size for an RB is 640! You violated this rule for the local buffers! Therefore, the size of RB is set to 640." << std::endl);
+        bufConfig.size_own_receive = 640;
     }
 
-    if (own) {
-        bufConfig.num_own_receive = newNumber;
-    } else {
-        bufConfig.num_remote_receive = newNumber;
+    if (bufConfig.size_remote_receive > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule for the remote buffers! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_remote_receive = 1ull << 30;
+    } else if (bufConfig.size_remote_receive < 640) {
+        LOG_WARNING("The minimal size for an RB is 640! You violated this rule for the remote buffers! Therefore, the size of RB is set to 640." << std::endl);
+        bufConfig.size_remote_receive = 640;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for removing a number of RBs to the configuration.
- *
- * @param quantity Number of RBs to remove (1 must be left).
- * @param own Whether to remove them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own = true) {
-    buffer_config_t bufConfig = bufferConfig;
-    int newNumber;
-
-    if (own) {
-        newNumber = bufConfig.num_own_receive - quantity;
-    } else {
-        newNumber = bufConfig.num_remote_receive - quantity;
+    // Checking size of the SBs
+    if (bufConfig.size_own_send > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule for the local buffers! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_own_send = 1ull << 30;
+    } else if (bufConfig.size_own_send < 640) {
+        LOG_WARNING("The minimal size for an SB is 640! You violated this rule for the local buffers! Therefore, the size of SB is set to 640." << std::endl);
+        bufConfig.size_own_send = 640;
     }
 
-    if (newNumber > (metaInfoReceive.size() / 2)) {
-        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl);
-        newNumber = 1;
-    } else if (newNumber < 1) {
-        LOG_WARNING("There has to be at least 1 RB on each side! You violated this rule! Therefore, the number of RB is set to 1." << std::endl);
-        newNumber = (metaInfoReceive.size() / 2);
+    if (bufConfig.size_remote_send > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule for the remote buffers! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_remote_send = 1ull << 30;
+    } else if (bufConfig.size_remote_send < 640) {
+        LOG_WARNING("The minimal size for an SB is 640! You violated this rule for the remote buffers! Therefore, the size of SB is set to 640." << std::endl);
+        bufConfig.size_remote_send = 640;
     }
 
-    if (own) {
-        bufConfig.num_own_receive = newNumber;
-    } else {
-        bufConfig.num_remote_receive = newNumber;
+    // Checking number of RBs
+    if (bufConfig.num_own_receive > (metaInfoReceive.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffers on each side! You violated this rule for the local buffers! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
+        bufConfig.num_own_receive = (metaInfoReceive.size() / 2);
+    } else if (bufConfig.num_own_receive < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local RB is set to 1." << std::endl);
+        bufConfig.num_own_receive = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for resizing all RBs.
- *
- * @param newSize The new size for all RBs.
- * @param own Whether to resize them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::resizeReceiveBuffer(std::size_t newSize, bool own) {
-    buffer_config_t bufConfig = bufferConfig;
-
-    if (newSize > (1ull << 30)) {
-        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
-        newSize = (1ull << 30);
-    } else if (newSize < 640) {
-        LOG_WARNING("There has to be at least 640 Byte for each RB! You violated this rule! Therefore, the size of RB is set to 640." << std::endl);
-        newSize = 640;
+    if (bufConfig.num_remote_receive > (metaInfoReceive.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffers on each side! You violated this rule for the remote buffers! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
+        bufConfig.num_remote_receive = (metaInfoReceive.size() / 2);
+    } else if (bufConfig.num_remote_receive < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote RB is set to 1." << std::endl);
+        bufConfig.num_remote_receive = 1;
     }
 
-    if (own) {
-        bufConfig.size_own_receive = newSize;
-    } else {
-        bufConfig.size_remote_receive = newSize;
+    // Checking number of SBs
+    if (bufConfig.num_own_send > (metaInfoSend.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoSend.size() / 2) << " Send Buffers on each side! You violated this rule for the local buffers! Therefore, the number of SB is set to " << (metaInfoSend.size() / 2) << std::endl);
+        bufConfig.num_own_send = (metaInfoSend.size() / 2);
+    } else if (bufConfig.num_own_send < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local SB is set to 1." << std::endl);
+        bufConfig.num_own_send = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for resizing all SBs.
- *
- * @param newSize The new size for all SBs.
- * @param own Whether to resize them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
-    buffer_config_t bufConfig = bufferConfig;
-
-    if (newSize > (1ull << 30)) {
-        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
-        newSize = (1ull << 30);
-    } else if (newSize < 640) {
-        LOG_WARNING("There has to be at least 640 Byte for each SB! You violated this rule! Therefore, the size of SB is set to 640." << std::endl);
-        newSize = 640;
+    if (bufConfig.num_remote_send > (metaInfoSend.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoSend.size() / 2) << " Send Buffers on each side! You violated this rule for the remote buffers! Therefore, the number of SB is set to " << (metaInfoSend.size() / 2) << std::endl);
+        bufConfig.num_remote_send = (metaInfoSend.size() / 2);
+    } else if (bufConfig.num_remote_send < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote SB is set to 1." << std::endl);
+        bufConfig.num_remote_send = 1;
     }
 
-    if (own) {
-        bufConfig.size_own_send = newSize;
-    } else {
-        bufConfig.size_remote_send = newSize;
+    // Checking number of Receive Threads
+    if (bufConfig.num_own_receive_threads > bufConfig.num_own_receive) {
+        LOG_WARNING("It is not possible to have more Receive Threads then RBs. You violated this rule for the local threads! Therefore, the number of Receive Threads is set to " << bufConfig.num_own_receive << std::endl);
+        bufConfig.num_own_receive_threads = bufConfig.num_own_receive;
+    } else if (bufConfig.num_own_receive_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local Receive Threads is set to 1." << std::endl);
+        bufConfig.num_own_receive_threads = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
+    if (bufConfig.num_remote_receive_threads > bufConfig.num_remote_receive) {
+        LOG_WARNING("It is not possible to have more Receive Threads then RBs. You violated this rule for the remote threads! Therefore, the number of Receive Threads is set to " << bufConfig.num_remote_receive << std::endl);
+        bufConfig.num_remote_receive_threads = bufConfig.num_remote_receive;
+    } else if (bufConfig.num_remote_receive_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote Receive Threads is set to 1." << std::endl);
+        bufConfig.num_remote_receive_threads = 1;
+    }
+
+    // Checking number of Send Threads
+    if (bufConfig.num_own_send_threads > bufConfig.num_own_send) {
+        LOG_WARNING("It is not possible to have more Send Threads then SBs. You violated this rule for the local threads! Therefore, the number of Send Threads is set to " << bufConfig.num_own_send << std::endl);
+        bufConfig.num_own_send_threads = bufConfig.num_own_send;
+    } else if (bufConfig.num_own_send_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local Send Threads is set to 1." << std::endl);
+        bufConfig.num_own_send_threads = 1;
+    }
+
+    if (bufConfig.num_remote_send_threads > bufConfig.num_remote_send) {
+        LOG_WARNING("It is not possible to have more Send Threads then SBs. You violated this rule for the remote threads! Therefore, the number of Send Threads is set to " << bufConfig.num_remote_send << std::endl);
+        bufConfig.num_remote_send_threads = bufConfig.num_remote_send;
+    } else if (bufConfig.num_remote_send_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote Send Threads is set to 1." << std::endl);
+        bufConfig.num_remote_send_threads = 1;
+    }
 }
 
 Connection::~Connection() {

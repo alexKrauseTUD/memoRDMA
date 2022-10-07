@@ -34,11 +34,6 @@ class ConnectionManager {
     int sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote);
     int sendCustomOpcodeToAllConnections(uint8_t code);
 
-    int addReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
-    int removeReceiveBuffer(std::size_t connectionId, std::size_t quantity, bool own);
-    int resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own);
-    int resizeSendBuffer(std::size_t connectionId, std::size_t newSize, bool own);
-
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
     int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat);

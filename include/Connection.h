@@ -128,10 +128,7 @@ class Connection {
 
     void receiveDataFromRemote(const size_t index, bool consu, Strategies strat);
 
-    int addReceiveBuffer(std::size_t quantity, bool own);
-    int removeReceiveBuffer(std::size_t quantity, bool own);
-    int resizeReceiveBuffer(std::size_t newSize, bool own);
-    int resizeSendBuffer(std::size_t newSize, bool own);
+    void validateBufferConfig(buffer_config_t &bufConfig);
 
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);
