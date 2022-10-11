@@ -206,7 +206,7 @@ void Connection::destroyResources() {
  */
 void Connection::printConnectionInfo() const {
     LOG_INFO("Connection Information:\n"
-             << "Remote IP:\t" << config.server_name << ":" << config.tcp_port << "\n"
+             << "Remote IP:\t" << config.serverName << ":" << config.tcpPort << "\n"
              << "\t\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
              << "\t\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
              << "\t\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
@@ -249,18 +249,18 @@ void Connection::setupReceiveBuffer() {
  *
  */
 void Connection::initTCP() {
-    if (!config.client_mode) {
+    if (!config.clientMode) {
         // @server
-        res.sock = sockConnect(config.server_name, &config.tcp_port);
+        res.sock = sockConnect(config.serverName, &config.tcpPort);
         if (res.sock < 0) {
-            LOG_ERROR("Failed to establish TCP connection to server " << config.server_name.c_str() << ", port " << config.tcp_port << std::endl);
+            LOG_ERROR("Failed to establish TCP connection to server " << config.serverName.c_str() << ", port " << config.tcpPort << std::endl);
             exit(EXIT_FAILURE);
         }
     } else {
         // @client
-        res.sock = sockConnect("", &config.tcp_port);
+        res.sock = sockConnect("", &config.tcpPort);
         if (res.sock < 0) {
-            LOG_ERROR("Failed to establish TCP connection with client on port " << +config.tcp_port << std::endl);
+            LOG_ERROR("Failed to establish TCP connection with client on port " << +config.tcpPort << std::endl);
             exit(EXIT_FAILURE);
         }
     }
@@ -272,15 +272,15 @@ void Connection::initTCP() {
  *
  */
 void Connection::exchangeBufferInfo() {
-    struct cm_con_data_t local_con_data;
-    struct cm_con_data_t remote_con_data;
-    struct cm_con_data_t tmp_con_data;
+    struct ConnectionData localConnectionData;
+    struct ConnectionData remoteConnectionData;
+    struct ConnectionData tempConnectionData;
 
-    if (config.client_mode) {
+    if (config.clientMode) {
         // Client waits on Server-Information as it is needed to create the buffers
-        Utility::checkOrDie(receiveTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data));
+        Utility::checkOrDie(receiveTcp(res.sock, sizeof(struct ConnectionData), (char *)&tempConnectionData));
 
-        bufferConfig = invertBufferConfig(tmp_con_data.buffer_config);
+        bufferConfig = invertBufferConfig(tempConnectionData.bufferConnectionData.bufferConfig);
 
         metaInfoReceive = std::array<uint8_t, 16>{0};
         metaInfoSend = std::array<uint8_t, 16>{0};
@@ -293,91 +293,91 @@ void Connection::exchangeBufferInfo() {
     // Creating the necessary RDMA resources locally.
     createResources();
 
-    union ibv_gid my_gid;
-    memset(&my_gid, 0, sizeof(my_gid));
+    union ibv_gid myGid;
+    memset(&myGid, 0, sizeof(myGid));
 
-    if (config.gid_idx >= 0) {
-        Utility::checkOrDie(ibv_query_gid(res.ib_ctx, config.ib_port, config.gid_idx, &my_gid));
+    if (config.gidIndex >= 0) {
+        Utility::checkOrDie(ibv_query_gid(res.ib_ctx, config.infiniBandPort, config.gidIndex, &myGid));
     }
 
     // \begin exchange required info like buffer (addr & rkey) / qp_num / lid,
     // etc. exchange using TCP sockets info required to connect QPs
-    local_con_data.meta_receive_buf = Utility::htonll((uintptr_t)&metaInfoReceive);
-    local_con_data.meta_receive_rkey = htonl(metaInfoReceiveMR->rkey);
-    local_con_data.meta_send_buf = Utility::htonll((uintptr_t)&metaInfoSend);
-    local_con_data.meta_send_rkey = htonl(metaInfoSendMR->rkey);
-    local_con_data.receive_num = ownReceiveBuffer.size();
-    local_con_data.send_num = ownSendBuffer.size();
+    localConnectionData.metaReceiveBuffer = Utility::htonll((uintptr_t)&metaInfoReceive);
+    localConnectionData.metaReceiveRkey = htonl(metaInfoReceiveMR->rkey);
+    localConnectionData.metaSendBuffer = Utility::htonll((uintptr_t)&metaInfoSend);
+    localConnectionData.metaSendRkey = htonl(metaInfoSendMR->rkey);
 
     // collect buffer information for RB
     auto pos = 0;
     for (const auto &rb : ownReceiveBuffer) {
-        local_con_data.receive_buf[pos] = Utility::htonll((uintptr_t)rb->getBufferPtr());
-        local_con_data.receive_rkey[pos++] = htonl(rb->getMrPtr()->rkey);
+        localConnectionData.bufferConnectionData.receiveBuffers[pos] = Utility::htonll((uintptr_t)rb->getBufferPtr());
+        localConnectionData.bufferConnectionData.receiveRkeys[pos++] = htonl(rb->getMrPtr()->rkey);
     }
 
     // collect buffer information for SB
     pos = 0;
     for (const auto &sb : ownSendBuffer) {
-        local_con_data.send_buf[pos] = Utility::htonll((uintptr_t)sb->getBufferPtr());
-        local_con_data.send_rkey[pos++] = htonl(sb->getMrPtr()->rkey);
+        localConnectionData.bufferConnectionData.sendBuffers[pos] = Utility::htonll((uintptr_t)sb->getBufferPtr());
+        localConnectionData.bufferConnectionData.sendRkeys[pos++] = htonl(sb->getMrPtr()->rkey);
     }
 
-    local_con_data.buffer_config = bufferConfig;
+    localConnectionData.bufferConnectionData.bufferConfig = bufferConfig;
 
-    local_con_data.dataQpNum = htonl(res.dataQp->qp_num);
-    local_con_data.metaQpNum = htonl(res.metaQp->qp_num);
-    local_con_data.lid = htons(res.port_attr.lid);
-    memcpy(local_con_data.gid, &my_gid, 16);
+    localConnectionData.dataQpNum = htonl(res.dataQp->qp_num);
+    localConnectionData.metaQpNum = htonl(res.metaQp->qp_num);
+    localConnectionData.lid = htons(res.port_attr.lid);
+    memcpy(localConnectionData.gid, &myGid, 16);
 
-    if (!config.client_mode) {
+    if (!config.clientMode) {
         // Server sends information to Client and waits on Client-Information
-        Utility::checkOrDie(sockSyncData(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data));
+        Utility::checkOrDie(sockSyncData(res.sock, sizeof(struct ConnectionData), (char *)&localConnectionData, (char *)&tempConnectionData));
     } else {
         // Client responds to server with own information
-        Utility::checkOrDie(sendTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data));
+        Utility::checkOrDie(sendTcp(res.sock, sizeof(struct ConnectionData), (char *)&localConnectionData));
     }
 
-    remote_con_data.meta_receive_buf = Utility::ntohll(tmp_con_data.meta_receive_buf);
-    remote_con_data.meta_receive_rkey = ntohl(tmp_con_data.meta_receive_rkey);
-    remote_con_data.meta_send_buf = Utility::ntohll(tmp_con_data.meta_send_buf);
-    remote_con_data.meta_send_rkey = ntohl(tmp_con_data.meta_send_rkey);
-    remote_con_data.receive_num = tmp_con_data.receive_num;
-    remote_con_data.send_num = tmp_con_data.send_num;
-    remote_con_data.buffer_config = invertBufferConfig(tmp_con_data.buffer_config);
-    remote_con_data.dataQpNum = ntohl(tmp_con_data.dataQpNum);
-    remote_con_data.metaQpNum = ntohl(tmp_con_data.metaQpNum);
-    remote_con_data.lid = ntohs(tmp_con_data.lid);
-    memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
+    remoteConnectionData.metaReceiveBuffer = Utility::ntohll(tempConnectionData.metaReceiveBuffer);
+    remoteConnectionData.metaReceiveRkey = ntohl(tempConnectionData.metaReceiveRkey);
+    remoteConnectionData.metaSendBuffer = Utility::ntohll(tempConnectionData.metaSendBuffer);
+    remoteConnectionData.metaSendRkey = ntohl(tempConnectionData.metaSendRkey);
+    remoteConnectionData.bufferConnectionData.bufferConfig = invertBufferConfig(tempConnectionData.bufferConnectionData.bufferConfig);
+    remoteConnectionData.dataQpNum = ntohl(tempConnectionData.dataQpNum);
+    remoteConnectionData.metaQpNum = ntohl(tempConnectionData.metaQpNum);
+    remoteConnectionData.lid = ntohs(tempConnectionData.lid);
+    memcpy(remoteConnectionData.gid, tempConnectionData.gid, 16);
 
     // save the remote side attributes, we will need it for the post SR
-    res.remote_props = remote_con_data;
+    res.remote_props = remoteConnectionData;
 
-    std::vector<uint64_t> temp_receive_buf(tmp_con_data.receive_buf, tmp_con_data.receive_buf + remote_con_data.receive_num);
-    std::vector<uint32_t> temp_receive_rkey(tmp_con_data.receive_rkey, tmp_con_data.receive_rkey + remote_con_data.receive_num);
+    std::vector<uint64_t> tempReceiveBuf(tempConnectionData.bufferConnectionData.receiveBuffers, tempConnectionData.bufferConnectionData.receiveBuffers + 8);
+    std::vector<uint32_t> tempReceiveRkey(tempConnectionData.bufferConnectionData.receiveRkeys, tempConnectionData.bufferConnectionData.receiveRkeys + 8);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
-    for (size_t i = 0; i < temp_receive_buf.size(); ++i) {
-        res.remote_receive_buffer.push_back(Utility::ntohll(temp_receive_buf[i]));
-        res.remote_receive_rkeys.push_back(ntohl(temp_receive_rkey[i]));
+    for (size_t i = 0; i < tempReceiveBuf.size(); ++i) {
+        if (tempReceiveBuf[i] != 0 && tempReceiveRkey[i]) {
+            res.remote_receive_buffer.push_back(Utility::ntohll(tempReceiveBuf[i]));
+            res.remote_receive_rkeys.push_back(ntohl(tempReceiveRkey[i]));
+        }
     }
 
-    std::vector<uint64_t> temp_send_buf(tmp_con_data.send_buf, tmp_con_data.send_buf + remote_con_data.send_num);
-    std::vector<uint32_t> temp_send_rkey(tmp_con_data.send_rkey, tmp_con_data.send_rkey + remote_con_data.send_num);
+    std::vector<uint64_t> tempSendBuf(tempConnectionData.bufferConnectionData.sendBuffers, tempConnectionData.bufferConnectionData.sendBuffers + 8);
+    std::vector<uint32_t> tempSendRkey(tempConnectionData.bufferConnectionData.sendRkeys, tempConnectionData.bufferConnectionData.sendRkeys + 8);
 
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
-    for (size_t i = 0; i < temp_send_buf.size(); ++i) {
-        res.remote_send_buffer.push_back(Utility::ntohll(temp_send_buf[i]));
-        res.remote_send_rkeys.push_back(ntohl(temp_receive_rkey[i]));
+    for (size_t i = 0; i < tempSendBuf.size(); ++i) {
+        if (tempSendBuf[i] != 0 && tempSendRkey[i]) {
+            res.remote_send_buffer.push_back(Utility::ntohll(tempSendBuf[i]));
+            res.remote_send_rkeys.push_back(ntohl(tempSendRkey[i]));
+        }
     }
 
     /* Change the queue pair state */
     Utility::checkOrDie(changeQueuePairStateToInit(res.dataQp));
     Utility::checkOrDie(changeQueuePairStateToInit(res.metaQp));
-    Utility::checkOrDie(changeQueuePairStateToRTR(res.dataQp, remote_con_data.dataQpNum, remote_con_data.lid, remote_con_data.gid));
-    Utility::checkOrDie(changeQueuePairStateToRTR(res.metaQp, remote_con_data.metaQpNum, remote_con_data.lid, remote_con_data.gid));
+    Utility::checkOrDie(changeQueuePairStateToRTR(res.dataQp, remoteConnectionData.dataQpNum, remoteConnectionData.lid, remoteConnectionData.gid));
+    Utility::checkOrDie(changeQueuePairStateToRTR(res.metaQp, remoteConnectionData.metaQpNum, remoteConnectionData.lid, remoteConnectionData.gid));
     Utility::checkOrDie(changeQueuePairStateToRTS(res.dataQp));
     Utility::checkOrDie(changeQueuePairStateToRTS(res.metaQp));
 }
@@ -392,7 +392,7 @@ void Connection::createResources() {
     struct ibv_context *context = createContext();
 
     // query port properties
-    Utility::checkOrDie(ibv_query_port(context, config.ib_port, &res.port_attr));
+    Utility::checkOrDie(ibv_query_port(context, config.infiniBandPort, &res.port_attr));
 
     /* Create a protection domain */
     struct ibv_pd *dataPd = ibv_alloc_pd(context);
@@ -447,7 +447,7 @@ struct ibv_mr *Connection::registerMemoryRegion(struct ibv_pd *pd, void *buf, si
  * @return struct ibv_context* The created RDMA context.
  */
 struct ibv_context *Connection::createContext() {
-    const std::string &device_name = config.dev_name;
+    const std::string &device_name = config.deviceName;
     /* There is no way to directly open the device with its name; we should get the list of devices first. */
     struct ibv_context *context = nullptr;
     int num_devices;
@@ -503,7 +503,7 @@ int Connection::changeQueuePairStateToInit(struct ibv_qp *queue_pair) {
 
     memset(&init_attr, 0, sizeof(init_attr));
     init_attr.qp_state = ibv_qp_state::IBV_QPS_INIT;
-    init_attr.port_num = config.ib_port;
+    init_attr.port_num = config.infiniBandPort;
     init_attr.pkey_index = 0;
     init_attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE |
                                 IBV_ACCESS_REMOTE_READ |
@@ -534,17 +534,17 @@ int Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t de
     rtr_attr.ah_attr.is_global = 0;
     rtr_attr.ah_attr.sl = 0;
     rtr_attr.ah_attr.src_path_bits = 0;
-    rtr_attr.ah_attr.port_num = config.ib_port;
+    rtr_attr.ah_attr.port_num = config.infiniBandPort;
     rtr_attr.dest_qp_num = destination_qp_number;
     rtr_attr.ah_attr.dlid = destination_local_id;
 
-    if (config.gid_idx >= 0) {
+    if (config.gidIndex >= 0) {
         rtr_attr.ah_attr.is_global = 1;
         rtr_attr.ah_attr.port_num = 1;
         memcpy(&rtr_attr.ah_attr.grh.dgid, destination_global_id, 16);
         rtr_attr.ah_attr.grh.flow_label = 0;
         rtr_attr.ah_attr.grh.hop_limit = 1;
-        rtr_attr.ah_attr.grh.sgid_index = config.gid_idx;
+        rtr_attr.ah_attr.grh.sgid_index = config.gidIndex;
         rtr_attr.ah_attr.grh.traffic_class = 0;
     }
 
@@ -881,8 +881,8 @@ void Connection::setReceiveOpcode(const size_t index, uint8_t opcode, bool sendT
         sr.send_flags = IBV_SEND_SIGNALED;
         // sr.send_flags = IBV_SEND_INLINE;
 
-        sr.wr.rdma.remote_addr = res.remote_props.meta_receive_buf + entrySize * remoteIndex;
-        sr.wr.rdma.rkey = res.remote_props.meta_receive_rkey;
+        sr.wr.rdma.remote_addr = res.remote_props.metaReceiveBuffer + entrySize * remoteIndex;
+        sr.wr.rdma.rkey = res.remote_props.metaReceiveRkey;
 
         ibv_post_send(res.metaQp, &sr, &bad_wr);
 
@@ -928,8 +928,8 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
         sr.opcode = IBV_WR_RDMA_WRITE;
         sr.send_flags = IBV_SEND_SIGNALED;
 
-        sr.wr.rdma.remote_addr = res.remote_props.meta_send_buf + entrySize * remoteIndex;
-        sr.wr.rdma.rkey = res.remote_props.meta_send_rkey;
+        sr.wr.rdma.remote_addr = res.remote_props.metaSendBuffer + entrySize * remoteIndex;
+        sr.wr.rdma.rkey = res.remote_props.metaSendRkey;
 
         ibv_post_send(res.metaQp, &sr, &bad_wr);
 
@@ -949,7 +949,7 @@ void Connection::readDataFromRemote(const size_t index, bool consu) {
     // Pretty sure this does not work atm -> Will fix eventually
     int sbIndex = findNextReadyToPullSendAndBlock();
 
-    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.bufferConnectionData.sendBuffers[sbIndex], res.remote_props.bufferConnectionData.sendRkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
     uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
 
     setSendOpcode((wrId % 10) + metaInfoSend.size() / 2, rdma_ready, true);
@@ -1007,7 +1007,7 @@ int Connection::closeConnection(bool sendRemote) {
  * @param bufConfig The new buffer configuration that should be applied.
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
-reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
+BufferConnectionData Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     std::size_t numBlockedRec = 0;
     std::size_t numBlockedSend = 0;
     bool allBlocked = false;
@@ -1120,19 +1120,19 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
 
     bufferConfig = bufConfig;
 
-    reconfigure_data recData = {.buffer_config = bufConfig};
+    BufferConnectionData bufConData = {.bufferConfig = bufConfig};
 
     auto pos = 0;
     for (const auto &rb : ownReceiveBuffer) {
-        recData.receive_buf[pos] = (uintptr_t)rb->getBufferPtr();
-        recData.receive_rkey[pos] = rb->getMrPtr()->rkey;
+        bufConData.receiveBuffers[pos] = (uintptr_t)rb->getBufferPtr();
+        bufConData.receiveRkeys[pos] = rb->getMrPtr()->rkey;
         ++pos;
     }
 
     pos = 0;
     for (const auto &sb : ownSendBuffer) {
-        recData.send_buf[pos] = (uintptr_t)sb->getBufferPtr();
-        recData.send_rkey[pos] = sb->getMrPtr()->rkey;
+        bufConData.sendBuffers[pos] = (uintptr_t)sb->getBufferPtr();
+        bufConData.sendRkeys[pos] = sb->getMrPtr()->rkey;
         ++pos;
     }
 
@@ -1153,7 +1153,7 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     LOG_INFO("Reconfigured Buffers to: " << std::endl);
     printConnectionInfo();
 
-    return recData;
+    return bufConData;
 }
 
 /**
@@ -1163,9 +1163,9 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
-    reconfigure_data recData = reconfigureBuffer(bufConfig);
+    BufferConnectionData bufConData = reconfigureBuffer(bufConfig);
 
-    sendData(reinterpret_cast<char *>(&recData), sizeof(reconfigure_data), nullptr, 0, rdma_reconfigure, Strategies::push);
+    sendData(reinterpret_cast<char *>(&bufConData), sizeof(BufferConnectionData), nullptr, 0, rdma_reconfigure, Strategies::push);
 
     std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
     reconfigureCV.wait(reconfigureLock);
@@ -1182,35 +1182,35 @@ int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
 int Connection::receiveReconfigureBuffer(const uint8_t index) {
     char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
 
-    reconfigure_data *recData = reinterpret_cast<reconfigure_data *>(malloc(sizeof(reconfigure_data)));
-    memcpy(recData, ptr, sizeof(reconfigure_data));
-    recData->buffer_config = invertBufferConfig(recData->buffer_config);
+    BufferConnectionData *bufConData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));
+    memcpy(bufConData, ptr, sizeof(BufferConnectionData));
+    bufConData->bufferConfig = invertBufferConfig(bufConData->bufferConfig);
 
     setReceiveOpcode(index, rdma_ready, true);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (recData->receive_buf[i] == 0) continue;
+        if (bufConData->receiveBuffers[i] == 0) continue;
 
-        res.remote_receive_buffer.push_back(recData->receive_buf[i]);
-        res.remote_receive_rkeys.push_back(recData->receive_rkey[i]);
+        res.remote_receive_buffer.push_back(bufConData->receiveBuffers[i]);
+        res.remote_receive_rkeys.push_back(bufConData->receiveRkeys[i]);
     }
 
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (recData->send_buf[i] == 0) continue;
+        if (bufConData->sendBuffers[i] == 0) continue;
 
-        res.remote_send_buffer.push_back(recData->send_buf[i]);
-        res.remote_send_rkeys.push_back(recData->send_rkey[i]);
+        res.remote_send_buffer.push_back(bufConData->sendBuffers[i]);
+        res.remote_send_rkeys.push_back(bufConData->sendRkeys[i]);
     }
 
-    reconfigure_data reconfData = reconfigureBuffer(recData->buffer_config);
+    BufferConnectionData reconfData = reconfigureBuffer(bufConData->bufferConfig);
 
-    free(recData);
+    free(bufConData);
 
-    sendData(reinterpret_cast<char *>(&reconfData), sizeof(reconfigure_data), nullptr, 0, rdma_reconfigure_ack, Strategies::push);
+    sendData(reinterpret_cast<char *>(&reconfData), sizeof(BufferConnectionData), nullptr, 0, rdma_reconfigure_ack, Strategies::push);
 
     return 0;
 }
@@ -1224,28 +1224,28 @@ int Connection::receiveReconfigureBuffer(const uint8_t index) {
 void Connection::ackReconfigureBuffer(size_t index) {
     char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
 
-    reconfigure_data *recData = reinterpret_cast<reconfigure_data *>(malloc(sizeof(reconfigure_data)));
-    memcpy(recData, ptr, sizeof(reconfigure_data));
-    recData->buffer_config = invertBufferConfig(recData->buffer_config);
+    BufferConnectionData *recData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));
+    memcpy(recData, ptr, sizeof(BufferConnectionData));
+    recData->bufferConfig = invertBufferConfig(recData->bufferConfig);
 
     setReceiveOpcode(index, rdma_ready, true);
 
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (recData->receive_buf[i] == 0) continue;
+        if (recData->receiveBuffers[i] == 0) continue;
 
-        res.remote_receive_buffer.push_back(recData->receive_buf[i]);
-        res.remote_receive_rkeys.push_back(recData->receive_rkey[i]);
+        res.remote_receive_buffer.push_back(recData->receiveBuffers[i]);
+        res.remote_receive_rkeys.push_back(recData->receiveRkeys[i]);
     }
 
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (recData->send_buf[i] == 0) continue;
+        if (recData->sendBuffers[i] == 0) continue;
 
-        res.remote_send_buffer.push_back(recData->send_buf[i]);
-        res.remote_send_rkeys.push_back(recData->send_rkey[i]);
+        res.remote_send_buffer.push_back(recData->sendBuffers[i]);
+        res.remote_send_rkeys.push_back(recData->sendRkeys[i]);
     }
 
     std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
@@ -1468,7 +1468,7 @@ int Connection::sockSyncData(int sockfd, int xfer_size, char *local_data, char *
 
 /**
  * @brief Receive data from socket communication.
- * 
+ *
  * @param sockfd The socket file descriptor.
  * @param xfer_size The expected transfer size in Bytes.
  * @param remote_data Location where to write the received data to.
@@ -1485,7 +1485,7 @@ int Connection::receiveTcp(int sockfd, int xfer_size, char *remote_data) {
 
 /**
  * @brief Send data over socket communication.
- * 
+ *
  * @param sockfd The socket file descriptor.
  * @param xfer_size The expected transfer size in Bytes.
  * @param local_data The indicated local data will be sent to the remote.

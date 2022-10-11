@@ -30,12 +30,12 @@ enum class BenchmarkType : uint8_t {
 
 // structure of test parameters
 struct config_t {
-    std::string dev_name;     // IB device name
-    std::string server_name;  // server hostname
-    uint32_t tcp_port;        // server TCP port
-    bool client_mode;         // Don't run an event loop
-    int32_t ib_port;          // local IB port to work with
-    int32_t gid_idx;          // GID index to use
+    std::string deviceName;     // IB device name
+    std::string serverName;  // server hostname
+    uint32_t tcpPort;        // server TCP port
+    bool clientMode;         // Don't run an event loop
+    int32_t infiniBandPort;          // local IB port to work with
+    int32_t gidIndex;          // GID index to use
 };
 
 struct buffer_config_t {
@@ -54,32 +54,26 @@ struct buffer_config_t {
     uint8_t meta_info_size = 16;
 };
 
+struct BufferConnectionData {
+    buffer_config_t bufferConfig;
+    uint64_t sendBuffers[8]{0, 0, 0, 0, 0, 0, 0, 0};     // buffer address
+    uint32_t sendRkeys[8]{0, 0, 0, 0, 0, 0, 0, 0};       // remote key
+    uint64_t receiveBuffers[8]{0, 0, 0, 0, 0, 0, 0, 0};  // buffer address
+    uint32_t receiveRkeys[8]{0, 0, 0, 0, 0, 0, 0, 0};    // remote key
+};
+
 // // structure to exchange data which is needed to connect the QPs
-struct cm_con_data_t {
-    uint64_t meta_receive_buf;
-    uint32_t meta_receive_rkey;
-    uint64_t meta_send_buf;
-    uint32_t meta_send_rkey;
-    uint32_t receive_num;
-    uint32_t send_num;
-    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
-    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
-    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
-    buffer_config_t buffer_config;
+struct ConnectionData {
+    uint64_t metaReceiveBuffer;
+    uint64_t metaSendBuffer;
+    uint32_t metaReceiveRkey;
+    uint32_t metaSendRkey;
+    BufferConnectionData bufferConnectionData;
     uint32_t dataQpNum;  // QP number
     uint32_t metaQpNum;  // QP number
     uint16_t lid;        // LID of the IB port
     uint8_t gid[16];     // GID
 } __attribute__((packed));
-
-struct reconfigure_data {
-    buffer_config_t buffer_config;
-    uint64_t send_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};      // buffer address
-    uint32_t send_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};     // remote key
-    uint64_t receive_buf[8]{0, 0, 0, 0, 0, 0, 0, 0};   // buffer address
-    uint32_t receive_rkey[8]{0, 0, 0, 0, 0, 0, 0, 0};  // remote key
-};
 
 typedef std::function<void(const size_t)> ResetFunction;
 
@@ -87,7 +81,7 @@ typedef std::function<void(const size_t)> ResetFunction;
 struct resources {
     struct ibv_device_attr device_attr;           // device attributes
     struct ibv_port_attr port_attr;               // IB port attributes
-    struct cm_con_data_t remote_props;            // values to connect to remote side
+    struct ConnectionData remote_props;            // values to connect to remote side
     struct ibv_context *ib_ctx;                   // device handle
     struct ibv_pd *dataPd;                        // PD handle
     struct ibv_pd *metaPd;                        // PD handle
@@ -100,13 +94,6 @@ struct resources {
     std::vector<uint64_t> remote_send_buffer;  // memory buffer pointer, used for RDMA send ops
     std::vector<uint32_t> remote_send_rkeys;
     int sock;  // TCP socket file descriptor
-};
-
-struct receive_data {
-    bool done;
-    uint64_t *localPtr;
-    uint64_t size;
-    std::chrono::_V2::system_clock::time_point endTime;
 };
 
 typedef std::chrono::_V2::system_clock::time_point timePoint;
@@ -195,7 +182,7 @@ class Connection {
     template <CompletionType compType>
     uint64_t pollCompletion();
 
-    reconfigure_data reconfigureBuffer(buffer_config_t &bufConfig);
+    BufferConnectionData reconfigureBuffer(buffer_config_t &bufConfig);
     void ackReconfigureBuffer(size_t index);
 
     int findNextFreeReceiveAndBlock();
