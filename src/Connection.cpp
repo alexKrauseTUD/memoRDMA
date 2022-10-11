@@ -143,7 +143,7 @@ void Connection::init() {
     exchangeBufferInfo();
 
     // done with TCP so socket is closed -> sometimes this seems to not work 100 percent
-    sock_close(res.sock);
+    sockCloseFd(res.sock);
 
     // the buffers are set locally and remotly to ready (usable) -> this can not be done on creation as the remote meta structure is not known at this moment
     for (size_t rbi = 0; rbi < bufferConfig.num_own_receive; ++rbi) {
@@ -206,7 +206,7 @@ void Connection::destroyResources() {
  */
 void Connection::printConnectionInfo() const {
     LOG_INFO("Connection Information:\n"
-             << "Remote IP:\t\t\t" << config.server_name << ":" << config.tcp_port << "\n"
+             << "Remote IP:\t" << config.server_name << ":" << config.tcp_port << "\n"
              << "\t\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
              << "\t\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
              << "\t\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
@@ -251,14 +251,14 @@ void Connection::setupReceiveBuffer() {
 void Connection::initTCP() {
     if (!config.client_mode) {
         // @server
-        res.sock = sock_connect(config.server_name, &config.tcp_port);
+        res.sock = sockConnect(config.server_name, &config.tcp_port);
         if (res.sock < 0) {
             LOG_ERROR("Failed to establish TCP connection to server " << config.server_name.c_str() << ", port " << config.tcp_port << std::endl);
             exit(EXIT_FAILURE);
         }
     } else {
         // @client
-        res.sock = sock_connect("", &config.tcp_port);
+        res.sock = sockConnect("", &config.tcp_port);
         if (res.sock < 0) {
             LOG_ERROR("Failed to establish TCP connection with client on port " << +config.tcp_port << std::endl);
             exit(EXIT_FAILURE);
@@ -278,7 +278,7 @@ void Connection::exchangeBufferInfo() {
 
     if (config.client_mode) {
         // Client waits on Server-Information as it is needed to create the buffers
-        receive_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data);
+        Utility::checkOrDie(receiveTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data));
 
         bufferConfig = invertBufferConfig(tmp_con_data.buffer_config);
 
@@ -332,10 +332,10 @@ void Connection::exchangeBufferInfo() {
 
     if (!config.client_mode) {
         // Server sends information to Client and waits on Client-Information
-        sock_sync_data(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
+        Utility::checkOrDie(sockSyncData(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data));
     } else {
         // Client responds to server with own information
-        send_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data);
+        Utility::checkOrDie(sendTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data));
     }
 
     remote_con_data.meta_receive_buf = Utility::ntohll(tmp_con_data.meta_receive_buf);
@@ -1050,7 +1050,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid, &cpuset);
             int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }
@@ -1070,7 +1071,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid + bufConfig.num_own_receive_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }
@@ -1331,34 +1333,20 @@ Connection::~Connection() {
     closeConnection();
 }
 
-// \begin socket operation
-//
-// For simplicity, the example program uses TCP sockets to exchange control
-// information. If a TCP/IP stack/connection is not available, connection
-// manager (CM) may be used to pass this information. Use of CM is beyond the
-// scope of this example.
-
-// Connect a socket. If servername is specified a client connection will be
-// initiated to the indicated server and port. Otherwise listen on the indicated
-// port for an incoming connection.
-int Connection::sock_connect(std::string client_name, uint32_t *port) {
+/**
+ * @brief Connect a socket.
+ *
+ * @param client_name If servername is specified a client connection will be initiated to the indicated server and port. Otherwise listen on the indicated port for an incoming connection.
+ * @param port If servername is specified a client connection will be initiated to the indicated server and port. Otherwise listen on the indicated port for an incoming connection.
+ * @return int The socket file descriptor.
+ */
+int Connection::sockConnect(std::string client_name, uint32_t *port) {
     struct addrinfo *resolved_addr = NULL;
     struct addrinfo *iterator;
     char service[6];
     int sockfd = -1;
     int listenfd = 0;
 
-    // @man getaddrinfo:
-    //  struct addrinfo {
-    //      int             ai_flags;
-    //      int             ai_family;
-    //      int             ai_socktype;
-    //      int             ai_protocol;
-    //      socklen_t       ai_addrlen;
-    //      struct sockaddr *ai_addr;
-    //      char            *ai_canonname;
-    //      struct addrinfo *ai_next;
-    //  }
     struct addrinfo hints = {.ai_flags = AI_PASSIVE,
                              .ai_family = AF_INET,
                              .ai_socktype = SOCK_STREAM,
@@ -1424,24 +1412,59 @@ int Connection::sock_connect(std::string client_name, uint32_t *port) {
     return -1;
 }
 
-// Sync data across a socket. The indicated local data will be sent to the
-// remote. It will then wait for the remote to send its data back. It is
-// assumned that the two sides are in sync and call this function in the proper
-// order. Chaos will ensure if they are not. Also note this is a blocking
-// function and will wait for the full data to be received from the remote.
-int Connection::sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data) {
-    int write_bytes = write(sockfd, local_data, xfer_size);
-    assert(write_bytes == xfer_size);
+/**
+ * @brief Sync data across a socket. It is assumned that the two sides are in sync and call this function in the proper order. Chaos will ensure if they are not. Also note this is a blocking function and will wait for the full data to be received from the remote.
+ *
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param local_data The indicated local data will be sent to the remote.
+ * @param remote_data It will then wait for the remote to send its data back and write it on the indicated position.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::sockSyncData(int sockfd, int xfer_size, char *local_data, char *remote_data) {
+    uint8_t result = sendTcp(sockfd, xfer_size, local_data);
+    result += receiveTcp(sockfd, xfer_size, remote_data);
 
+    return result;
+}
+
+/**
+ * @brief Receive data from socket communication.
+ * 
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param remote_data Location where to write the received data to.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::receiveTcp(int sockfd, int xfer_size, char *remote_data) {
     int read_bytes = read(sockfd, remote_data, xfer_size);
-    assert(read_bytes == xfer_size);
-
-    LOG_INFO("SYNCHRONIZED!\n\n");
-
-    // FIXME: hard code that always returns no error
+    if (read_bytes != xfer_size) {
+        return 1;
+        LOG_WARNING("The transfered size (read) did not match the expected one!" << std::endl);
+    }
     return 0;
 }
-// \end socket operation
+
+/**
+ * @brief Send data over socket communication.
+ * 
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param local_data The indicated local data will be sent to the remote.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::sendTcp(int sockfd, int xfer_size, char *local_data) {
+    int write_bytes = write(sockfd, local_data, xfer_size);
+    if (write_bytes != xfer_size) {
+        return 1;
+        LOG_WARNING("The transfered size (write) did not match the expected one!" << std::endl);
+    }
+    return 0;
+}
+
+void Connection::sockCloseFd(int &sockfd) {
+    Utility::checkOrDie(close(sockfd));
+}
 
 buffer_config_t Connection::invertBufferConfig(buffer_config_t bufferConfig) {
     return {.num_own_send_threads = bufferConfig.num_remote_send_threads,
@@ -1457,23 +1480,4 @@ buffer_config_t Connection::invertBufferConfig(buffer_config_t bufferConfig) {
             .num_remote_send = bufferConfig.num_own_send,
             .size_remote_send = bufferConfig.size_own_send,
             .meta_info_size = bufferConfig.meta_info_size};
-}
-
-void Connection::sock_close(int &sockfd) {
-    Utility::checkOrDie(close(sockfd));
-}
-
-int Connection::receive_tcp(int sockfd, int xfer_size, char *remote_data) {
-    int read_bytes = read(sockfd, remote_data, xfer_size);
-    assert(read_bytes == xfer_size);
-
-    // FIXME: hard code that always returns no error
-    return 0;
-}
-int Connection::send_tcp(int sockfd, int xfer_size, char *local_data) {
-    int write_bytes = write(sockfd, local_data, xfer_size);
-    assert(write_bytes == xfer_size);
-
-    // FIXME: hard code that always returns no error
-    return 0;
 }
