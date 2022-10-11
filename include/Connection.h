@@ -39,19 +39,19 @@ struct config_t {
 };
 
 struct buffer_config_t {
-    uint8_t num_own_send_threads;
-    uint8_t num_own_receive_threads;
-    uint8_t num_remote_send_threads;
-    uint8_t num_remote_receive_threads;
-    uint8_t num_own_receive;
-    uint64_t size_own_receive;
-    uint8_t num_remote_receive;
-    uint64_t size_remote_receive;
-    uint8_t num_own_send;
-    uint64_t size_own_send;
-    uint8_t num_remote_send;
-    uint64_t size_remote_send;
-    uint8_t meta_info_size;
+    uint8_t num_own_send_threads = 1;
+    uint8_t num_own_receive_threads = 1;
+    uint8_t num_remote_send_threads = 1;
+    uint8_t num_remote_receive_threads = 1;
+    uint8_t num_own_receive = 1;
+    uint64_t size_own_receive = 640;
+    uint8_t num_remote_receive = 1;
+    uint64_t size_remote_receive = 640;
+    uint8_t num_own_send = 1;
+    uint64_t size_own_send = 640;
+    uint8_t num_remote_send = 1;
+    uint64_t size_remote_send = 640;
+    uint8_t meta_info_size = 16;
 };
 
 // // structure to exchange data which is needed to connect the QPs
@@ -69,8 +69,8 @@ struct cm_con_data_t {
     buffer_config_t buffer_config;
     uint32_t dataQpNum;  // QP number
     uint32_t metaQpNum;  // QP number
-    uint16_t lid;     // LID of the IB port
-    uint8_t gid[16];  // GID
+    uint16_t lid;        // LID of the IB port
+    uint8_t gid[16];     // GID
 } __attribute__((packed));
 
 struct reconfigure_data {
@@ -129,10 +129,7 @@ class Connection {
     void readDataFromRemote(const size_t index, bool consu);
     void consumeData(const size_t index);
 
-    int addReceiveBuffer(std::size_t quantity, bool own);
-    int removeReceiveBuffer(std::size_t quantity, bool own);
-    int resizeReceiveBuffer(std::size_t newSize, bool own);
-    int resizeSendBuffer(std::size_t newSize, bool own);
+    void validateBufferConfig(buffer_config_t &bufConfig);
 
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);
@@ -144,12 +141,12 @@ class Connection {
 
     int benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat);
 
-    static int sock_connect(std::string client_name, uint32_t *port);
-    static int sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data);
+    static int sockConnect(std::string client_name, uint32_t *port);
+    static int sockSyncData(int sockfd, int xfer_size, char *local_data, char *remote_data);
     static buffer_config_t invertBufferConfig(buffer_config_t bufferConfig);
-    static void sock_close(int &sockfd);
-    static int receive_tcp(int sockfd, int xfer_size, char *remote_data);
-    static int send_tcp(int sockfd, int xfer_size, char *local_data);
+    static void sockCloseFd(int &sockfd);
+    static int receiveTcp(int sockfd, int xfer_size, char *remote_data);
+    static int sendTcp(int sockfd, int xfer_size, char *local_data);
 
    private:
     config_t config;
@@ -194,7 +191,7 @@ class Connection {
     int changeQueuePairStateToInit(struct ibv_qp *queue_pair);
     int changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t destination_qp_number, uint16_t destination_local_id, uint8_t *destination_global_id);
     int changeQueuePairStateToRTS(struct ibv_qp *qp);
-    
+
     template <CompletionType compType>
     uint64_t pollCompletion();
 
