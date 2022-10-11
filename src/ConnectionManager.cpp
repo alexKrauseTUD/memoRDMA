@@ -134,48 +134,6 @@ int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config
     return 1;
 }
 
-int ConnectionManager::addReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
-    // TODO: sanity check
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->addReceiveBuffer(quantity, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
-    // TODO: sanity check
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->removeReceiveBuffer(quantity, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeReceiveBuffer(newSize, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeSendBuffer(newSize, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
 int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat) {
     if (connections.contains(connectionId)) {
         return connections[connectionId]->benchmark(shortName, name, benchType, strat);

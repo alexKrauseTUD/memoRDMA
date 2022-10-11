@@ -27,6 +27,7 @@ using namespace memordma;
 
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
     config = _config;
+    validateBufferConfig(_bufferConfig);
     bufferConfig = _bufferConfig;
     localConId = _localConId;
     res.sock = -1;
@@ -142,7 +143,7 @@ void Connection::init() {
     exchangeBufferInfo();
 
     // done with TCP so socket is closed -> sometimes this seems to not work 100 percent
-    sock_close(res.sock);
+    sockCloseFd(res.sock);
 
     // the buffers are set locally and remotly to ready (usable) -> this can not be done on creation as the remote meta structure is not known at this moment
     for (size_t rbi = 0; rbi < bufferConfig.num_own_receive; ++rbi) {
@@ -205,7 +206,7 @@ void Connection::destroyResources() {
  */
 void Connection::printConnectionInfo() const {
     LOG_INFO("Connection Information:\n"
-             << "Remote IP:\t\t\t" << config.server_name << ":" << config.tcp_port << "\n"
+             << "Remote IP:\t" << config.server_name << ":" << config.tcp_port << "\n"
              << "\t\tOwn S Threads:\t\t" << +bufferConfig.num_own_send_threads << "\n"
              << "\t\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
              << "\t\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
@@ -250,14 +251,14 @@ void Connection::setupReceiveBuffer() {
 void Connection::initTCP() {
     if (!config.client_mode) {
         // @server
-        res.sock = sock_connect(config.server_name, &config.tcp_port);
+        res.sock = sockConnect(config.server_name, &config.tcp_port);
         if (res.sock < 0) {
             LOG_ERROR("Failed to establish TCP connection to server " << config.server_name.c_str() << ", port " << config.tcp_port << std::endl);
             exit(EXIT_FAILURE);
         }
     } else {
         // @client
-        res.sock = sock_connect("", &config.tcp_port);
+        res.sock = sockConnect("", &config.tcp_port);
         if (res.sock < 0) {
             LOG_ERROR("Failed to establish TCP connection with client on port " << +config.tcp_port << std::endl);
             exit(EXIT_FAILURE);
@@ -277,7 +278,7 @@ void Connection::exchangeBufferInfo() {
 
     if (config.client_mode) {
         // Client waits on Server-Information as it is needed to create the buffers
-        receive_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data);
+        Utility::checkOrDie(receiveTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&tmp_con_data));
 
         bufferConfig = invertBufferConfig(tmp_con_data.buffer_config);
 
@@ -331,10 +332,10 @@ void Connection::exchangeBufferInfo() {
 
     if (!config.client_mode) {
         // Server sends information to Client and waits on Client-Information
-        sock_sync_data(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
+        Utility::checkOrDie(sockSyncData(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data));
     } else {
         // Client responds to server with own information
-        send_tcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data);
+        Utility::checkOrDie(sendTcp(res.sock, sizeof(struct cm_con_data_t), (char *)&local_con_data));
     }
 
     remote_con_data.meta_receive_buf = Utility::ntohll(tmp_con_data.meta_receive_buf);
@@ -973,6 +974,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     std::size_t numBlockedSend = 0;
     bool allBlocked = false;
 
+    validateBufferConfig(bufConfig);
+
     while (!allBlocked) {
         while (numBlockedRec < bufferConfig.num_own_receive) {
             for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
@@ -1047,7 +1050,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid, &cpuset);
             int rc = pthread_setaffinity_np(readWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }
@@ -1067,7 +1071,8 @@ reconfigure_data Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
             CPU_SET(tid + bufConfig.num_own_receive_threads, &cpuset);
             int rc = pthread_setaffinity_np(sendWorkerPool.back()->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
-                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n" << std::endl);
+                LOG_FATAL("Error calling pthread_setaffinity_np: " << rc << "\n"
+                                                                   << std::endl);
                 exit(-10);
             }
         }
@@ -1211,160 +1216,137 @@ void Connection::ackReconfigureBuffer(size_t index) {
     setReceiveOpcode(index, rdma_ready, true);
 }
 
-/**
- * @brief Wrapper for adding a number of RBs to the configuration.
- *
- * @param quantity Number of RBs to add.
- * @param own Whether to add them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::addReceiveBuffer(std::size_t quantity = 1, bool own = true) {
-    buffer_config_t bufConfig = bufferConfig;
-    size_t newNumber;
-
-    if (own) {
-        newNumber = bufConfig.num_own_receive + quantity;
-    } else {
-        newNumber = bufConfig.num_remote_receive + quantity;
+void Connection::validateBufferConfig(buffer_config_t &bufConfig) {
+    // Checking meta info size -> atm this is not really needed, as this value is currently unused. if it is used, the corresponding parts of this function should be changed.
+    if (bufConfig.meta_info_size < 2) {
+        LOG_WARNING("The metaInfo struct needs at least a size of 2 to work. You violated this rule! Therefore, the meta info size is set to 2." << std::endl);
+        bufConfig.meta_info_size = 2;
+    } else if (bufConfig.meta_info_size % 2 != 0) {
+        LOG_WARNING("The metaInfoSize needs to be divisible by 2 to work. You violated this rule! Therefore, the meta info size is round up." << std::endl);
+        bufConfig.meta_info_size++;
     }
 
-    if (newNumber > (metaInfoReceive.size() / 2)) {
-        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffer on each side!  You violated this rule! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
-        newNumber = (metaInfoReceive.size() / 2);
-    } else if (newNumber < 1) {
-        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl);
-        newNumber = 1;
+    // Checking size of the RBs
+    if (bufConfig.size_own_receive > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule for the local buffers! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_own_receive = 1ull << 30;
+    } else if (bufConfig.size_own_receive < 640) {
+        LOG_WARNING("The minimal size for an RB is 640! You violated this rule for the local buffers! Therefore, the size of RB is set to 640." << std::endl);
+        bufConfig.size_own_receive = 640;
     }
 
-    if (own) {
-        bufConfig.num_own_receive = newNumber;
-    } else {
-        bufConfig.num_remote_receive = newNumber;
+    if (bufConfig.size_remote_receive > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule for the remote buffers! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_remote_receive = 1ull << 30;
+    } else if (bufConfig.size_remote_receive < 640) {
+        LOG_WARNING("The minimal size for an RB is 640! You violated this rule for the remote buffers! Therefore, the size of RB is set to 640." << std::endl);
+        bufConfig.size_remote_receive = 640;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for removing a number of RBs to the configuration.
- *
- * @param quantity Number of RBs to remove (1 must be left).
- * @param own Whether to remove them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::removeReceiveBuffer(std::size_t quantity = 1, bool own = true) {
-    buffer_config_t bufConfig = bufferConfig;
-    int newNumber;
-
-    if (own) {
-        newNumber = bufConfig.num_own_receive - quantity;
-    } else {
-        newNumber = bufConfig.num_remote_receive - quantity;
+    // Checking size of the SBs
+    if (bufConfig.size_own_send > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule for the local buffers! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_own_send = 1ull << 30;
+    } else if (bufConfig.size_own_send < 640) {
+        LOG_WARNING("The minimal size for an SB is 640! You violated this rule for the local buffers! Therefore, the size of SB is set to 640." << std::endl);
+        bufConfig.size_own_send = 640;
     }
 
-    if (newNumber > (metaInfoReceive.size() / 2)) {
-        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of RB is set to 1." << std::endl);
-        newNumber = 1;
-    } else if (newNumber < 1) {
-        LOG_WARNING("There has to be at least 1 RB on each side! You violated this rule! Therefore, the number of RB is set to 1." << std::endl);
-        newNumber = (metaInfoReceive.size() / 2);
+    if (bufConfig.size_remote_send > (1ull << 30)) {
+        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule for the remote buffers! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
+        bufConfig.size_remote_send = 1ull << 30;
+    } else if (bufConfig.size_remote_send < 640) {
+        LOG_WARNING("The minimal size for an SB is 640! You violated this rule for the remote buffers! Therefore, the size of SB is set to 640." << std::endl);
+        bufConfig.size_remote_send = 640;
     }
 
-    if (own) {
-        bufConfig.num_own_receive = newNumber;
-    } else {
-        bufConfig.num_remote_receive = newNumber;
+    // Checking number of RBs
+    if (bufConfig.num_own_receive > (metaInfoReceive.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffers on each side! You violated this rule for the local buffers! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
+        bufConfig.num_own_receive = (metaInfoReceive.size() / 2);
+    } else if (bufConfig.num_own_receive < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local RB is set to 1." << std::endl);
+        bufConfig.num_own_receive = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for resizing all RBs.
- *
- * @param newSize The new size for all RBs.
- * @param own Whether to resize them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::resizeReceiveBuffer(std::size_t newSize, bool own) {
-    buffer_config_t bufConfig = bufferConfig;
-
-    if (newSize > (1ull << 30)) {
-        LOG_WARNING("The maximal size for an RB is " << (1ull << 30) << "! You violated this rule! Therefore, the size of RB is set to " << (1ull << 30) << std::endl);
-        newSize = (1ull << 30);
-    } else if (newSize < 640) {
-        LOG_WARNING("There has to be at least 640 Byte for each RB! You violated this rule! Therefore, the size of RB is set to 640." << std::endl);
-        newSize = 640;
+    if (bufConfig.num_remote_receive > (metaInfoReceive.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoReceive.size() / 2) << " Receive Buffers on each side! You violated this rule for the remote buffers! Therefore, the number of RB is set to " << (metaInfoReceive.size() / 2) << std::endl);
+        bufConfig.num_remote_receive = (metaInfoReceive.size() / 2);
+    } else if (bufConfig.num_remote_receive < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote RB is set to 1." << std::endl);
+        bufConfig.num_remote_receive = 1;
     }
 
-    if (own) {
-        bufConfig.size_own_receive = newSize;
-    } else {
-        bufConfig.size_remote_receive = newSize;
+    // Checking number of SBs
+    if (bufConfig.num_own_send > (metaInfoSend.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoSend.size() / 2) << " Send Buffers on each side! You violated this rule for the local buffers! Therefore, the number of SB is set to " << (metaInfoSend.size() / 2) << std::endl);
+        bufConfig.num_own_send = (metaInfoSend.size() / 2);
+    } else if (bufConfig.num_own_send < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local SB is set to 1." << std::endl);
+        bufConfig.num_own_send = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
-}
-
-/**
- * @brief Wrapper for resizing all SBs.
- *
- * @param newSize The new size for all SBs.
- * @param own Whether to resize them locally or remote.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::resizeSendBuffer(std::size_t newSize, bool own) {
-    buffer_config_t bufConfig = bufferConfig;
-
-    if (newSize > (1ull << 30)) {
-        LOG_WARNING("The maximal size for an SB is " << (1ull << 30) << "! You violated this rule! Therefore, the size of SB is set to " << (1ull << 30) << std::endl);
-        newSize = (1ull << 30);
-    } else if (newSize < 640) {
-        LOG_WARNING("There has to be at least 640 Byte for each SB! You violated this rule! Therefore, the size of SB is set to 640." << std::endl);
-        newSize = 640;
+    if (bufConfig.num_remote_send > (metaInfoSend.size() / 2)) {
+        LOG_WARNING("It is only possible to have " << (metaInfoSend.size() / 2) << " Send Buffers on each side! You violated this rule for the remote buffers! Therefore, the number of SB is set to " << (metaInfoSend.size() / 2) << std::endl);
+        bufConfig.num_remote_send = (metaInfoSend.size() / 2);
+    } else if (bufConfig.num_remote_send < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote SB is set to 1." << std::endl);
+        bufConfig.num_remote_send = 1;
     }
 
-    if (own) {
-        bufConfig.size_own_send = newSize;
-    } else {
-        bufConfig.size_remote_send = newSize;
+    // Checking number of Receive Threads
+    if (bufConfig.num_own_receive_threads > bufConfig.num_own_receive) {
+        LOG_WARNING("It is not possible to have more Receive Threads then RBs. You violated this rule for the local threads! Therefore, the number of Receive Threads is set to " << bufConfig.num_own_receive << std::endl);
+        bufConfig.num_own_receive_threads = bufConfig.num_own_receive;
+    } else if (bufConfig.num_own_receive_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local Receive Threads is set to 1." << std::endl);
+        bufConfig.num_own_receive_threads = 1;
     }
 
-    return sendReconfigureBuffer(bufConfig);
+    if (bufConfig.num_remote_receive_threads > bufConfig.num_remote_receive) {
+        LOG_WARNING("It is not possible to have more Receive Threads then RBs. You violated this rule for the remote threads! Therefore, the number of Receive Threads is set to " << bufConfig.num_remote_receive << std::endl);
+        bufConfig.num_remote_receive_threads = bufConfig.num_remote_receive;
+    } else if (bufConfig.num_remote_receive_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote Receive Threads is set to 1." << std::endl);
+        bufConfig.num_remote_receive_threads = 1;
+    }
+
+    // Checking number of Send Threads
+    if (bufConfig.num_own_send_threads > bufConfig.num_own_send) {
+        LOG_WARNING("It is not possible to have more Send Threads then SBs. You violated this rule for the local threads! Therefore, the number of Send Threads is set to " << bufConfig.num_own_send << std::endl);
+        bufConfig.num_own_send_threads = bufConfig.num_own_send;
+    } else if (bufConfig.num_own_send_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of local Send Threads is set to 1." << std::endl);
+        bufConfig.num_own_send_threads = 1;
+    }
+
+    if (bufConfig.num_remote_send_threads > bufConfig.num_remote_send) {
+        LOG_WARNING("It is not possible to have more Send Threads then SBs. You violated this rule for the remote threads! Therefore, the number of Send Threads is set to " << bufConfig.num_remote_send << std::endl);
+        bufConfig.num_remote_send_threads = bufConfig.num_remote_send;
+    } else if (bufConfig.num_remote_send_threads < 1) {
+        LOG_WARNING("Congratulation! You reached a state that should not be possible! The number of remote Send Threads is set to 1." << std::endl);
+        bufConfig.num_remote_send_threads = 1;
+    }
 }
 
 Connection::~Connection() {
     closeConnection();
 }
 
-// \begin socket operation
-//
-// For simplicity, the example program uses TCP sockets to exchange control
-// information. If a TCP/IP stack/connection is not available, connection
-// manager (CM) may be used to pass this information. Use of CM is beyond the
-// scope of this example.
-
-// Connect a socket. If servername is specified a client connection will be
-// initiated to the indicated server and port. Otherwise listen on the indicated
-// port for an incoming connection.
-int Connection::sock_connect(std::string client_name, uint32_t *port) {
+/**
+ * @brief Connect a socket.
+ *
+ * @param client_name If servername is specified a client connection will be initiated to the indicated server and port. Otherwise listen on the indicated port for an incoming connection.
+ * @param port If servername is specified a client connection will be initiated to the indicated server and port. Otherwise listen on the indicated port for an incoming connection.
+ * @return int The socket file descriptor.
+ */
+int Connection::sockConnect(std::string client_name, uint32_t *port) {
     struct addrinfo *resolved_addr = NULL;
     struct addrinfo *iterator;
     char service[6];
     int sockfd = -1;
     int listenfd = 0;
 
-    // @man getaddrinfo:
-    //  struct addrinfo {
-    //      int             ai_flags;
-    //      int             ai_family;
-    //      int             ai_socktype;
-    //      int             ai_protocol;
-    //      socklen_t       ai_addrlen;
-    //      struct sockaddr *ai_addr;
-    //      char            *ai_canonname;
-    //      struct addrinfo *ai_next;
-    //  }
     struct addrinfo hints = {.ai_flags = AI_PASSIVE,
                              .ai_family = AF_INET,
                              .ai_socktype = SOCK_STREAM,
@@ -1430,24 +1412,59 @@ int Connection::sock_connect(std::string client_name, uint32_t *port) {
     return -1;
 }
 
-// Sync data across a socket. The indicated local data will be sent to the
-// remote. It will then wait for the remote to send its data back. It is
-// assumned that the two sides are in sync and call this function in the proper
-// order. Chaos will ensure if they are not. Also note this is a blocking
-// function and will wait for the full data to be received from the remote.
-int Connection::sock_sync_data(int sockfd, int xfer_size, char *local_data, char *remote_data) {
-    int write_bytes = write(sockfd, local_data, xfer_size);
-    assert(write_bytes == xfer_size);
+/**
+ * @brief Sync data across a socket. It is assumned that the two sides are in sync and call this function in the proper order. Chaos will ensure if they are not. Also note this is a blocking function and will wait for the full data to be received from the remote.
+ *
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param local_data The indicated local data will be sent to the remote.
+ * @param remote_data It will then wait for the remote to send its data back and write it on the indicated position.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::sockSyncData(int sockfd, int xfer_size, char *local_data, char *remote_data) {
+    uint8_t result = sendTcp(sockfd, xfer_size, local_data);
+    result += receiveTcp(sockfd, xfer_size, remote_data);
 
+    return result;
+}
+
+/**
+ * @brief Receive data from socket communication.
+ * 
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param remote_data Location where to write the received data to.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::receiveTcp(int sockfd, int xfer_size, char *remote_data) {
     int read_bytes = read(sockfd, remote_data, xfer_size);
-    assert(read_bytes == xfer_size);
-
-    LOG_INFO("SYNCHRONIZED!\n\n");
-
-    // FIXME: hard code that always returns no error
+    if (read_bytes != xfer_size) {
+        return 1;
+        LOG_WARNING("The transfered size (read) did not match the expected one!" << std::endl);
+    }
     return 0;
 }
-// \end socket operation
+
+/**
+ * @brief Send data over socket communication.
+ * 
+ * @param sockfd The socket file descriptor.
+ * @param xfer_size The expected transfer size in Bytes.
+ * @param local_data The indicated local data will be sent to the remote.
+ * @return int Success indicator (number of occured errors).
+ */
+int Connection::sendTcp(int sockfd, int xfer_size, char *local_data) {
+    int write_bytes = write(sockfd, local_data, xfer_size);
+    if (write_bytes != xfer_size) {
+        return 1;
+        LOG_WARNING("The transfered size (write) did not match the expected one!" << std::endl);
+    }
+    return 0;
+}
+
+void Connection::sockCloseFd(int &sockfd) {
+    Utility::checkOrDie(close(sockfd));
+}
 
 buffer_config_t Connection::invertBufferConfig(buffer_config_t bufferConfig) {
     return {.num_own_send_threads = bufferConfig.num_remote_send_threads,
@@ -1463,23 +1480,4 @@ buffer_config_t Connection::invertBufferConfig(buffer_config_t bufferConfig) {
             .num_remote_send = bufferConfig.num_own_send,
             .size_remote_send = bufferConfig.size_own_send,
             .meta_info_size = bufferConfig.meta_info_size};
-}
-
-void Connection::sock_close(int &sockfd) {
-    Utility::checkOrDie(close(sockfd));
-}
-
-int Connection::receive_tcp(int sockfd, int xfer_size, char *remote_data) {
-    int read_bytes = read(sockfd, remote_data, xfer_size);
-    assert(read_bytes == xfer_size);
-
-    // FIXME: hard code that always returns no error
-    return 0;
-}
-int Connection::send_tcp(int sockfd, int xfer_size, char *local_data) {
-    int write_bytes = write(sockfd, local_data, xfer_size);
-    assert(write_bytes == xfer_size);
-
-    // FIXME: hard code that always returns no error
-    return 0;
 }
