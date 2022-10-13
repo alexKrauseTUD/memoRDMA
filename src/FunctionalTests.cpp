@@ -26,26 +26,14 @@ FunctionalTests::FunctionalTests() {
             receiveMap[packageId].result += data[i];
         }
 
+        LOG_DEBUG2("Package id " << head->id << "\tPackage Number " << head->package_number << "\tReceived Bytes " << receiveMap[packageId].receivedBytes << "\tCurrent Result " << receiveMap[packageId].result << std::endl);
+
         reset_buffer();
 
         if (receiveMap[packageId].receivedBytes == dataSize) {
             ConnectionManager::getInstance().sendData(conId, reinterpret_cast<char*>(&receiveMap[packageId].result), sizeof(receiveMap[packageId].result), nullptr, 0, rdma_functional_test_ack, Strategies::push);
             receiveMap.erase(packageId);
         }
-    };
-
-    CallbackFunction pullDataTransferTest = [this](__attribute__((unused)) const size_t conId, const ReceiveBuffer* rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
-        setReceiveOpcode(index, rdma_working, false);
-
-        // Pretty sure this does not work atm -> Will fix eventually
-        int sbIndex = findNextReadyToPullSendAndBlock();
-
-        ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.send_buf[sbIndex], res.remote_props.send_rkey[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
-        uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
-
-        setSendOpcode((wrId % 10) + metaInfoSend.size() / 2, rdma_ready, true);
-
-        setReceiveOpcode(wrId / 10, rdma_functional_test, false);
     };
 
     // We have to comply with the callback function signature but don't need the size_t conId here. Thus a GCC specific unused information.
@@ -71,7 +59,6 @@ FunctionalTests::FunctionalTests() {
     };
 
     ConnectionManager::getInstance().registerCallback(static_cast<uint8_t>(rdma_functional_test), receiveDataTransferTest);
-    ConnectionManager::getInstance().registerCallback(static_cast<uint8_t>(rdma_functional_test_pull), pullDataTransferTest);
     ConnectionManager::getInstance().registerCallback(static_cast<uint8_t>(rdma_functional_test_ack), dataTransferTestAck);
 }
 
@@ -323,7 +310,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
                 receiveMap.clear();
 
                 auto sendLambda = [&]() {
-                    ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, strat == Strategies::push ? rdma_functional_test : rdma_functional_test_pull, strat);
+                    ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, strat == Strategies::push ? rdma_functional_test : rdma_pull_consume, strat);
                 };
 
                 for (size_t k = 0; k < parallelExecutions; ++k) {
