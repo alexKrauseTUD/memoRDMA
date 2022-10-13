@@ -527,7 +527,7 @@ int Connection::changeQueuePairStateToRTR(struct ibv_qp *queue_pair, uint32_t de
     memset(&rtr_attr, 0, sizeof(rtr_attr));
 
     rtr_attr.qp_state = ibv_qp_state::IBV_QPS_RTR;
-    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_1024;  // This implies splitting message into 256 Byte chunks
+    rtr_attr.path_mtu = ibv_mtu::IBV_MTU_1024;  // This implies splitting message into 1024 Byte chunks
     rtr_attr.rq_psn = 0;
     rtr_attr.max_dest_rd_atomic = 1;
     rtr_attr.min_rnr_timer = 0x12;
@@ -946,13 +946,12 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
 void Connection::readDataFromRemote(const size_t index, bool consu) {
     setReceiveOpcode(index, rdma_working, false);
 
-    // Pretty sure this does not work atm -> Will fix eventually
     int sbIndex = findNextReadyToPullSendAndBlock();
 
-    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_props.bufferConnectionData.sendBuffers[sbIndex], res.remote_props.bufferConnectionData.sendRkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
     uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
 
-    setSendOpcode((wrId % 10) + metaInfoSend.size() / 2, rdma_ready, true);
+    setSendOpcode((wrId % 10) + (metaInfoSend.size() / 2), rdma_ready, true);
 
     if (consu) {
         setReceiveOpcode(wrId / 10, rdma_data_finished, false);
@@ -1191,19 +1190,19 @@ int Connection::receiveReconfigureBuffer(const uint8_t index) {
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (bufConData->receiveBuffers[i] == 0) continue;
-
-        res.remote_receive_buffer.push_back(bufConData->receiveBuffers[i]);
-        res.remote_receive_rkeys.push_back(bufConData->receiveRkeys[i]);
+        if (bufConData->receiveBuffers[i] != 0) {
+            res.remote_receive_buffer.push_back(bufConData->receiveBuffers[i]);
+            res.remote_receive_rkeys.push_back(bufConData->receiveRkeys[i]);
+        }
     }
 
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (bufConData->sendBuffers[i] == 0) continue;
-
-        res.remote_send_buffer.push_back(bufConData->sendBuffers[i]);
-        res.remote_send_rkeys.push_back(bufConData->sendRkeys[i]);
+        if (bufConData->sendBuffers[i] != 0) {
+            res.remote_send_buffer.push_back(bufConData->sendBuffers[i]);
+            res.remote_send_rkeys.push_back(bufConData->sendRkeys[i]);
+        }
     }
 
     BufferConnectionData reconfData = reconfigureBuffer(bufConData->bufferConfig);
@@ -1233,19 +1232,19 @@ void Connection::ackReconfigureBuffer(size_t index) {
     res.remote_receive_buffer.clear();
     res.remote_receive_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (recData->receiveBuffers[i] == 0) continue;
-
-        res.remote_receive_buffer.push_back(recData->receiveBuffers[i]);
-        res.remote_receive_rkeys.push_back(recData->receiveRkeys[i]);
+        if (recData->receiveBuffers[i] != 0) {
+            res.remote_receive_buffer.push_back(recData->receiveBuffers[i]);
+            res.remote_receive_rkeys.push_back(recData->receiveRkeys[i]);
+        }
     }
 
     res.remote_send_buffer.clear();
     res.remote_send_rkeys.clear();
     for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (recData->sendBuffers[i] == 0) continue;
-
-        res.remote_send_buffer.push_back(recData->sendBuffers[i]);
-        res.remote_send_rkeys.push_back(recData->sendRkeys[i]);
+        if (recData->sendBuffers[i] != 0) {
+            res.remote_send_buffer.push_back(recData->sendBuffers[i]);
+            res.remote_send_rkeys.push_back(recData->sendRkeys[i]);
+        }
     }
 
     std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
