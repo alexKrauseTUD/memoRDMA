@@ -9,6 +9,7 @@
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "FunctionalTests.hpp"
+#include "PerformanceTests.h"
 #include "Logger.h"
 #include "Utility.h"
 
@@ -414,7 +415,13 @@ void TaskManager::setup(size_t init_flags) {
         registerTask(std::make_shared<Task>("all_func_tests_lite", "Execute all functional tests lite", [this]() -> void {
             FunctionalTests::getInstance().executeAllTests(true);
         }));
+
+        registerTask(std::make_shared<Task>("ctb_consume", "Consume Test w/ current config, 10 seconds", [this]() -> void {
+            Utility::checkOrDie( PerformanceTests::getInstance().continuousConsumeBenchmark(1, 10) );
+        }));
     }
+
+    PerformanceTests::getInstance();
 }
 
 void TaskManager::setGlobalAbortFunction(std::function<void()> fn) {

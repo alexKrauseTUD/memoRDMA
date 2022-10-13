@@ -32,9 +32,7 @@ class FunctionalTests {
     uint8_t bufferReconfigurationTest(std::ofstream& out);
     uint8_t bufferReconfigurationTestLite(std::ofstream& out);
 
-    template <typename T>
-    static T* generateRandomDummyData(const uint64_t elementCount);
-    
+   
    private:
     FunctionalTests();
 

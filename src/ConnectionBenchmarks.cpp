@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Connection.h"
+#include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "Utility.h"
 
@@ -72,7 +73,7 @@ int Connection::benchmark(const std::string shortName, const std::string name, c
                     for (std::size_t elementCount = 1; elementCount <= MAX_DATA_ELEMENTS; elementCount <<= 1) {
                         for (std::size_t iteration = 0; iteration < TEST_ITERATIONS; ++iteration) {
                             uint64_t dataSize = elementCount * sizeof(uint64_t);
-                            char *copy = reinterpret_cast<char *>(d.data);
+                            char* copy = reinterpret_cast<char*>(d.data);
                             auto readable_size = Utility::GetBytesReadable(dataSize);
                             // LOG_DEBUG1("[" << name << "]\tGenerating " << readable_size << " of data to send them over." << std::endl);
 
