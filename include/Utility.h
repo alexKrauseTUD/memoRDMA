@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <sstream>
 #include <string>
+#include <random>
 
 #include "Logger.h"
 
@@ -125,6 +126,18 @@ class Utility {
             s.erase(s.find_last_not_of(del_if) + 1, std::string::npos);
             s.erase(0, std::min(s.find_first_not_of(del_if), s.size() - 1));
         }
+    }
+
+    template <typename T>
+    static inline T *generateRandomDummyData(const uint64_t elementCount) {
+        std::default_random_engine generator;
+        std::uniform_int_distribution<T> distribution(0, 100);
+        auto data = reinterpret_cast<T *>(malloc(elementCount * sizeof(T)));
+        for (size_t i = 0; i < elementCount; ++i) {
+            data[i] = distribution(generator);
+        }
+
+        return data;
     }
 
    private:

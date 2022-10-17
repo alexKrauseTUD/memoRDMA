@@ -103,7 +103,7 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out, Strategies strat) 
     using namespace std::chrono_literals;
 
     uint8_t errorCount = 0;
-    uint64_t* data = generateRandomDummyData<uint64_t>(elementCount);
+    uint64_t* data = memordma::Utility::generateRandomDummyData<uint64_t>(elementCount);
 
     LOG_INFO("\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl);
     out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
@@ -272,7 +272,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
     using namespace std::chrono_literals;
 
     uint8_t errorCount = 0;
-    uint64_t* data = generateRandomDummyData<uint64_t>(elementCount);
+    uint64_t* data = memordma::Utility::generateRandomDummyData<uint64_t>(elementCount);
 
     LOG_INFO("\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl);
     out << "[INFO]\t\t[DataTransferTest]\tGenerated " << elementCount << " Elements with a total size of ca. " << Utility::GetBytesReadable(dataSize) << std::endl;
@@ -418,16 +418,4 @@ uint8_t FunctionalTests::bufferReconfigurationTestLite(std::ofstream& out) {
 }
 
 FunctionalTests::~FunctionalTests() {
-}
-
-template <typename T>
-T* FunctionalTests::generateRandomDummyData(const uint64_t elementCount) {
-    std::default_random_engine generator;
-    std::uniform_int_distribution<T> distribution(0, 100);
-    auto data = reinterpret_cast<T*>(malloc(elementCount * sizeof(T)));
-    for (size_t i = 0; i < elementCount; ++i) {
-        data[i] = distribution(generator);
-    }
-
-    return data;
 }
