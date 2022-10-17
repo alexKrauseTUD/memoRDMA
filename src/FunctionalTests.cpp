@@ -285,7 +285,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
     LOG_INFO("\t[DataTransferTest]\tThe checksum of the generated data is\t" << +checkSum << std::endl);
     out << "[INFO]\t\t[DataTransferTest]\tThe checksum of the generated data is\t" << +checkSum << std::endl;
 
-    for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
+    for (uint8_t num_rb = 4; num_rb <= 8; ++num_rb) {
         for (uint64_t bytes = 1ull << 16; bytes <= 1ull << 21; bytes <<= 1) {
             buffer_config_t bufferConfig = {.num_own_send_threads = num_rb,
                                             .num_own_receive_threads = num_rb,

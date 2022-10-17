@@ -735,7 +735,7 @@ int Connection::findNextFreeSendAndBlock() {
  */
 int Connection::getNextReadyToPullSend() {
     std::shared_lock<std::shared_mutex> _lk(sendBufferCheckMutex);
-    size_t metaSizeHalf = metaInfoReceive.size() / 2;
+    size_t metaSizeHalf = metaInfoSend.size() / 2;
     for (size_t i = metaSizeHalf; i < metaInfoSend.size(); ++i) {
         if (metaInfoSend[i] == rdma_ready_to_pull) return i - metaSizeHalf;
     }
@@ -757,7 +757,7 @@ int Connection::findNextReadyToPullSendAndBlock() {
         nextReadyToPullSend = getNextReadyToPullSend();
     }
 
-    setSendOpcode(nextReadyToPullSend, rdma_working, false);
+    setSendOpcode(nextReadyToPullSend + (metaInfoSend.size() / 2), rdma_working, false);
 
     return nextReadyToPullSend;
 }
@@ -775,9 +775,8 @@ int Connection::__sendData(const size_t index, Strategies strat) {
     int nextFreeRec = findNextFreeReceiveAndBlock();
 
     if (strat == Strategies::push) {
-        uint64_t wrId = nextFreeRec;
         sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.dataQp, sb->getBufferPtr(), 10 * index + nextFreeRec);
-        wrId = pollCompletion<CompletionType::useDataCq>();
+        uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
 
         auto &doneSb = ownSendBuffer[wrId / 10];
 
@@ -949,12 +948,15 @@ void Connection::readDataFromRemote(const size_t index, bool consu) {
     int sbIndex = findNextReadyToPullSendAndBlock();
 
     ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    LOG_DEBUG2(sbIndex << "\t" << +metaInfoSend[sbIndex + (metaInfoSend.size() / 2)] << std::endl);
     uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
+
+    LOG_DEBUG1(wrId << std::endl);
 
     setSendOpcode((wrId % 10) + (metaInfoSend.size() / 2), rdma_ready, true);
 
     if (consu) {
-        setReceiveOpcode(wrId / 10, rdma_data_finished, false);
+        setReceiveOpcode(wrId / 10, rdma_functional_test, false);
     } else {
         setReceiveOpcode(wrId / 10, rdma_ready, true);
     }
