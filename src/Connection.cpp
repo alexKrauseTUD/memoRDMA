@@ -98,7 +98,7 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     // for the sending threads -> check whether a SB is ready to be send
     check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
         LOG_INFO("[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::endl);
-        size_t metaSizeHalf = metaInfoReceive.size() / 2;
+        size_t metaSizeHalf = metaInfoSend.size() / 2;
 
         while (!*abort) {
             // std::this_thread::sleep_for(100ms);
@@ -948,10 +948,7 @@ void Connection::readDataFromRemote(const size_t index, bool consu) {
     int sbIndex = findNextReadyToPullSendAndBlock();
 
     ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
-    LOG_DEBUG2(sbIndex << "\t" << +metaInfoSend[sbIndex + (metaInfoSend.size() / 2)] << std::endl);
     uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
-
-    LOG_DEBUG1(wrId << std::endl);
 
     setSendOpcode((wrId % 10) + (metaInfoSend.size() / 2), rdma_ready, true);
 
@@ -1009,43 +1006,39 @@ int Connection::closeConnection(bool sendRemote) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 BufferConnectionData Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
-    std::size_t numBlockedRec = 0;
-    std::size_t numBlockedSend = 0;
     bool allBlocked = false;
-
     validateBufferConfig(bufConfig);
 
     while (!allBlocked) {
-        while (numBlockedRec < bufferConfig.num_own_receive) {
-            for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
-                if (metaInfoReceive[i] == rdma_ready || metaInfoReceive[i] == rdma_reconfiguring) {
-                    setReceiveOpcode(i, rdma_blocked, true);
-                    ++numBlockedRec;
-                } else {
-                    continue;
-                }
+        allBlocked = true;
+        for (size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
+            if (metaInfoReceive[i] == rdma_ready || metaInfoReceive[i] == rdma_reconfiguring) {
+                setReceiveOpcode(i, rdma_blocked, true);
+            } else if (metaInfoReceive[i] == rdma_blocked) {
+                continue;
+            } else {
+                allBlocked = false;
+                LOG_DEBUG2("Invalid state for Rec index: " << i << "\tstate: " << +metaInfoReceive[i] << std::endl);
+                break;
             }
         }
 
-        while (numBlockedSend < bufferConfig.num_own_send) {
-            for (std::size_t i = 0; i < bufferConfig.num_own_send; ++i) {
+        if (allBlocked) {
+            for (size_t i = 0; i < bufferConfig.num_own_send; ++i) {
                 if (metaInfoSend[i] == rdma_ready || metaInfoSend[i] == rdma_reconfiguring) {
                     setSendOpcode(i, rdma_blocked, true);
-                    ++numBlockedSend;
-                } else {
+                } else if (metaInfoSend[i] == rdma_blocked) {
                     continue;
+                } else {
+                    allBlocked = false;
+                    LOG_DEBUG2("Invalid state for Send index: " << i << "\t state: " << +metaInfoSend[i] << std::endl);
+                    break;
                 }
             }
         }
 
-        allBlocked = true;
-
-        for (std::size_t i = 0; i < bufferConfig.num_own_receive; ++i) {
-            allBlocked = allBlocked && metaInfoReceive[i] == rdma_blocked;
-        }
-
-        for (std::size_t i = 0; i < bufferConfig.num_own_send; ++i) {
-            allBlocked = allBlocked && metaInfoSend[i] == rdma_blocked;
+        if (!allBlocked) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
 
