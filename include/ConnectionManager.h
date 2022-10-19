@@ -4,7 +4,7 @@
 #include <map>
 
 #include "Configuration.h"
-#include "Connection.h"
+#include "Connection.hpp"
 
 typedef std::function<void(const size_t, const ReceiveBuffer *, const std::_Bind<ResetFunction(uint64_t)>)> CallbackFunction;
 
@@ -30,13 +30,13 @@ class ConnectionManager {
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections(bool remoteShutdown);
-    int sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
+    int sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode);
     int sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote);
     int sendCustomOpcodeToAllConnections(uint8_t code);
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat);
+    int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType);
 
     void stop(bool remoteShutdown);
     bool abortSignaled() const;

@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include "Buffer.h"
-#include "Connection.h"
+#include "Connection.hpp"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "FunctionalTests.hpp"
@@ -16,22 +16,22 @@
 using namespace memordma;
 
 static void printSystemConfig(struct config_t& config) {
-    LOG_INFO("\tDevice name:\t\t" << config.dev_name << std::endl);
-    LOG_INFO("\tIB port:\t\t" << config.ib_port << std::endl);
+    LOG_INFO("\tDevice name:\t\t" << config.deviceName << std::endl);
+    LOG_INFO("\tIB port:\t\t" << config.infiniBandPort << std::endl);
 
-    if (!config.server_name.empty()) {
-        LOG_INFO("\tIP:\t\t\t" << config.server_name << std::endl);
+    if (!config.serverName.empty()) {
+        LOG_INFO("\tIP:\t\t\t" << config.serverName << std::endl);
     }
 
-    LOG_INFO("\tTCP port:\t\t" << config.tcp_port << std::endl);
+    LOG_INFO("\tTCP port:\t\t" << config.tcpPort << std::endl);
 
-    if (config.gid_idx >= 0) {
-        LOG_INFO("\tGID index:\t\t" << config.gid_idx << std::endl);
+    if (config.gidIndex >= 0) {
+        LOG_INFO("\tGID index:\t\t" << config.gidIndex << std::endl);
     }
 }
 
 static void printBufferConfig(struct config_t& config, struct buffer_config_t& bufferConfig) {
-    LOG_INFO("Remote IP:\t\t\t" << config.server_name << "\n"
+    LOG_INFO("Remote IP:\t\t\t" << config.serverName << "\n"
                                 << "\tOwn SB Number:\t\t" << +bufferConfig.num_own_send << "\n"
                                 << "\tOwn SB Size:\t\t" << bufferConfig.size_own_send << "\n"
                                 << "\tOwn RB Number:\t\t" << +bufferConfig.num_own_receive << "\n"
@@ -155,12 +155,12 @@ void TaskManager::setup(size_t init_flags) {
                 const uint8_t defaultMetaSize = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_META_INFO_SIZE);
                 uint8_t metaInfoSize = minMetaInfoSize > defaultMetaSize ? minMetaInfoSize : defaultMetaSize;
             */
-            config_t config = {.dev_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
-                               .server_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_INITIATE_IP),
-                               .tcp_port = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
-                               .client_mode = false,
-                               .ib_port = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
-                               .gid_idx = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
+            config_t config = {.deviceName = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
+                               .serverName = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_INITIATE_IP),
+                               .tcpPort = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
+                               .clientMode = false,
+                               .infiniBandPort = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
+                               .gidIndex = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
 
             buffer_config_t bufferConfig = {.num_own_send_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_OWN_SEND_THREADS),
                                             .num_own_receive_threads = ConnectionManager::getInstance().configuration->get<uint8_t>(MEMO_DEFAULT_OWN_RECEIVE_THREADS),
@@ -190,12 +190,12 @@ void TaskManager::setup(size_t init_flags) {
         }));
 
         registerTask(std::make_shared<Task>("listenConnection", "Listen for Connection", []() -> void {
-            config_t config = {.dev_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
-                               .server_name = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_LISTEN_IP),
-                               .tcp_port = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
-                               .client_mode = true,
-                               .ib_port = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
-                               .gid_idx = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
+            config_t config = {.deviceName = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_IB_DEVICE_NAME),
+                               .serverName = ConnectionManager::getInstance().configuration->getAsString(MEMO_DEFAULT_CONNECTION_AUTO_LISTEN_IP),
+                               .tcpPort = ConnectionManager::getInstance().configuration->get<uint32_t>(MEMO_DEFAULT_TCP_PORT),
+                               .clientMode = true,
+                               .infiniBandPort = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_PORT),
+                               .gidIndex = ConnectionManager::getInstance().configuration->get<int32_t>(MEMO_DEFAULT_IB_GLOBAL_INDEX)};
 
             buffer_config_t bufferConfig;
 
@@ -248,21 +248,21 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & performance_benchmarks) {
-        registerTask(std::make_shared<Task>("ss_tput_push", "Single-sided throughput benchmark PUSH", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_push", "Single-sided throughput benchmark PUSH", BenchmarkType::throughput, Strategies::push));
+        registerTask(std::make_shared<Task>("ss_tput_push", "Single-sided throughput benchmark", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_push", "Single-sided throughput benchmark", BenchmarkType::throughput));
         }));
 
-        registerTask(std::make_shared<Task>("ds_tput_push", "Double-sided throughput benchmark PUSH", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_push", "Double-sided throughput benchmark PUSH", BenchmarkType::consume, Strategies::push));
+        registerTask(std::make_shared<Task>("ds_tput_push", "Double-sided throughput benchmark", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_push", "Double-sided throughput benchmark", BenchmarkType::consume));
         }));
 
-        registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_pull", "Single-sided throughput benchmark PULL", BenchmarkType::throughput, Strategies::pull));
-        }));
+        // registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
+        //     Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_pull", "Single-sided throughput benchmark PULL", BenchmarkType::throughput));
+        // }));
 
-        registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_pull", "Double-sided throughput benchmark PULL", BenchmarkType::consume, Strategies::pull));
-        }));
+        // registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
+        //     Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_pull", "Double-sided throughput benchmark PULL", BenchmarkType::consume));
+        // }));
     }
 
     if (init_flags & functional_tests) {

@@ -1,7 +1,8 @@
 #include "ConnectionManager.h"
-#include "Connection.h"
 
 #include <iostream>
+
+#include "Connection.hpp"
 
 ConnectionManager::ConnectionManager() : globalConnectionId{0} {
 }
@@ -15,7 +16,14 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, std::make_shared<Connection>(config, bufferConfig, globalConnectionId)));
+    if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PushConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPush>(config, bufferConfig, globalConnectionId)));
+    } else if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PullConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPull>(config, bufferConfig, globalConnectionId)));
+    } else {
+        LOG_ERROR("There was a wrong connection type provided! (" << +configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) << ")" << std::endl);
+        return 0;
+    }
 
     return globalConnectionId;
 }
@@ -93,9 +101,9 @@ int ConnectionManager::closeAllConnections(bool remoteShutdown) {
     return allSuccess;
 }
 
-int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat) {
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->sendData(data, dataSize, customMetaData, customMetaDataSize, opcode, strat);
+        return connections[connectionId]->sendData(data, dataSize, customMetaData, customMetaDataSize, opcode);
     } else {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -134,9 +142,9 @@ int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config
     return 1;
 }
 
-int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat) {
+int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->benchmark(shortName, name, benchType, strat);
+        return connections[connectionId]->benchmark(shortName, name, benchType);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }

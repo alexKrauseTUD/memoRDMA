@@ -8,7 +8,7 @@
 #include <mutex>
 #include <thread>
 
-#include "Connection.h"
+#include "Connection.hpp"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "Logger.h"
@@ -38,7 +38,7 @@ class FunctionalTests {
 
     const uint64_t elementCount = 2000000;
     const uint64_t dataSize = elementCount * sizeof(uint64_t);
-    const uint8_t parallelExecutions = 10;
+    const uint8_t parallelExecutions = 3;
 
     std::mutex mapMutex;
     std::mutex resultWaitMutex;
@@ -48,6 +48,7 @@ class FunctionalTests {
     std::map<uint64_t, ReceiveData> receiveMap;
 
     CallbackFunction receiveDataTransferTest;
+    CallbackFunction pullDataTransferTest;
     CallbackFunction dataTransferTestAck;
 };
 

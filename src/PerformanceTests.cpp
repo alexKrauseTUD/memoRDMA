@@ -17,7 +17,7 @@ PerformanceTests::PerformanceTests() {
         reset_buffer();
 
         auto con = ConnectionManager::getInstance().getConnectionById(conId);
-        con->sendData((char *)&data_received, sizeof(uint64_t), nullptr, 0, rdma_continuous_test_ack, Strategies::push);
+        con->sendData((char *)&data_received, sizeof(uint64_t), nullptr, 0, rdma_continuous_test_ack);
     };
 
     CallbackFunction continuosTestAck = [this](__attribute__ ((unused)) const size_t conId, const ReceiveBuffer *rcv_buffer, const std::_Bind<ResetFunction(uint64_t)> reset_buffer) {
@@ -48,7 +48,7 @@ int PerformanceTests::continuousConsumeBenchmark(size_t conId, size_t seconds) {
     auto currentCheckpoint = lastCheckpoint;
     while (millisecondsExecutedTotal < seconds * 1000) {
         while (testRuntimeMilliseconds < 1000.0) {
-            con->sendData(reinterpret_cast<char *>(data), dataSize, nullptr, 0, rdma_continuous_test, Strategies::push);
+            con->sendData(reinterpret_cast<char *>(data), dataSize, nullptr, 0, rdma_continuous_test);
             currentCheckpoint = std::chrono::high_resolution_clock::now();
             testRuntimeMilliseconds += std::chrono::duration_cast<std::chrono::milliseconds>(currentCheckpoint - lastCheckpoint).count();
             lastCheckpoint = currentCheckpoint;

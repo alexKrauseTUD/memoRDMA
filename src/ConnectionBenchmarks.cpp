@@ -12,31 +12,23 @@
 #include <tuple>
 #include <vector>
 
-#include "Connection.h"
+#include "Connection.hpp"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "Utility.h"
 
 using namespace memordma;
 
-int Connection::benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat) {
+int Connection::benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType) {
     /* provide data to remote */
     DataProvider d;
     d.generateDummyData(MAX_DATA_ELEMENTS);
 
     uint8_t sendOpcode = rdma_ready;
     if (benchType == BenchmarkType::throughput) {
-        if (strat == Strategies::push) {
-            sendOpcode = rdma_ready;
-        } else if (strat == Strategies::pull) {
-            sendOpcode = rdma_pull_read;
-        }
+        sendOpcode = rdma_ready;
     } else if (benchType == BenchmarkType::consume) {
-        if (strat == Strategies::push) {
-            sendOpcode = rdma_data_finished;
-        } else if (strat == Strategies::pull) {
-            sendOpcode = rdma_pull_consume;
-        }
+        sendOpcode = rdma_data_finished;
     }
 
     for (uint8_t num_rb = 1; num_rb <= 8; ++num_rb) {
@@ -90,7 +82,7 @@ int Connection::benchmark(const std::string shortName, const std::string name, c
 
                             auto s_ts = std::chrono::high_resolution_clock::now();
 
-                            sendData(copy, dataSize, nullptr, 0, sendOpcode, strat);
+                            sendData(copy, dataSize, nullptr, 0, sendOpcode);
 
                             allDone = false;
                             while (!allDone) {

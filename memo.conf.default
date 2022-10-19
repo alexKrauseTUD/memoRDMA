@@ -51,6 +51,10 @@
 // Mirror the output of the logger to a file.
 #logger.tofile = 0
 
+// memo.default.connection.type [0]
+// Which type of connection to use -> 0: Push, 1: Pull -> Be sure to set on both sides equally!
+#memo.default.connection.type = 0
+
 // memo.default.autoconnect.initiate [0]
 // Upon startup, immediately use the default TCP Port and initiate a connection to the default initiate ip.
 #memo.default.autoconnect.initiate = 0
