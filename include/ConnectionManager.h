@@ -4,7 +4,7 @@
 #include <map>
 
 #include "Configuration.h"
-#include "Connection.h"
+#include "Connection.hpp"
 
 typedef std::function<void(const size_t, const ReceiveBuffer *, const std::_Bind<ResetFunction(uint64_t)>)> CallbackFunction;
 
@@ -23,20 +23,20 @@ class ConnectionManager {
     void operator=(ConnectionManager const &) = delete;
 
     int registerConnection(config_t &config, buffer_config_t &bufferConfig);
-    std::shared_ptr<Connection> getConnectionById(size_t id);
+    std::shared_ptr<ConnectionPush> getConnectionById(size_t id);
     bool registerCallback(uint8_t code, CallbackFunction cb);
     bool hasCallback(uint8_t code) const;
     CallbackFunction getCallback(uint8_t code) const;
     void printConnections();
     int closeConnection(std::size_t connectionId, bool sendRemote = true);
     int closeAllConnections(bool remoteShutdown);
-    int sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode, Strategies strat);
+    int sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode);
     int sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote);
     int sendCustomOpcodeToAllConnections(uint8_t code);
 
     int reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig);
 
-    int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType, Strategies strat);
+    int benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType);
 
     void stop(bool remoteShutdown);
     bool abortSignaled() const;
@@ -47,7 +47,7 @@ class ConnectionManager {
     /* Singleton-required */
     ConnectionManager();
 
-    std::map<std::size_t, std::shared_ptr<Connection>> connections;
+    std::map<std::size_t, std::shared_ptr<ConnectionPush>> connections;
 
     bool globalAbort;
     bool stopped = false;

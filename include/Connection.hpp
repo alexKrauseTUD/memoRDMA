@@ -1,10 +1,14 @@
 #ifndef MEMORDMA_RDMA_CONNECTION
 #define MEMORDMA_RDMA_CONNECTION
 
+#include <assert.h>
 #include <inttypes.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <condition_variable>
+#include <csignal>
 #include <functional>
 #include <mutex>
 #include <random>
@@ -15,6 +19,10 @@
 #include <vector>
 
 #include "Buffer.h"
+#include "Logger.h"
+#include "Utility.h"
+
+using namespace memordma;
 
 #define MAX_POLL_CQ_TIMEOUT 30000  // ms
 
@@ -30,12 +38,12 @@ enum class BenchmarkType : uint8_t {
 
 // structure of test parameters
 struct config_t {
-    std::string deviceName;     // IB device name
+    std::string deviceName;  // IB device name
     std::string serverName;  // server hostname
     uint32_t tcpPort;        // server TCP port
     bool clientMode;         // Don't run an event loop
-    int32_t infiniBandPort;          // local IB port to work with
-    int32_t gidIndex;          // GID index to use
+    int32_t infiniBandPort;  // local IB port to work with
+    int32_t gidIndex;        // GID index to use
 };
 
 struct buffer_config_t {
@@ -81,7 +89,7 @@ typedef std::function<void(const size_t)> ResetFunction;
 struct resources {
     struct ibv_device_attr device_attr;           // device attributes
     struct ibv_port_attr port_attr;               // IB port attributes
-    struct ConnectionData remote_props;            // values to connect to remote side
+    struct ConnectionData remote_props;           // values to connect to remote side
     struct ibv_context *ib_ctx;                   // device handle
     struct ibv_pd *dataPd;                        // PD handle
     struct ibv_pd *metaPd;                        // PD handle
@@ -100,33 +108,28 @@ typedef std::chrono::_V2::system_clock::time_point timePoint;
 
 class Connection {
    public:
-    explicit Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
-    ~Connection();
+    virtual ~Connection();
 
     void init();
 
     size_t maxBytesInPayload(const size_t customMetaDataSize) const;
 
-    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat);
+    virtual int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode) = 0;
 
     int sendOpcode(uint8_t opcode, bool sendToRemote);
 
     int closeConnection(bool send_remote = true);
 
-    void readDataFromRemote(const size_t index, bool consu);
-    void consumeData(const size_t index);
+    virtual void consumeData(const size_t index) = 0;
 
     void validateBufferConfig(buffer_config_t &bufConfig);
 
-    int sendReconfigureBuffer(buffer_config_t &bufConfig);
-    int receiveReconfigureBuffer(const uint8_t index);
+    virtual int sendReconfigureBuffer(buffer_config_t &bufConfig) = 0;
+    virtual int receiveReconfigureBuffer(const uint8_t index) = 0;
 
     void printConnectionInfo() const;
 
-    int throughputBenchmark(std::string logName, Strategies strat);
-    int consumingBenchmark(std::string logName, Strategies strat);
-
-    int benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType, const Strategies strat);
+    int benchmark(const std::string shortName, const std::string name, const BenchmarkType benchType);
 
     static int sockConnect(std::string client_name, uint32_t *port);
     static int sockSyncData(int sockfd, int xfer_size, char *local_data, char *remote_data);
@@ -135,7 +138,9 @@ class Connection {
     static int receiveTcp(int sockfd, int xfer_size, char *remote_data);
     static int sendTcp(int sockfd, int xfer_size, char *local_data);
 
-   private:
+   protected:
+    explicit Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
+
     config_t config;
     buffer_config_t bufferConfig;
     uint32_t localConId;
@@ -149,8 +154,6 @@ class Connection {
     std::mutex reconfigureMutex;
     std::mutex closingMutex;
     std::mutex idGeneratorMutex;
-
-    std::shared_mutex completionSetMutex;
 
     std::condition_variable reconfigureCV;
     bool reconfigureDone = false;
@@ -183,7 +186,7 @@ class Connection {
     uint64_t pollCompletion();
 
     BufferConnectionData reconfigureBuffer(buffer_config_t &bufConfig);
-    void ackReconfigureBuffer(size_t index);
+    virtual void ackReconfigureBuffer(size_t index) = 0;
 
     int findNextFreeReceiveAndBlock();
     int findNextFreeSendAndBlock();
@@ -193,10 +196,7 @@ class Connection {
     void setSendOpcode(const size_t index, uint8_t opcode, bool sendToRemote);
     uint64_t generatePackageID();
 
-    int getNextReadyToPullSend();
-    int findNextReadyToPullSendAndBlock();
-
-    int __sendData(const size_t index, Strategies strat);
+    virtual int __sendData(const size_t index) = 0;
 
     std::atomic<bool> globalReceiveAbort;
     std::atomic<bool> globalSendAbort;
@@ -209,13 +209,99 @@ class Connection {
 
     std::mt19937_64 randGen;
 
-    std::unordered_set<uint64_t> completionSet;
-
     std::vector<std::unique_ptr<std::thread>> readWorkerPool;
     std::vector<std::unique_ptr<std::thread>> sendWorkerPool;
 
     static const std::size_t TEST_ITERATIONS = 10;
     static const std::uint64_t MAX_DATA_ELEMENTS = 1ull << 31;
 };
+
+class ConnectionPush : public Connection {
+   public:
+    explicit ConnectionPush(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
+    ~ConnectionPush();
+
+    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
+    int sendReconfigureBuffer(buffer_config_t &bufConfig);
+    int receiveReconfigureBuffer(const uint8_t index);
+
+    void consumeData(const size_t index);
+
+   private:
+    int __sendData(const size_t index);
+
+    void ackReconfigureBuffer(size_t index);
+};
+
+class ConnectionPull : public Connection {
+   public:
+    explicit ConnectionPull(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
+    ~ConnectionPull();
+
+    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
+
+    int sendReconfigureBuffer(buffer_config_t &bufConfig);
+    int receiveReconfigureBuffer(const uint8_t index);
+
+    void consumeData(const size_t index);
+
+   private:
+    int __sendData(const size_t index);
+
+    int getNextReadyToPullSend();
+    int findNextReadyToPullSendAndBlock();
+
+    void ackReconfigureBuffer(size_t index);
+};
+
+/**
+ * @brief Poll the CQ for a single event. This function will continue to poll the queue until MAX_POLL_TIMEOUT ms have passed.
+ *
+ * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
+ */
+template <CompletionType compType>
+uint64_t Connection::pollCompletion() {
+    struct ibv_wc wc;
+    unsigned long start_time_ms;
+    unsigned long curr_time_ms;
+    struct timeval curr_time;
+    int poll_result;
+
+    // poll the completion for a while before giving up of doing it
+    gettimeofday(&curr_time, NULL);
+    start_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
+    do {
+        if (compType == CompletionType::useDataCq) {
+            poll_result = ibv_poll_cq(res.dataCq, 1, &wc);
+        } else if (compType == CompletionType::useMetaCq) {
+            poll_result = ibv_poll_cq(res.metaCq, 1, &wc);
+        }
+        gettimeofday(&curr_time, NULL);
+        curr_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
+    } while ((poll_result == 0) &&
+             ((curr_time_ms - start_time_ms) < MAX_POLL_CQ_TIMEOUT));
+
+    if (poll_result < 0) {
+        // poll CQ failed
+        LOG_ERROR("poll CQ failed\n");
+        goto die;
+    } else if (poll_result == 0) {
+        LOG_ERROR("Completion wasn't found in the CQ after timeout\n");
+        goto die;
+    } else {
+        // CQE found
+        // LOG_INFO("Completion was found in CQ with status 0x%x\n", wc.status);
+    }
+
+    if (wc.status != IBV_WC_SUCCESS) {
+        LOG_ERROR("Got bad completion with status: " << ibv_wc_status_str(wc.status) << " (" << std::hex << wc.status << ") vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
+        goto die;
+    }
+
+    // FIXME: ;)
+    return wc.wr_id;
+die:
+    exit(EXIT_FAILURE);
+}
 
 #endif  // MEMORDMA_RDMA_CONNECTION

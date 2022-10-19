@@ -12,21 +12,12 @@ enum rdma_handler_communication: uint8_t {
     rdma_reconfigure,
     rdma_reconfigure_ack,
     rdma_reconfiguring,
-    rdma_pull_read,
-    rdma_pull_consume,
-    rdma_ready_to_push,
-    rdma_ready_to_pull,
+    rdma_ready_to_send,
     rdma_functional_test,
-    rdma_functional_test_pull,
     rdma_functional_test_ack,
     rdma_continuous_test,
     rdma_continuous_test_ack,
     rdma_shutdown
-};
-
-enum class Strategies {
-    push,
-    pull
 };
 
 #endif // COMMON_H

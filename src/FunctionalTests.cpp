@@ -26,12 +26,12 @@ FunctionalTests::FunctionalTests() {
             receiveMap[packageId].result += data[i];
         }
 
-        LOG_DEBUG2("Package id " << head->id << "\tPackage Number " << head->package_number << "\tReceived Bytes " << receiveMap[packageId].receivedBytes << "\tCurrent Result " << receiveMap[packageId].result << std::endl);
+        // LOG_DEBUG2("Package id " << head->id << "\tPackage Number " << head->package_number << "\tReceived Bytes " << receiveMap[packageId].receivedBytes << "\tCurrent Result " << receiveMap[packageId].result << std::endl);
 
         reset_buffer();
 
         if (receiveMap[packageId].receivedBytes == dataSize) {
-            ConnectionManager::getInstance().sendData(conId, reinterpret_cast<char*>(&receiveMap[packageId].result), sizeof(receiveMap[packageId].result), nullptr, 0, rdma_functional_test_ack, Strategies::push);
+            ConnectionManager::getInstance().sendData(conId, reinterpret_cast<char*>(&receiveMap[packageId].result), sizeof(receiveMap[packageId].result), nullptr, 0, rdma_functional_test_ack);
             receiveMap.erase(packageId);
         }
     };
@@ -81,12 +81,12 @@ uint8_t FunctionalTests::executeAllTests(bool lite) {
 
     if (lite) {
         // numberProblems += bufferReconfigurationTestLite(out);
-        // numberProblems += dataTransferTestLite(out, Strategies::push);
-        numberProblems += dataTransferTestLite(out, Strategies::pull);
+        // numberProblems += dataTransferTestLite(out);
+        numberProblems += dataTransferTestLite(out);
     } else {
         // numberProblems += bufferReconfigurationTest(out);
-        // numberProblems += dataTransferTest(out, Strategies::push);
-        numberProblems += dataTransferTest(out, Strategies::pull);
+        // numberProblems += dataTransferTest(out);
+        numberProblems += dataTransferTest(out);
     }
 
     out.close();
@@ -99,7 +99,7 @@ uint8_t FunctionalTests::executeAllTests(bool lite) {
 
 // FULL TESTS -> very time consuming
 
-uint8_t FunctionalTests::dataTransferTest(std::ofstream& out, Strategies strat) {
+uint8_t FunctionalTests::dataTransferTest(std::ofstream& out) {
     using namespace std::chrono_literals;
 
     uint8_t errorCount = 0;
@@ -144,7 +144,7 @@ uint8_t FunctionalTests::dataTransferTest(std::ofstream& out, Strategies strat) 
                             receiveMap.clear();
 
                             auto sendLambda = [&]() {
-                                ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, strat == Strategies::push ? rdma_functional_test : rdma_functional_test_pull, strat);
+                                ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, rdma_functional_test);
                             };
 
                             for (size_t k = 0; k < parallelExecutions; ++k) {
@@ -268,7 +268,7 @@ uint8_t FunctionalTests::bufferReconfigurationTest(std::ofstream& out) {
 
 // LITE TESTS -> significantly less time consuming but also less accurate
 
-uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies strat) {
+uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out) {
     using namespace std::chrono_literals;
 
     uint8_t errorCount = 0;
@@ -310,7 +310,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
                 receiveMap.clear();
 
                 auto sendLambda = [&]() {
-                    ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, strat == Strategies::push ? rdma_functional_test : rdma_pull_consume, strat);
+                    ConnectionManager::getInstance().sendData(1, reinterpret_cast<char*>(data), dataSize, nullptr, 0, rdma_functional_test);
                 };
 
                 for (size_t k = 0; k < parallelExecutions; ++k) {
@@ -319,7 +319,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
 
                 std::unique_lock<std::mutex> resultWaitLock(resultWaitMutex);
 
-                resultWaitCV.wait_for(resultWaitLock, 10s);
+                resultWaitCV.wait_for(resultWaitLock, 1s);
                 if (!resultsArrived) {
                     errorCount++;
                     LOG_ERROR("\t[DataTransferTest]\tA result in iteration " << +i << " did not arrive within 10s!" << std::endl);
@@ -332,7 +332,7 @@ uint8_t FunctionalTests::dataTransferTestLite(std::ofstream& out, Strategies str
                     for (auto it = receiveMap.begin(); it != receiveMap.end(); ++it) {
                         auto currentResult = it->second.result;
                         if (currentResult == checkSum) {
-                            LOG_SUCCESS("\t[DataTransferTest]\tThe Result in iteration " << +i << " matches the expected one." << std::endl);
+                            LOG_SUCCESS("\t[DataTransferTest]\tThe Result in iteration " << +i << " matches the expected one. (Result " << currentResult << ", Expected " << checkSum << ")" << std::endl);
                             out << "[SUCCESS]\t[DataTransferTest]\tThe Result in iteration " << +i << " matches the expected one." << std::endl;
                         } else {
                             errorCount++;

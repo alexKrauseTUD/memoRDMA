@@ -8,7 +8,7 @@
 #include <mutex>
 #include <thread>
 
-#include "Connection.h"
+#include "Connection.hpp"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "Logger.h"
@@ -27,8 +27,8 @@ class FunctionalTests {
     ~FunctionalTests();
 
     uint8_t executeAllTests(bool lite);
-    uint8_t dataTransferTest(std::ofstream& out, Strategies strat);
-    uint8_t dataTransferTestLite(std::ofstream& out, Strategies strat);
+    uint8_t dataTransferTest(std::ofstream& out);
+    uint8_t dataTransferTestLite(std::ofstream& out);
     uint8_t bufferReconfigurationTest(std::ofstream& out);
     uint8_t bufferReconfigurationTestLite(std::ofstream& out);
 
@@ -38,7 +38,7 @@ class FunctionalTests {
 
     const uint64_t elementCount = 2000000;
     const uint64_t dataSize = elementCount * sizeof(uint64_t);
-    const uint8_t parallelExecutions = 10;
+    const uint8_t parallelExecutions = 3;
 
     std::mutex mapMutex;
     std::mutex resultWaitMutex;

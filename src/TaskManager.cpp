@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include "Buffer.h"
-#include "Connection.h"
+#include "Connection.hpp"
 #include "ConnectionManager.h"
 #include "DataProvider.h"
 #include "FunctionalTests.hpp"
@@ -248,21 +248,21 @@ void TaskManager::setup(size_t init_flags) {
     }
 
     if (init_flags & performance_benchmarks) {
-        registerTask(std::make_shared<Task>("ss_tput_push", "Single-sided throughput benchmark PUSH", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_push", "Single-sided throughput benchmark PUSH", BenchmarkType::throughput, Strategies::push));
+        registerTask(std::make_shared<Task>("ss_tput_push", "Single-sided throughput benchmark", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_push", "Single-sided throughput benchmark", BenchmarkType::throughput));
         }));
 
-        registerTask(std::make_shared<Task>("ds_tput_push", "Double-sided throughput benchmark PUSH", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_push", "Double-sided throughput benchmark PUSH", BenchmarkType::consume, Strategies::push));
+        registerTask(std::make_shared<Task>("ds_tput_push", "Double-sided throughput benchmark", [this]() -> void {
+            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_push", "Double-sided throughput benchmark", BenchmarkType::consume));
         }));
 
-        registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_pull", "Single-sided throughput benchmark PULL", BenchmarkType::throughput, Strategies::pull));
-        }));
+        // registerTask(std::make_shared<Task>("ss_tput_pull", "Single-sided throughput benchmark PULL", [this]() -> void {
+        //     Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ss_tput_pull", "Single-sided throughput benchmark PULL", BenchmarkType::throughput));
+        // }));
 
-        registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
-            Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_pull", "Double-sided throughput benchmark PULL", BenchmarkType::consume, Strategies::pull));
-        }));
+        // registerTask(std::make_shared<Task>("ds_tput_pull", "Double-sided throughput benchmark PULL", [this]() -> void {
+        //     Utility::checkOrDie(ConnectionManager::getInstance().benchmark(1, "ds_tput_pull", "Double-sided throughput benchmark PULL", BenchmarkType::consume));
+        // }));
     }
 
     if (init_flags & functional_tests) {

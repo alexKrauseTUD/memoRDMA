@@ -1,29 +1,15 @@
-#include "Connection.h"
-
-#include <ConnectionManager.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include "Connection.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
-#include <csignal>
 #include <cstring>
 #include <fstream>
-#include <functional>
 #include <future>
 #include <iostream>
-#include <shared_mutex>
-#include <thread>
 #include <tuple>
-#include <vector>
 
+#include "ConnectionManager.h"
 #include "DataProvider.h"
-#include "Logger.h"
-#include "Utility.h"
-
-using namespace memordma;
 
 Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : globalReceiveAbort(false), globalSendAbort(false) {
     config = _config;
@@ -31,101 +17,6 @@ Connection::Connection(config_t _config, buffer_config_t _bufferConfig, uint32_t
     bufferConfig = _bufferConfig;
     localConId = _localConId;
     res.sock = -1;
-
-    // for resetting the buffer -> this is needed for the callbacks as they do not have access to the necessary structures
-    reset_buffer = [this](const size_t i) -> void {
-        // ownReceiveBuffer[i]->clearBuffer();
-        setReceiveOpcode(i, rdma_ready, true);
-    };
-
-    // for the receiving threads -> check whether a RB is ready to be consumed
-    check_receive = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
-        LOG_INFO("[check_receive] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for receiving on connection!" << std::endl);
-        size_t metaSizeHalf = metaInfoReceive.size() / 2;
-
-        // currently this works with (busy) waiting -> TODO: conditional variable with wait
-        while (!*abort) {
-            // std::this_thread::sleep_for(1000ms);
-            for (size_t i = tid; i < metaSizeHalf; i += thrdcnt) {
-                if (ConnectionManager::getInstance().hasCallback(metaInfoReceive[i])) {
-                    // LOG_DEBUG1("[Connection] Invoking custom callback for code " << (size_t)metaInfoReceive[i] << std::endl);
-
-                    // Handle the call
-                    auto cb = ConnectionManager::getInstance().getCallback(metaInfoReceive[i]);
-                    cb(localConId, ownReceiveBuffer[i].get(), std::bind(reset_buffer, i));
-
-                    continue;
-                }
-                switch (metaInfoReceive[i]) {
-                    case rdma_no_op:
-                    case rdma_ready:
-                    case rdma_working: {
-                        continue;
-                    }; break;
-                    case rdma_data_finished: {
-                        consumeData(i);
-                    }; break;
-                    case rdma_pull_read: {
-                        readDataFromRemote(i, false);
-                    } break;
-                    case rdma_pull_consume: {
-                        readDataFromRemote(i, true);
-                    } break;
-                    case rdma_reconfigure: {
-                        auto recFunc = [this](size_t index) {
-                            receiveReconfigureBuffer(index);
-                        };
-                        setReceiveOpcode(i, rdma_reconfiguring, false);
-                        std::thread(recFunc, i).detach();
-                    } break;
-                    case rdma_reconfigure_ack: {
-                        ackReconfigureBuffer(i);
-                    } break;
-                    case rdma_shutdown: {
-                        auto shutdown = []() { std::raise(SIGUSR1); };
-                        std::thread(shutdown).detach();
-                    }; break;
-                    default: {
-                        continue;
-                    }; break;
-                }
-            }
-        }
-
-        LOG_INFO("[check_receive] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl);
-    };
-
-    // for the sending threads -> check whether a SB is ready to be send
-    check_send = [this](std::atomic<bool> *abort, size_t tid, size_t thrdcnt) -> void {
-        LOG_INFO("[check_send] Starting monitoring thread " << tid + 1 << "/" << +thrdcnt << " for sending on connection!" << std::endl);
-        size_t metaSizeHalf = metaInfoSend.size() / 2;
-
-        while (!*abort) {
-            // std::this_thread::sleep_for(100ms);
-            for (size_t i = tid; i < metaSizeHalf; i += thrdcnt) {
-                switch (metaInfoSend[i]) {
-                    case rdma_no_op:
-                    case rdma_ready:
-                    case rdma_working: {
-                        continue;
-                    }; break;
-                    case rdma_ready_to_push: {
-                        __sendData(i, Strategies::push);
-                    }; break;
-                    case rdma_ready_to_pull: {
-                        __sendData(i, Strategies::pull);
-                    }; break;
-                    default: {
-                        continue;
-                    }; break;
-                }
-            }
-        }
-
-        LOG_INFO("[check_send] Ending thread " << tid + 1 << "/" << +thrdcnt << " through global abort." << std::endl);
-    };
-
-    init();
 }
 
 /**
@@ -580,56 +471,6 @@ int Connection::changeQueuePairStateToRTS(struct ibv_qp *qp) {
 }
 
 /**
- * @brief Poll the CQ for a single event. This function will continue to poll the queue until MAX_POLL_TIMEOUT ms have passed.
- *
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-template <CompletionType compType>
-uint64_t Connection::pollCompletion() {
-    struct ibv_wc wc;
-    unsigned long start_time_ms;
-    unsigned long curr_time_ms;
-    struct timeval curr_time;
-    int poll_result;
-
-    // poll the completion for a while before giving up of doing it
-    gettimeofday(&curr_time, NULL);
-    start_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
-    do {
-        if (compType == CompletionType::useDataCq) {
-            poll_result = ibv_poll_cq(res.dataCq, 1, &wc);
-        } else if (compType == CompletionType::useMetaCq) {
-            poll_result = ibv_poll_cq(res.metaCq, 1, &wc);
-        }
-        gettimeofday(&curr_time, NULL);
-        curr_time_ms = (curr_time.tv_sec * 1000) + (curr_time.tv_usec / 1000);
-    } while ((poll_result == 0) &&
-             ((curr_time_ms - start_time_ms) < MAX_POLL_CQ_TIMEOUT));
-
-    if (poll_result < 0) {
-        // poll CQ failed
-        LOG_ERROR("poll CQ failed\n");
-        goto die;
-    } else if (poll_result == 0) {
-        LOG_ERROR("Completion wasn't found in the CQ after timeout\n");
-        goto die;
-    } else {
-        // CQE found
-        // LOG_INFO("Completion was found in CQ with status 0x%x\n", wc.status);
-    }
-
-    if (wc.status != IBV_WC_SUCCESS) {
-        LOG_ERROR("Got bad completion with status: " << ibv_wc_status_str(wc.status) << " (" << std::hex << wc.status << ") vendor syndrome: 0x" << std::hex << wc.vendor_err << std::endl;)
-        goto die;
-    }
-
-    // FIXME: ;)
-    return wc.wr_id;
-die:
-    exit(EXIT_FAILURE);
-}
-
-/**
  * @brief Calculating how much bytes of payload can fit into one remote RB.
  *
  * @param customMetaDataSize The size of the custom meta data. This is only known to the workload and not to package or buffer.
@@ -637,57 +478,6 @@ die:
  */
 size_t Connection::maxBytesInPayload(const size_t customMetaDataSize) const {
     return bufferConfig.size_remote_receive - package_t::metaDataSize() - customMetaDataSize;
-}
-
-/**
- * @brief                   Function for distributing the data to send on the available SBs. The real sending process is triggered by the opcode and done in an other function.
- *
- * @param data              Pointer to the start of the payload data that should be sent.
- * @param dataSize          The size of the whole payload data that should be sent.
- * @param appMetaData       Pointer to the application specific meta data that is written into each package.
- * @param appMetaDataSize   The size of the application specific meta data in bytes.
- * @param opcode            The opcode that should be written to remote for every package.
- * @param strat             Whether using push or pull.
- * @return int              Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::sendData(char *data, size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode, Strategies strat) {
-    int nextFreeSend;
-
-    uint64_t remainingSize = dataSize;                                                                                                   // Whats left to write
-    uint64_t maxPayloadSize = bufferConfig.size_own_send - package_t::metaDataSize() - appMetaDataSize;                                  // As much as we can fit into the SB excluding metadata
-    uint64_t maxDataToWrite = remainingSize <= maxPayloadSize ? remainingSize : (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);  // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
-    uint64_t packageID = generatePackageID();                                                                                            // Some randomized identifier
-
-    size_t packageCounter = 0;
-    package_t package(packageID, maxDataToWrite, packageCounter, 0, dataSize, appMetaDataSize, data);
-
-    while (remainingSize > 0) {
-        nextFreeSend = findNextFreeSendAndBlock();
-        auto &sb = ownSendBuffer[nextFreeSend];
-
-        if (remainingSize < maxDataToWrite) {
-            maxDataToWrite = remainingSize;
-            package.setCurrentPackageSize(remainingSize);
-        }
-
-        package.setCurrentPackageNumber(packageCounter++);
-
-        sb->loadPackage(sb->getBufferPtr(), &package, appMetaData);
-
-        sb->sendOpcode = opcode;
-
-        package.advancePayloadPtr(maxDataToWrite);
-
-        if (strat == Strategies::push) {
-            setSendOpcode(nextFreeSend, rdma_ready_to_push, false);
-        } else if (strat == Strategies::pull) {
-            setSendOpcode(nextFreeSend, rdma_ready_to_pull, true);
-        }
-
-        remainingSize -= maxDataToWrite;
-    }
-
-    return remainingSize == 0 ? 0 : 1;
 }
 
 /**
@@ -726,67 +516,6 @@ int Connection::findNextFreeSendAndBlock() {
     setSendOpcode(nextFreeSend, rdma_working, false);
 
     return nextFreeSend;
-}
-
-/**
- * @brief Search the send meta info struct once for a ready buffer. Only once as this should be a locked process and the lock should be returned in small intervalls.
- *
- * @return int The local index of the found SB.
- */
-int Connection::getNextReadyToPullSend() {
-    std::shared_lock<std::shared_mutex> _lk(sendBufferCheckMutex);
-    size_t metaSizeHalf = metaInfoSend.size() / 2;
-    for (size_t i = metaSizeHalf; i < metaInfoSend.size(); ++i) {
-        if (metaInfoSend[i] == rdma_ready_to_pull) return i - metaSizeHalf;
-    }
-
-    return -1;
-}
-
-/**
- * @brief Searching for a ready local SB and block this for further usage before returning the buffer index.
- *
- * @return int The local SB index. This is the actual index in the meta info structure.
- */
-int Connection::findNextReadyToPullSendAndBlock() {
-    int nextReadyToPullSend = -1;
-
-    std::lock_guard<std::mutex> lk(remoteSendBufferBlockMutex);
-    // ideally this will be done with a conditional variabel and not with busy waiting.
-    while (nextReadyToPullSend == -1) {
-        nextReadyToPullSend = getNextReadyToPullSend();
-    }
-
-    setSendOpcode(nextReadyToPullSend + (metaInfoSend.size() / 2), rdma_working, false);
-
-    return nextReadyToPullSend;
-}
-
-/**
- * @brief The actual sending process. It assumes that the data is already in the indicated SB and is called when the corresponding opcode is set.
- *
- * @param index The local index of the SB.
- * @param strat Whether to push or pull.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::__sendData(const size_t index, Strategies strat) {
-    setSendOpcode(index, rdma_working, false);
-    auto &sb = ownSendBuffer[index];
-    int nextFreeRec = findNextFreeReceiveAndBlock();
-
-    if (strat == Strategies::push) {
-        sb->sendPackage(res.remote_receive_buffer[nextFreeRec], res.remote_receive_rkeys[nextFreeRec], res.dataQp, sb->getBufferPtr(), 10 * index + nextFreeRec);
-        uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
-
-        auto &doneSb = ownSendBuffer[wrId / 10];
-
-        setReceiveOpcode((wrId % 10) + (metaInfoReceive.size() / 2), doneSb->sendOpcode, doneSb->sendOpcode != rdma_ready);  // do not send opcode if rdma_ready -> throughput test
-        setSendOpcode(wrId / 10, rdma_ready, false);
-    } else {
-        setReceiveOpcode(nextFreeRec + (metaInfoReceive.size() / 2), sb->sendOpcode, sb->sendOpcode != rdma_ready);
-    }
-
-    return 0;
 }
 
 /**
@@ -934,52 +663,6 @@ void Connection::setSendOpcode(size_t index, uint8_t opcode, bool sendToRemote) 
 
         pollCompletion<CompletionType::useMetaCq>();
     }
-}
-
-/**
- * @brief Read the data from the remote SB.
- *
- * @param index The RB index where the data is located (or should be read into).
- * @param consu Whether the data should actually be consumed.
- */
-void Connection::readDataFromRemote(const size_t index, bool consu) {
-    setReceiveOpcode(index, rdma_working, false);
-
-    int sbIndex = findNextReadyToPullSendAndBlock();
-
-    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
-    uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
-
-    setSendOpcode((wrId % 10) + (metaInfoSend.size() / 2), rdma_ready, true);
-
-    if (consu) {
-        setReceiveOpcode(wrId / 10, rdma_functional_test, false);
-    } else {
-        setReceiveOpcode(wrId / 10, rdma_ready, true);
-    }
-}
-
-/**
- * @brief Copying the data from the RB into local memory and set it free again.
- *
- * @param index The RB index where the data is located (or should be read into).
- */
-void Connection::consumeData(const size_t index) {
-    setReceiveOpcode(index, rdma_working, false);
-
-    char *ptr = ownReceiveBuffer[index]->getBufferPtr();
-
-    package_t::header_t *header = reinterpret_cast<package_t::header_t *>(ptr);
-
-    LOG_DEBUG2(header->id << "\t" << header->total_data_size << "\t" << header->current_payload_size << "\t" << header->package_number << std::endl);
-
-    uint64_t *localPtr = reinterpret_cast<uint64_t *>(malloc(header->current_payload_size));
-    memset(localPtr, 0, header->current_payload_size);
-    memcpy(localPtr, ptr + package_t::metaDataSize(), header->current_payload_size);
-
-    free(localPtr);
-
-    setReceiveOpcode(index, rdma_ready, true);
 }
 
 /**
@@ -1148,104 +831,6 @@ BufferConnectionData Connection::reconfigureBuffer(buffer_config_t &bufConfig) {
     printConnectionInfo();
 
     return bufConData;
-}
-
-/**
- * @brief Reconfiguration of the local buffer setup to the (possibly) new setup. Note: trying to be as lazy as possible, there are only changes if the configuration changed.
- *
- * @param bufConfig The new buffer configuration that should be applied.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::sendReconfigureBuffer(buffer_config_t &bufConfig) {
-    BufferConnectionData bufConData = reconfigureBuffer(bufConfig);
-
-    sendData(reinterpret_cast<char *>(&bufConData), sizeof(BufferConnectionData), nullptr, 0, rdma_reconfigure, Strategies::push);
-
-    std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
-    reconfigureCV.wait(reconfigureLock);
-
-    return 0;
-}
-
-/**
- * @brief Receiving the task to reconfigure. Apply the given information to the own buffer structure.
- *
- * @param index The index of the RB where the new buffer information is stored.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int Connection::receiveReconfigureBuffer(const uint8_t index) {
-    char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
-
-    BufferConnectionData *bufConData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));
-    memcpy(bufConData, ptr, sizeof(BufferConnectionData));
-    bufConData->bufferConfig = invertBufferConfig(bufConData->bufferConfig);
-
-    setReceiveOpcode(index, rdma_ready, true);
-
-    res.remote_receive_buffer.clear();
-    res.remote_receive_rkeys.clear();
-    for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (bufConData->receiveBuffers[i] != 0) {
-            res.remote_receive_buffer.push_back(bufConData->receiveBuffers[i]);
-            res.remote_receive_rkeys.push_back(bufConData->receiveRkeys[i]);
-        }
-    }
-
-    res.remote_send_buffer.clear();
-    res.remote_send_rkeys.clear();
-    for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (bufConData->sendBuffers[i] != 0) {
-            res.remote_send_buffer.push_back(bufConData->sendBuffers[i]);
-            res.remote_send_rkeys.push_back(bufConData->sendRkeys[i]);
-        }
-    }
-
-    BufferConnectionData reconfData = reconfigureBuffer(bufConData->bufferConfig);
-
-    free(bufConData);
-
-    sendData(reinterpret_cast<char *>(&reconfData), sizeof(BufferConnectionData), nullptr, 0, rdma_reconfigure_ack, Strategies::push);
-
-    return 0;
-}
-
-/**
- * @brief Reconfiguration of the local buffer setup to the (possibly) new setup. Note: trying to be as lazy as possible, there are only changes if the configuration changed.
- *
- * @param bufConfig The new buffer configuration that should be applied.
- * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-void Connection::ackReconfigureBuffer(size_t index) {
-    char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
-
-    BufferConnectionData *recData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));
-    memcpy(recData, ptr, sizeof(BufferConnectionData));
-    recData->bufferConfig = invertBufferConfig(recData->bufferConfig);
-
-    setReceiveOpcode(index, rdma_ready, true);
-
-    res.remote_receive_buffer.clear();
-    res.remote_receive_rkeys.clear();
-    for (uint8_t i = 0; i < metaInfoReceive.size() / 2; ++i) {
-        if (recData->receiveBuffers[i] != 0) {
-            res.remote_receive_buffer.push_back(recData->receiveBuffers[i]);
-            res.remote_receive_rkeys.push_back(recData->receiveRkeys[i]);
-        }
-    }
-
-    res.remote_send_buffer.clear();
-    res.remote_send_rkeys.clear();
-    for (uint8_t i = 0; i < metaInfoSend.size() / 2; ++i) {
-        if (recData->sendBuffers[i] != 0) {
-            res.remote_send_buffer.push_back(recData->sendBuffers[i]);
-            res.remote_send_rkeys.push_back(recData->sendRkeys[i]);
-        }
-    }
-
-    std::unique_lock<std::mutex> reconfigureLock(reconfigureMutex);
-    reconfigureCV.notify_all();
-
-    setReceiveOpcode(index, rdma_ready, true);
 }
 
 void Connection::validateBufferConfig(buffer_config_t &bufConfig) {
