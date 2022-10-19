@@ -114,7 +114,7 @@ class Connection {
 
     size_t maxBytesInPayload(const size_t customMetaDataSize) const;
 
-    virtual int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode) = 0;
+    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
 
     int sendOpcode(uint8_t opcode, bool sendToRemote);
 
@@ -220,8 +220,7 @@ class ConnectionPush : public Connection {
    public:
     explicit ConnectionPush(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
     ~ConnectionPush();
-
-    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
+    
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);
 
@@ -237,8 +236,6 @@ class ConnectionPull : public Connection {
    public:
     explicit ConnectionPull(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId);
     ~ConnectionPull();
-
-    int sendData(char *data, std::size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode);
 
     int sendReconfigureBuffer(buffer_config_t &bufConfig);
     int receiveReconfigureBuffer(const uint8_t index);

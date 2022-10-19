@@ -2,6 +2,8 @@
 #include "ConnectionManager.h"
 
 ConnectionPull::ConnectionPull(config_t _config, buffer_config_t _bufferConfig, uint32_t _localConId) : Connection(_config, _bufferConfig, _localConId) {
+    LOG_DEBUG1("Opened pull-based connection!" << std::endl);
+
     // for resetting the buffer -> this is needed for the callbacks as they do not have access to the necessary structures
     reset_buffer = [this](const size_t i) -> void {
         // ownReceiveBuffer[i]->clearBuffer();
@@ -90,53 +92,6 @@ ConnectionPull::ConnectionPull(config_t _config, buffer_config_t _bufferConfig, 
 }
 
 /**
- * @brief                   Function for distributing the data to send on the available SBs. The real sending process is triggered by the opcode and done in an other function.
- *
- * @param data              Pointer to the start of the payload data that should be sent.
- * @param dataSize          The size of the whole payload data that should be sent.
- * @param appMetaData       Pointer to the application specific meta data that is written into each package.
- * @param appMetaDataSize   The size of the application specific meta data in bytes.
- * @param opcode            The opcode that should be written to remote for every package.
- * @param strat             Whether using push or pull.
- * @return int              Indication whether it succeeded. 0 for success and everything else is failure indication.
- */
-int ConnectionPull::sendData(char *data, size_t dataSize, char *appMetaData, size_t appMetaDataSize, uint8_t opcode) {
-    int nextFreeSend;
-
-    uint64_t remainingSize = dataSize;                                                                                                   // Whats left to write
-    uint64_t maxPayloadSize = bufferConfig.size_own_send - package_t::metaDataSize() - appMetaDataSize;                                  // As much as we can fit into the SB excluding metadata
-    uint64_t maxDataToWrite = remainingSize <= maxPayloadSize ? remainingSize : (maxPayloadSize / sizeof(uint64_t)) * sizeof(uint64_t);  // Only write full 64bit elements -- should be adjusted to underlying datatype, e.g. float or uint8_t
-    uint64_t packageID = generatePackageID();                                                                                            // Some randomized identifier
-
-    size_t packageCounter = 0;
-    package_t package(packageID, maxDataToWrite, packageCounter, 0, dataSize, appMetaDataSize, data);
-
-    while (remainingSize > 0) {
-        nextFreeSend = findNextFreeSendAndBlock();
-        auto &sb = ownSendBuffer[nextFreeSend];
-
-        if (remainingSize < maxDataToWrite) {
-            maxDataToWrite = remainingSize;
-            package.setCurrentPackageSize(remainingSize);
-        }
-
-        package.setCurrentPackageNumber(packageCounter++);
-
-        sb->loadPackage(sb->getBufferPtr(), &package, appMetaData);
-
-        sb->sendOpcode = opcode;
-
-        package.advancePayloadPtr(maxDataToWrite);
-
-        setSendOpcode(nextFreeSend, rdma_ready_to_send, true);
-
-        remainingSize -= maxDataToWrite;
-    }
-
-    return remainingSize == 0 ? 0 : 1;
-}
-
-/**
  * @brief The actual sending process. It assumes that the data is already in the indicated SB and is called when the corresponding opcode is set.
  *
  * @param index The local index of the SB.
@@ -200,8 +155,6 @@ void ConnectionPull::consumeData(const size_t index) {
     uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
 
     setSendOpcode((wrId % 10) + (metaInfoSend.size() / 2), rdma_ready, true);
-
-    setReceiveOpcode(wrId / 10, rdma_functional_test, false);
 
     char *ptr = ownReceiveBuffer[wrId / 10]->getBufferPtr();
 

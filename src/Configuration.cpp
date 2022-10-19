@@ -54,6 +54,8 @@ Configuration::Configuration() {
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_DEBUG1, "blue", "Default color for debug1 logs");
     addDefault(MEMO_DEFAULT_LOGGER_COLOR_DEBUG2, "blue", "Default color for debug2 logs");
 
+    addDefault(MEMO_DEFAULT_CONNECTION_TYPE, "0", "The type of the connection. Either 0 (Push) or 1 (Pull).");
+    
     addDefault(MEMO_DEFAULT_OWN_SEND_THREADS, "2", "How many threads are used to copy from local sendbuffers to remote receive buffers.");
     addDefault(MEMO_DEFAULT_OWN_RECEIVE_THREADS, "2", "How many threads are used to observe local receive buffers.");
 

@@ -29,6 +29,8 @@
 #define MEMO_DEFAULT_LOGGER_COLOR_DEBUG1 "logger.color.debug1"
 #define MEMO_DEFAULT_LOGGER_COLOR_DEBUG2 "logger.color.debug2"
 
+#define MEMO_DEFAULT_CONNECTION_TYPE "memo.default.connection.type"
+
 #define MEMO_DEFAULT_OWN_SEND_THREADS "memo.default.own.sender"
 #define MEMO_DEFAULT_OWN_RECEIVE_THREADS "memo.default.own.receiver"
 

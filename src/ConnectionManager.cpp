@@ -1,7 +1,8 @@
 #include "ConnectionManager.h"
-#include "Connection.hpp"
 
 #include <iostream>
+
+#include "Connection.hpp"
 
 ConnectionManager::ConnectionManager() : globalConnectionId{0} {
 }
@@ -15,12 +16,19 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPush>(config, bufferConfig, globalConnectionId)));
+    if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PushConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPush>(config, bufferConfig, globalConnectionId)));
+    } else if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PullConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPull>(config, bufferConfig, globalConnectionId)));
+    } else {
+        LOG_ERROR("There was a wrong connection type provided! (" << +configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) << ")" << std::endl);
+        return 0;
+    }
 
     return globalConnectionId;
 }
 
-std::shared_ptr<ConnectionPush> ConnectionManager::getConnectionById(size_t id) {
+std::shared_ptr<Connection> ConnectionManager::getConnectionById(size_t id) {
     if (connections.contains(id)) {
         return connections[id];
     }

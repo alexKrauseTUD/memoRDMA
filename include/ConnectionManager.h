@@ -23,7 +23,7 @@ class ConnectionManager {
     void operator=(ConnectionManager const &) = delete;
 
     int registerConnection(config_t &config, buffer_config_t &bufferConfig);
-    std::shared_ptr<ConnectionPush> getConnectionById(size_t id);
+    std::shared_ptr<Connection> getConnectionById(size_t id);
     bool registerCallback(uint8_t code, CallbackFunction cb);
     bool hasCallback(uint8_t code) const;
     CallbackFunction getCallback(uint8_t code) const;
@@ -47,7 +47,7 @@ class ConnectionManager {
     /* Singleton-required */
     ConnectionManager();
 
-    std::map<std::size_t, std::shared_ptr<ConnectionPush>> connections;
+    std::map<std::size_t, std::shared_ptr<Connection>> connections;
 
     bool globalAbort;
     bool stopped = false;

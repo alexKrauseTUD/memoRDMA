@@ -20,4 +20,9 @@ enum rdma_handler_communication: uint8_t {
     rdma_shutdown
 };
 
+enum class ConnectionType: uint8_t {
+    PushConnection,
+    PullConnection
+};
+
 #endif // COMMON_H
