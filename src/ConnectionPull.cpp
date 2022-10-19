@@ -127,7 +127,7 @@ int ConnectionPull::getNextReadyToPullSend() {
  *
  * @return int The local SB index. This is the actual index in the meta info structure.
  */
-int ConnectionPull::findNextReadyToPullSendAndBlock() {
+uint64_t ConnectionPull::findNextReadyToPullSendAndBlock() {
     int nextReadyToPullSend = -1;
 
     std::lock_guard<std::mutex> lk(remoteSendBufferBlockMutex);
@@ -195,6 +195,17 @@ int ConnectionPull::sendReconfigureBuffer(buffer_config_t &bufConfig) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 int ConnectionPull::receiveReconfigureBuffer(const uint8_t index) {
+    uint64_t sbIndex = findNextReadyToPullSendAndBlock();
+
+    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
+
+    if (wrId %10 != sbIndex || wrId/10 != index) {
+        LOG_ERROR("There was a conflicting Read-Request! This causes data loss!" << std::endl);
+    }
+
+    setSendOpcode(sbIndex + (metaInfoSend.size() / 2), rdma_ready, true);
+
     char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
 
     BufferConnectionData *bufConData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));
@@ -237,6 +248,17 @@ int ConnectionPull::receiveReconfigureBuffer(const uint8_t index) {
  * @return int Indication whether it succeeded. 0 for success and everything else is failure indication.
  */
 void ConnectionPull::ackReconfigureBuffer(size_t index) {
+    uint64_t sbIndex = findNextReadyToPullSendAndBlock();
+
+    ownReceiveBuffer[index]->postRequest(bufferConfig.size_own_receive, IBV_WR_RDMA_READ, res.remote_send_buffer[sbIndex], res.remote_send_rkeys[sbIndex], res.dataQp, ownReceiveBuffer[index]->getBufferPtr(), 10 * index + sbIndex);
+    uint64_t wrId = pollCompletion<CompletionType::useDataCq>();
+
+    if (wrId %10 != sbIndex || wrId/10 != index) {
+        LOG_ERROR("There was a conflicting Read-Request! This causes data loss!" << std::endl);
+    }
+
+    setSendOpcode(sbIndex + (metaInfoSend.size() / 2), rdma_ready, true);
+
     char *ptr = ownReceiveBuffer[index]->getBufferPtr() + package_t::metaDataSize();
 
     BufferConnectionData *recData = reinterpret_cast<BufferConnectionData *>(malloc(sizeof(BufferConnectionData)));

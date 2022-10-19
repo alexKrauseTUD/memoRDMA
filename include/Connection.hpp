@@ -246,7 +246,7 @@ class ConnectionPull : public Connection {
     int __sendData(const size_t index);
 
     int getNextReadyToPullSend();
-    int findNextReadyToPullSendAndBlock();
+    uint64_t findNextReadyToPullSendAndBlock();
 
     void ackReconfigureBuffer(size_t index);
 };
