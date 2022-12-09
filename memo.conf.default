@@ -1,0 +1,140 @@
+
+// logger.color.console [yellow]
+// Default color for console logs
+#logger.color.console = yellow
+
+// logger.color.debug1 [blue]
+// Default color for debug1 logs
+#logger.color.debug1 = blue
+
+// logger.color.debug2 [blue]
+// Default color for debug2 logs
+#logger.color.debug2 = blue
+
+// logger.color.enable [0]
+// Enable color support for Logger
+#logger.color.enable = 0
+
+// logger.color.error [red]
+// Default color for error logs
+#logger.color.error = red
+
+// logger.color.fatal [red]
+// Default color for fatal logs
+#logger.color.fatal = red
+
+// logger.color.info [light_green]
+// Default color for info logs
+#logger.color.info = light_green
+
+// logger.color.success [green]
+// Default color for success logs
+#logger.color.success = green
+
+// logger.color.warning [brown]
+// Default color for warning logs
+#logger.color.warning = brown
+
+// logger.level [DEBUG2]
+// Control log level[FATAL, ERROR, CONSOLE, WARNING, INFO, SUCCESS, DEBUG1, DEBUG2]
+#logger.level = DEBUG2
+
+// logger.logfile [default.log]
+// The filename, where every valid logger output is mirrored. New data is always appended to an existing file.
+#logger.logfile = default.log
+
+// logger.timeformat [%m/%d %H:%M:%S]
+// Time format for logger timestamp. see strftime().
+#logger.timeformat = %m/%d %H:%M:%S
+
+// logger.tofile [0]
+// Mirror the output of the logger to a file.
+#logger.tofile = 0
+
+// memo.default.connection.type [0]
+// Which type of connection to use -> 0: Push, 1: Pull -> Be sure to set on both sides equally!
+#memo.default.connection.type = 0
+
+// memo.default.autoconnect.initiate [0]
+// Upon startup, immediately use the default TCP Port and initiate a connection to the default initiate ip.
+#memo.default.autoconnect.initiate = 0
+
+// memo.default.autoconnect.initiate.ip [141.76.47.9]
+// haecBoehmTheSecond
+#memo.default.autoconnect.initiate.ip = 141.76.47.9
+
+// memo.default.autoconnect.listen [0]
+// Upon startup, immediately use the default TCP Port and listen to the default listen ip.
+#memo.default.autoconnect.listen = 0
+
+// memo.default.autoconnect.listen.ip [141.76.47.8]
+// haecBoehm
+#memo.default.autoconnect.listen.ip = 141.76.47.8
+
+// memo.default.ibv.dev [mlx5_0]
+// The device name of the RDMA NIC.
+#memo.default.ibv.dev = mlx5_0
+
+// memo.default.ibv.gidx [0]
+// Global Index ID of the RDMA NIC to be used.
+#memo.default.ibv.gidx = 0
+
+// memo.default.ibv.port [1]
+// The port on the RDMA NIC where the to-be-used infiniband cable is attached.
+#memo.default.ibv.port = 1
+
+// memo.default.metainfo.size [16]
+// [Currently unchangeable] Size of the meta info array. Allows for maximum 8 receive buffers per server.
+#memo.default.metainfo.size = 16
+
+// memo.default.own.rb.count [2]
+// How many receive buffers are created locally.
+#memo.default.own.rb.count = 2
+
+// memo.default.own.rb.size [524288]
+// Size of local receive buffers in Byte.
+#memo.default.own.rb.size = 524288
+
+// memo.default.own.receiver [2]
+// How many threads are used to observe local receive buffers.
+#memo.default.own.receiver = 2
+
+// memo.default.own.sb.count [2]
+// How many send buffers are created locally.
+#memo.default.own.sb.count = 2
+
+// memo.default.own.sb.size [524288]
+// Size of local send buffers in Byte.
+#memo.default.own.sb.size = 524288
+
+// memo.default.own.sender [2]
+// How many threads are used to copy from local sendbuffers to remote receive buffers.
+#memo.default.own.sender = 2
+
+// memo.default.remote.rb.count [2]
+// Used for Reconfiguring the buffer config on the remote side: How many receive buffers are created remotely.
+#memo.default.remote.rb.count = 2
+
+// memo.default.remote.rb.size [524288]
+// Used for Reconfiguring the buffer config on the remote side: Size of remote receive buffers in Byte.
+#memo.default.remote.rb.size = 524288
+
+// memo.default.remote.receiver [2]
+// Used for Reconfiguring the buffer config on the remote side: How many threads are used to observe local receive buffers.
+#memo.default.remote.receiver = 2
+
+// memo.default.remote.sb.count [2]
+// Used for Reconfiguring the buffer config on the remote side: How many send buffers are created remotely.
+#memo.default.remote.sb.count = 2
+
+// memo.default.remote.sb.size [524288]
+// Used for Reconfiguring the buffer config on the remote side: Size of remote send buffers in Byte.
+#memo.default.remote.sb.size = 524288
+
+// memo.default.remote.sender [2]
+// Used for Reconfiguring the buffer config on the remote side: How many threads are used to copy from remote sendbuffers to local receive buffers.
+#memo.default.remote.sender = 2
+
+// memo.default.tcp.port [20000]
+// TCP Port to perform initial handshake and exchange RDMA Infos.
+#memo.default.tcp.port = 20000

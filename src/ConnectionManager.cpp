@@ -1,36 +1,14 @@
 #include "ConnectionManager.h"
 
-#include "Connection.h"
+#include <iostream>
 
-ConnectionManager::ConnectionManager() : globalConnectionId{1} {
-    monitor_connection = [this](bool *abort) -> void {
-        using namespace std::chrono_literals;
+#include "Connection.hpp"
 
-        std::cout << "Starting monitoring thread for connections!" << std::flush;
-
-        while (!*abort) {
-            std::this_thread::sleep_for(100ms);
-            for (auto const &[name, con] : connections) {
-                switch (con->conStat) {
-                    case closing: {
-                        closeConnection(name, false);
-                    } break;
-                    case mt_consume: {
-                        con->consumeMultiThread();
-                    } break;
-                    default:
-                        break;
-                }
-            }
-        }
-        std::cout << "[monitor_connection] Ending through global abort." << std::endl;
-    };
-
-    monitorWorker = new std::thread(monitor_connection, &globalAbort);
+ConnectionManager::ConnectionManager() : globalConnectionId{0} {
 }
 
 ConnectionManager::~ConnectionManager() {
-    stop();
+    stop(false);
 }
 
 int ConnectionManager::registerConnection(config_t &config, buffer_config_t &bufferConfig) {
@@ -38,9 +16,45 @@ int ConnectionManager::registerConnection(config_t &config, buffer_config_t &buf
         ++globalConnectionId;
     } while (connections.contains(globalConnectionId));
 
-    connections.insert(std::make_pair(globalConnectionId, new Connection(config, bufferConfig)));
+    if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PushConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPush>(config, bufferConfig, globalConnectionId)));
+    } else if (configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) == (uint8_t)ConnectionType::PullConnection) {
+        connections.insert(std::make_pair(globalConnectionId, std::make_shared<ConnectionPull>(config, bufferConfig, globalConnectionId)));
+    } else {
+        LOG_ERROR("There was a wrong connection type provided! (" << +configuration->get<uint8_t>(MEMO_DEFAULT_CONNECTION_TYPE) << ")" << std::endl);
+        return 0;
+    }
 
     return globalConnectionId;
+}
+
+std::shared_ptr<Connection> ConnectionManager::getConnectionById(size_t id) {
+    if (connections.contains(id)) {
+        return connections[id];
+    }
+    return nullptr;
+}
+
+bool ConnectionManager::registerCallback(uint8_t code, CallbackFunction cb) {
+    if (callbacks.contains(code)) {
+        return false;
+    }
+    callbacks.insert({code, cb});
+
+    return true;
+}
+
+bool ConnectionManager::hasCallback(uint8_t code) const {
+    return callbacks.contains(code);
+}
+
+CallbackFunction ConnectionManager::getCallback(uint8_t code) const {
+    if (callbacks.contains(code)) {
+        return callbacks.at(code);
+    } else {
+        std::cout << "There was no callback found for " << +code << std::endl;
+        return CallbackFunction();
+    }
 }
 
 void ConnectionManager::printConnections() {
@@ -64,12 +78,12 @@ int ConnectionManager::closeConnection(std::size_t connectionId, bool sendRemote
     return 1;
 }
 
-int ConnectionManager::closeAllConnections() {
+int ConnectionManager::closeAllConnections(bool remoteShutdown) {
     std::size_t success = 0;
     std::size_t allSuccess = 0;
 
     for (auto &[name, con] : connections) {
-        success = con->closeConnection();
+        success = con->closeConnection(remoteShutdown);
         if (success == 0)
             std::cout << "Connection '" << name << "' was successfully closed." << std::endl;
         else
@@ -77,7 +91,7 @@ int ConnectionManager::closeAllConnections() {
         allSuccess += success;
     }
 
-    if (allSuccess == 0) {
+    if (connections.size() && allSuccess == 0) {
         std::cout << "All Connections were successfully closed!" << std::endl;
         connections.clear();
     } else {
@@ -87,10 +101,9 @@ int ConnectionManager::closeAllConnections() {
     return allSuccess;
 }
 
-// TODO: How about a pointer to the data;; Generic datatype?
-int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
+int ConnectionManager::sendData(std::size_t connectionId, char *data, std::size_t dataSize, char *customMetaData, std::size_t customMetaDataSize, uint8_t opcode) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->sendData(data);
+        return connections[connectionId]->sendData(data, dataSize, customMetaData, customMetaDataSize, opcode);
     } else {
         std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -98,22 +111,24 @@ int ConnectionManager::sendData(std::size_t connectionId, std::string &data) {
     return 1;
 }
 
-// TODO: How about a pointer to the data;; Generic datatype?
-int ConnectionManager::sendDataToAllConnections(std::string &data) {
-    int success = 0;
-
-    for (auto const &[name, con] : connections) {
-        success += sendData(name, data);
-    }
-
-    if (success == 0) {
-        std::cout << "The data was successfully broadcasted to all connections!" << std::endl;
+int ConnectionManager::sendOpCode(std::size_t connectionId, uint8_t opcode, bool sendToRemote) {
+    if (connections.contains(connectionId)) {
+        return connections[connectionId]->sendOpcode(opcode, sendToRemote);
     } else {
-        std::cout << "Something went wrong when trying to broadcast the data to all connections!" << std::endl;
-        success = 1;
+        std::cout << "The Connection you wanted to use was not found. Please be sure to use the correct ID!" << std::endl;
     }
 
-    return success;
+    return 1;
+}
+
+int ConnectionManager::sendCustomOpcodeToAllConnections(uint8_t code) {
+    for (auto const &[name, con] : connections) {
+        con->sendOpcode(code, true);
+    }
+
+    std::cout << "Sent opcode " << (uint64_t)code << " to all connections." << std::endl;
+
+    return 0;
 }
 
 int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config_t &bufferConfig) {
@@ -127,51 +142,9 @@ int ConnectionManager::reconfigureBuffer(std::size_t connectionId, buffer_config
     return 1;
 }
 
-int ConnectionManager::addReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
-    // TODO: sanity check
+int ConnectionManager::benchmark(std::size_t connectionId, std::string shortName, std::string name, BenchmarkType benchType) {
     if (connections.contains(connectionId)) {
-        return connections[connectionId]->addReceiveBuffer(quantity, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::removeReceiveBuffer(std::size_t connectionId, std::size_t quantity = 1, bool own = true) {
-    // TODO: sanity check
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->removeReceiveBuffer(quantity, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::resizeReceiveBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeReceiveBuffer(newSize, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::resizeSendBuffer(std::size_t connectionId, std::size_t newSize, bool own = true) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->resizeSendBuffer(newSize, own);
-    } else {
-        std::cout << "The Connection you wanted to change was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::pendingBufferCreation(std::size_t connectionId) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->pendingBufferCreation();
+        return connections[connectionId]->benchmark(shortName, name, benchType);
     } else {
         std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
     }
@@ -179,50 +152,10 @@ int ConnectionManager::pendingBufferCreation(std::size_t connectionId) {
     return 1;
 }
 
-int ConnectionManager::throughputTest(std::size_t connectionId, std::string logName) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputTest(logName);
-    } else {
-        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
+void ConnectionManager::stop(bool remoteShutdown) {
+    if (!stopped) {
+        closeAllConnections(remoteShutdown);
     }
-
-    return 1;
-}
-
-int ConnectionManager::consumingTest(std::size_t connectionId, std::string logName) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingTest(logName);
-    } else {
-        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::throughputTestMultiThread(std::size_t connectionId, std::string logName) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->throughputTestMultiThread(logName);
-    } else {
-        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-int ConnectionManager::consumingTestMultiThread(std::size_t connectionId, std::string logName) {
-    if (connections.contains(connectionId)) {
-        return connections[connectionId]->consumingTestMultiThread(logName);
-    } else {
-        std::cout << "The Connection was not found. Please be sure to use the correct ID!" << std::endl;
-    }
-
-    return 1;
-}
-
-void ConnectionManager::stop() {
-    closeAllConnections();
-    globalAbort = true;
-    monitorWorker->join();
 }
 
 bool ConnectionManager::abortSignaled() const {

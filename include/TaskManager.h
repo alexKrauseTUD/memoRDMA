@@ -2,38 +2,50 @@
 #define MEMORDMA_TASK_MANAGER_H
 
 #include <map>
+#include <memory>
 #include <string>
 
 #include "Task.h"
+#include "common.h"
 
-enum test_code {
-    ss_tput = 1,
-    ds_tput = 2,
-    mt_ss_tput = 3,
-    mt_ds_tput = 4,
+enum init_task_type {
+    connection_handling = 1,
+    buffer_handling = 1 << 1,
+    dummy_tests = 1 << 2,
+    performance_benchmarks = 1 << 3,
+    functional_tests = 1 << 4
 };
 
 class TaskManager {
-   public:
+   private:
     TaskManager();
+
+   public:
+    static TaskManager &getInstance() {
+        static TaskManager instance;
+        return instance;
+    }
     ~TaskManager();
 
-    void registerTask(Task* task);
+    TaskManager(TaskManager const &) = delete;
+    void operator=(TaskManager const &) = delete;
+
+    void registerTask(std::shared_ptr<Task> task);
+    void unregisterTask(std::string ident);
+    bool hasTask(std::string ident) const;
     void printAll();
 
     void executeById(std::size_t id);
     void executeByIdent(std::string name);
 
-    void setup();
+    void setup(size_t init_flags);
 
     void setGlobalAbortFunction(std::function<void()> fn);
 
    private:
-    std::map<std::size_t, Task*> tasks;
+    std::map<std::size_t, std::shared_ptr<Task>> tasks;
     std::size_t globalId;
     std::function<void()> globalAbort;
-
-    void genericTestFunc(std::string shortName, std::string name, test_code tc, std::size_t connectionId);
 };
 
 #endif  // MEMORDMA_TASK_MANAGER_H
